@@ -1,0 +1,93 @@
+# T8 — sunucuya bozuk imaj gitmesini önler.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Tip + lint + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Tip kontrolü
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # T12 — birim testleri. Kimlik doğrulama, izin kesişimi, hız sınırı
+      # anahtarı ve PATCH birleştirmesi buradan geçiyor: bunların bozulması
+      # hiçbir ekranda uyarı üretmez, sessizce yayına gider.
+      - name: Testler
+        run: npm test
+
+      # Şema kendi içinde geçerli mi (redocly) VE kodla uyuşuyor mu (betik).
+      # İkincisi olmadan birincisi yanıltıcı: geçerli ama yanlış bir şema,
+      # güvenilmez olduğu hâlde güvenilir görünen bir belgedir.
+      - name: OpenAPI şeması geçerli mi
+        run: npx --yes @redocly/cli@latest lint docs/openapi.yaml
+
+      - name: OpenAPI şeması kodla uyuşuyor mu
+        run: npm run check:openapi
+
+      - name: Build
+        run: npm run build
+
+  image:
+    name: Docker imajı derlenebiliyor mu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build (push yok)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: server-panel:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Container ayağa kalkıyor ve /api/health yanıt veriyor mu
+        run: |
+          # MASTER_KEY (T3) olmadan panel bilerek açılmaz. Buradaki anahtar
+          # TEK KULLANIMLIK: container'la birlikte doğar ve ölür, hiçbir veriyi
+          # şifrelemez. Sabit bir değer yazmak, gerçek bir anahtar sanılıp
+          # kopyalanma riski taşırdı.
+          docker run -d --name panel-ci \
+            -e MOCK_MODE=1 \
+            -e MASTER_KEY="$(openssl rand -hex 32)" \
+            -e ADMIN_PASSWORD="ci-gecici-parola" \
+            -p 3000:3000 server-panel:ci
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/api/health > /tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Panel yanıt vermedi."
+          echo "--- container durumu ---"
+          docker ps -a --filter name=panel-ci --format '{{.Status}}'
+          echo "--- son loglar ---"
+          # Kuyruk sınırı şart: açılışta patlayan bir panel aynı hatayı her
+          # istekte tekrarlıyor ve CI çıktısı yüzlerce özdeş satıra boğuluyor,
+          # asıl sebep görünmez oluyordu.
+          docker logs --tail 40 panel-ci
+          exit 1

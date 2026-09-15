@@ -1,0 +1,14 @@
+{
+  "reportedAt": 1785000000,
+  "total": 5,
+  "security": 2,
+  "rebootRequired": true,
+  "packages": [
+    { "name": "linux-image-generic", "current": "6.8.0-135.135", "candidate": "6.8.0-136.136", "security": true },
+    { "name": "openssl", "current": "3.0.13-0ubuntu3.4", "candidate": "3.0.13-0ubuntu3.5", "security": true },
+    { "name": "curl", "current": "8.5.0-2ubuntu10.6", "candidate": "8.5.0-2ubuntu10.7", "security": false },
+    { "name": "tzdata", "current": "2025b-0ubuntu0.24.04", "candidate": "2026a-0ubuntu0.24.04", "security": false },
+    { "name": "vim-common", "current": "2:9.1.0016-1ubuntu7.6", "candidate": "2:9.1.0016-1ubuntu7.7", "security": false }
+  ],
+  "errors": []
+}

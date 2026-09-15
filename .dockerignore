@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.github
+data
+*.log
+
+# Gerçek .env asla imaja girmez (MASTER_KEY içerir — T3).
+.env
+.env.*
+!.env.example
+
+README.md
+PLAN.md
+DEPLOY.md
+AGENTS.md
+CLAUDE.md

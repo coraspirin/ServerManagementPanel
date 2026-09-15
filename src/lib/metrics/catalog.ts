@@ -1,0 +1,200 @@
+/**
+ * Metrik meta verisi, paylaşılan tipler ve biçimlendirme.
+ *
+ * Bu dosyada `server-only` YOK: hem job runner hem de İzleme ekranı (istemci)
+ * aynı tanımları kullanır. Veritabanına dokunan kod query.ts / collect.ts
+ * içindedir ve tiplerini buradan alır.
+ */
+
+export type SeriesPoint = { ts: number; avg: number; min: number; max: number };
+export type Series = { metric: string; label: string; points: SeriesPoint[] };
+
+export type SeriesResult = {
+  /** Kullanıcıya gösterilen katman adı — "1 saatlik ortalama" gibi. */
+  tier: string;
+  resolution: number;
+  from: number;
+  to: number;
+  series: Series[];
+};
+
+export type DiskSnapshot = {
+  mount: string;
+  usedPct: number;
+  used: number;
+  free: number;
+  total: number;
+};
+
+export type InterfaceSnapshot = { name: string; rxBps: number; txBps: number };
+
+/** Kartları besleyen son değerler. Hiç örnek yoksa alanlar null gelir. */
+export type Snapshot = {
+  ts: number | null;
+  cpuPct: number | null;
+  cpuIowaitPct: number | null;
+  memUsedPct: number | null;
+  memUsed: number | null;
+  memTotal: number | null;
+  swapUsedPct: number | null;
+  swapUsed: number | null;
+  load1: number | null;
+  load5: number | null;
+  load15: number | null;
+  uptimeSeconds: number | null;
+  disks: DiskSnapshot[];
+  interfaces: InterfaceSnapshot[];
+};
+
+export type RangeId = "1h" | "6h" | "24h" | "7d" | "30d" | "1y";
+
+export const RANGES: { id: RangeId; label: string; seconds: number }[] = [
+  { id: "1h", label: "1 saat", seconds: 3600 },
+  { id: "6h", label: "6 saat", seconds: 6 * 3600 },
+  { id: "24h", label: "24 saat", seconds: 86400 },
+  { id: "7d", label: "7 gün", seconds: 7 * 86400 },
+  { id: "30d", label: "30 gün", seconds: 30 * 86400 },
+  { id: "1y", label: "1 yıl", seconds: 365 * 86400 },
+];
+
+export function rangeSeconds(id: string): number {
+  return RANGES.find((r) => r.id === id)?.seconds ?? 86400;
+}
+
+export function isRangeId(value: string): value is RangeId {
+  return RANGES.some((r) => r.id === value);
+}
+
+/**
+ * İzleme ekranındaki grafiklerin metrikleri.
+ *
+ * Sunucu ilk yüklemede, istemci de tazelerken aynı listeyi kullanır; iki yerde
+ * ayrı ayrı yazılırsa biri unutulup grafiklerden biri boş kalır.
+ */
+export const CHART_METRICS = [
+  "cpu.pct",
+  "cpu.iowait_pct",
+  "mem.used_pct",
+  "swap.used_pct",
+  "net.rx_bps",
+  "net.tx_bps",
+  "disk.used_pct",
+  "load.1m",
+  "load.5m",
+  "load.15m",
+];
+
+// --- Biçimlendirme ---------------------------------------------------------
+
+const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB", "PB"];
+
+export function formatBytes(bytes: number, digits = 1): string {
+  if (!Number.isFinite(bytes)) return "—";
+  let value = Math.abs(bytes);
+  let unit = 0;
+  while (value >= 1024 && unit < BYTE_UNITS.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  const sign = bytes < 0 ? "-" : "";
+  return `${sign}${value.toFixed(unit === 0 ? 0 : digits)} ${BYTE_UNITS[unit]}`;
+}
+
+/**
+ * Ağ hızı. Sayaçlar BAYT/sn tutuyor; kullanıcıya bit/sn gösteriyoruz çünkü
+ * internet hızları (100 Mbps vb.) o birimde konuşulur.
+ */
+export function formatBps(bytesPerSecond: number): string {
+  const bits = Math.max(0, bytesPerSecond) * 8;
+  const units = ["bps", "Kbps", "Mbps", "Gbps"];
+  let value = bits;
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit++;
+  }
+  return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
+export function formatPct(value: number, digits = 1): string {
+  return `%${value.toFixed(digits)}`;
+}
+
+export function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "—";
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days} gün ${hours} saat`;
+  if (hours > 0) return `${hours} saat ${minutes} dk`;
+  return `${minutes} dk`;
+}
+
+// --- Metrik tanımları ------------------------------------------------------
+
+export type MetricFormat = "pct" | "bytes" | "bps" | "number" | "duration" | "ms";
+
+export type MetricMeta = {
+  label: string;
+  format: MetricFormat;
+  /** Yüzde metriklerinde y ekseni 0–100 sabitlenir; diğerlerinde veriye uyar. */
+  fixedMax?: number;
+  /** Etiket (mount/arayüz) taşıyan metrikler grafikte seri başına ayrışır. */
+  labelled?: boolean;
+};
+
+export const METRIC_META: Record<string, MetricMeta> = {
+  "cpu.pct": { label: "İşlemci", format: "pct", fixedMax: 100 },
+  "cpu.iowait_pct": { label: "G/Ç bekleme", format: "pct", fixedMax: 100 },
+  "mem.used_pct": { label: "Bellek", format: "pct", fixedMax: 100 },
+  "mem.used": { label: "Kullanılan bellek", format: "bytes" },
+  "mem.total": { label: "Toplam bellek", format: "bytes" },
+  "swap.used_pct": { label: "Takas alanı", format: "pct", fixedMax: 100 },
+  "swap.used": { label: "Kullanılan takas", format: "bytes" },
+  "load.1m": { label: "Yük (1 dk)", format: "number" },
+  "load.5m": { label: "Yük (5 dk)", format: "number" },
+  "load.15m": { label: "Yük (15 dk)", format: "number" },
+  "uptime.seconds": { label: "Çalışma süresi", format: "duration" },
+  "disk.used_pct": { label: "Disk doluluğu", format: "pct", fixedMax: 100, labelled: true },
+  "disk.used": { label: "Kullanılan disk", format: "bytes", labelled: true },
+  "disk.free": { label: "Boş disk", format: "bytes", labelled: true },
+  "disk.total": { label: "Disk kapasitesi", format: "bytes", labelled: true },
+  "net.rx_bps": { label: "İndirme", format: "bps", labelled: true },
+  "net.tx_bps": { label: "Yükleme", format: "bps", labelled: true },
+  // M1.2 — health-check gecikmesi. Ayrı bir zaman serisi tablosu açmak yerine
+  // T1 hattına giriyor: rollup, budama ve grafik hazır geliyor. `label` =
+  // monitör kimliği.
+  "monitor.latency": { label: "Yanıt süresi", format: "ms", labelled: true },
+  // M1.6 — container ölçümleri. `label` = container adı.
+  "docker.cpu_pct": { label: "Container CPU", format: "pct", labelled: true },
+  "docker.mem_used": { label: "Container bellek", format: "bytes", labelled: true },
+  "docker.mem_pct": { label: "Container bellek", format: "pct", fixedMax: 100, labelled: true },
+  // Kümülatif sayaçlar (M3.22) — grafikte hıza çevrilerek gösteriliyor.
+  "docker.net_rx": { label: "Container ağ giriş", format: "bytes", labelled: true },
+  "docker.net_tx": { label: "Container ağ çıkış", format: "bytes", labelled: true },
+  "docker.blk_read": { label: "Container disk okuma", format: "bytes", labelled: true },
+  "docker.blk_write": { label: "Container disk yazma", format: "bytes", labelled: true },
+  "docker.restart_count": { label: "Yeniden başlatma", format: "number", labelled: true },
+  "docker.running": { label: "Çalışıyor", format: "number", fixedMax: 1, labelled: true },
+};
+
+export function metricMeta(metric: string): MetricMeta {
+  return METRIC_META[metric] ?? { label: metric, format: "number" };
+}
+
+export function formatValue(format: MetricFormat, value: number): string {
+  switch (format) {
+    case "pct":
+      return formatPct(value);
+    case "bytes":
+      return formatBytes(value);
+    case "bps":
+      return formatBps(value);
+    case "duration":
+      return formatDuration(value);
+    case "ms":
+      return value >= 1000 ? `${(value / 1000).toFixed(2)} sn` : `${Math.round(value)} ms`;
+    default:
+      return value.toFixed(2);
+  }
+}

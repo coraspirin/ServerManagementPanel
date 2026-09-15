@@ -1,0 +1,1750 @@
+# T12 — /api/v1 makine okunur sözleşmesi.
+#
+# ⚠️ BU DOSYA ELLE YAZILIR, koddan üretilmez.
+#
+# Yansıma tabanlı bir üreteç iç tipleri şemaya sızdırırdı ve `serialize.ts`
+# içindeki "tipler elle yazılır" kuralıyla aynı sebepten yanlış olurdu: türetilen
+# bir şema, iç model değiştiğinde sözleşmeyi sessizce değiştirir. Bu dosya
+# `src/lib/apiv1/serialize.ts`in ikizidir — ikisi AYNI PR'da değişir.
+#
+# Doğrulama: npx @redocly/cli lint docs/openapi.yaml (CI'da koşuyor)
+
+openapi: 3.0.3
+
+info:
+  title: Sunucu Yönetim Paneli — Dış API
+  version: "1.0.0"
+  description: |
+    Panelin dışa açık, sürümlenmiş HTTP arayüzü. Bearer token ile kimlik
+    doğrular; token bir kullanıcıya bağlıdır ve o kullanıcının izinlerinin
+    **alt kümesini** taşır. Kesişim her istekte alınır: kullanıcının rolü
+    daraltılırsa token da anında daralır.
+
+    API varsayılan olarak **kapalıdır** (`api.enabled`). Kapalıyken her uç
+    `404` döner — kapalı bir API'nin var olduğunu bile söylememek gerekir.
+
+    Ayrıntılı anlatım, kararların gerekçeleri ve kopyalanabilir Prometheus /
+    Home Assistant / curl örnekleri: `docs/API.md`.
+
+    **Kararlılık:** v2 çıkana kadar bu sürümde kırıcı değişiklik yapılmaz.
+    Eklemeler (yeni uç, yeni alan, yeni opsiyonel parametre, enum'a yeni değer)
+    her an gelebilir; istemci bilinmeyen alanları yok saymalı ve bilinmeyen
+    enum değerlerinde çökmemelidir.
+  license:
+    name: Özel kullanım
+    url: https://example.invalid/lisans
+
+servers:
+  - url: https://sunucu:8443
+    description: Caddy üzerinden panel (adres kendi kurulumuna göre değişir)
+
+tags:
+  - name: Keşif
+    description: Sürüm ve uç listesi
+  - name: Sistem
+    description: Donanım, işletim sistemi ve zaman serisi metrikleri
+  - name: Docker
+    description: Container listesi, logları ve eylemleri
+  - name: Görevler
+    description: Uzun süren eylemlerin durumu
+  - name: Monitörler
+    description: Servis izleme kayıtları ve bakım pencereleri
+  - name: Katalog
+    description: Uygulama kartları ve bookmark'lar
+  - name: Olaylar
+    description: Alarm ve olay geçmişi
+  - name: Host
+    description: host-helper üzerinden çalışan sunucu eylemleri
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1:
+    get:
+      tags: [Keşif]
+      operationId: getIndex
+      summary: Kendini tanıtan uç listesi
+      description: |
+        İzin aranmaz ama **kimlik aranır**. Kimliksiz bırakılsaydı bir ev
+        sunucusunun API yüzeyini listeleyen bedava bir keşif ucu olurdu;
+        canlılık kontrolü için `/api/health` zaten var.
+      responses:
+        "200":
+          description: Sürüm, uç listesi ve çağıranın kimliği
+          headers:
+            X-Panel-Api-Version:
+              $ref: "#/components/headers/ApiVersion"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: integer
+                    example: 1
+                  endpoints:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        path: { type: string }
+                        methods:
+                          type: array
+                          items: { type: string }
+                        permission:
+                          type: string
+                          nullable: true
+                        note: { type: string }
+                  actor:
+                    type: object
+                    properties:
+                      username: { type: string }
+                      via:
+                        type: string
+                        enum: [session, token]
+                      permissions:
+                        type: array
+                        items: { type: string }
+                  docs: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/system:
+    get:
+      tags: [Sistem]
+      operationId: getSystem
+      summary: Sistem bilgisi ve son metrik anlık görüntüsü
+      responses:
+        "200":
+          description: Sistem durumu
+          headers:
+            X-Panel-Api-Version:
+              $ref: "#/components/headers/ApiVersion"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/System" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/hardware:
+    get:
+      tags: [Sistem]
+      operationId: getHardware
+      summary: Sıcaklıklar, disk sağlığı (SMART) ve havuz durumu
+      description: |
+        `notes` alanı verinin neden eksik olduğunu söyler. Boş bir rapor
+        "arıza mı, yok mu" sorusunu cevapsız bırakırdı.
+      responses:
+        "200":
+          description: Donanım raporu
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Hardware" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/metrics/series:
+    get:
+      tags: [Sistem]
+      operationId: getMetricSeries
+      summary: Zaman serisi
+      description: |
+        Katman (ham / 1dk / 1sa / 1gün) sunucuda seçilir ve yanıt hangisinin
+        kullanıldığını söyler — istemci "bu nokta 5 saniyelik mi 1 saatlik
+        ortalama mı" sorusunu tahmin etmek zorunda kalmasın.
+
+        Bilinmeyen metrik **sessizce elenmez**, `400` ile reddedilir: sessiz
+        eleme, yazım hatası yapan bir istemciye boş grafik gösterip sebebini
+        gizlerdi. (Bu, limit kırpmasından farklı — orada istek anlamlı ama
+        fazla, burada istek anlamsız.)
+      parameters:
+        - name: metrics
+          in: query
+          required: true
+          description: Virgülle ayrılmış metrik listesi
+          schema:
+            type: string
+            example: cpu.pct,mem.used_pct
+        - name: range
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["1h", "6h", "24h", "7d", "30d", "1y"]
+            default: "24h"
+      responses:
+        "200":
+          description: Seri noktaları
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MetricSeries" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/containers:
+    get:
+      tags: [Docker]
+      operationId: listContainers
+      summary: Container listesi
+      responses:
+        "200":
+          description: Container'lar
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hostId: { type: integer, example: 1 }
+                  containers:
+                    type: array
+                    items: { $ref: "#/components/schemas/Container" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/containers/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ContainerId"
+    get:
+      tags: [Docker]
+      operationId: getContainer
+      summary: Tek container
+      responses:
+        "200":
+          description: Container
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  container: { $ref: "#/components/schemas/Container" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/containers/{id}/logs:
+    parameters:
+      - $ref: "#/components/parameters/ContainerId"
+    get:
+      tags: [Docker]
+      operationId: getContainerLogs
+      summary: Container logları (düz metin, akışsız)
+      description: |
+        İç uç SSE ile canlı akıyor çünkü tarayıcı bunu gösterebiliyor. Bir
+        script gösteremez: `curl` bir SSE akışına bağlanıp bekler ve
+        `| grep` yazan kullanıcı komut istemine hiç dönmez. Burada tek parça
+        gövde döner ve bağlantı kapanır.
+
+        Sayfalanmaz — bu bir kuyruk, bir koleksiyon değil.
+      parameters:
+        - name: tail
+          in: query
+          description: Son N satır. Tavan 2000; aşan değer sessizce kırpılır.
+          schema: { type: integer, default: 200, maximum: 2000 }
+        - name: since
+          in: query
+          description: Unix zaman damgası; bu andan sonrası
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Log satırları
+          content:
+            text/plain:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/containers/{id}/actions:
+    parameters:
+      - $ref: "#/components/parameters/ContainerId"
+    post:
+      tags: [Docker]
+      operationId: runContainerAction
+      summary: Container eylemi
+      description: |
+        `Idempotency-Key` kapsam dışı ve bu bilinçli: bu eylemler zaten
+        tekrarlanabilir — iki kez `restart`, bir kez `restart`tan farklı bir
+        duruma götürmez.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [start, stop, restart, pause, unpause]
+      responses:
+        "200":
+          description: Eylem uygulandı; container'ın yeni hâli
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  container: { $ref: "#/components/schemas/Container" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "502": { $ref: "#/components/responses/UpstreamError" }
+
+  /api/v1/containers/{id}/update:
+    parameters:
+      - $ref: "#/components/parameters/ContainerId"
+    post:
+      tags: [Docker, Görevler]
+      operationId: updateContainer
+      summary: İmajı güncelle (asenkron)
+      description: |
+        Senkron değil, "kabul edildi, poll et". Birkaç GB'lık bir imajın
+        çekilmesi dakikalar sürer; senkron tutulsaydı hattaki her ara katmanın
+        zaman aşımı devreye girerdi ve istemci işlemin başarısız olduğunu
+        sanarken işlem arkada devam ederdi. Yanlış bilgi veren bir yanıt, geç
+        gelen yanıttan kötüdür.
+
+        Üst sınır 900 saniye; aşımda görev `failed` + `upstream_error`.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "202":
+          description: Görev başlatıldı
+          headers:
+            Retry-After:
+              description: Önerilen poll aralığı (saniye)
+              schema: { type: integer, example: 5 }
+            Idempotency-Replayed:
+              $ref: "#/components/headers/IdempotencyReplayed"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  taskId: { type: string, example: tsk_9f2c1d4e7a03b5c8d1e2f3a4 }
+                  status: { type: string, example: running }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "502": { $ref: "#/components/responses/UpstreamError" }
+        "503": { $ref: "#/components/responses/HelperUnavailable" }
+
+  /api/v1/tasks/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Görevler]
+      operationId: getTask
+      summary: Uzun süren eylemin durumu
+      description: |
+        Yalnızca görevi **başlatan** token/kullanıcı okuyabilir. `taskId`
+        tahmin edilemez olsa da yetki kontrolü tahmin edilemezliğe bırakılmaz.
+
+        ⚠️ `404` **"işlem iptal edildi" DEMEK DEĞİLDİR.** Görev kaydı bellek
+        içidir (en fazla 100 kayıt, TTL 1 saat) ve panel yeniden başlarsa
+        kaybolur. Ama `dockerd` panelin bir parçası değil, host'ta çalışıyor:
+        imaj çekme kesilmez ve büyük ihtimalle tamamlanır. Container'ın güncel
+        durumunu `GET /api/v1/containers/{id}` ile doğrula. Aynı sebeple
+        `status` alanında `cancelled` gibi sahte bir değer üretilmez.
+      responses:
+        "200":
+          description: Görev durumu
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: |
+            Görev kaydı bulunamadı. **İptal edildiği anlamına gelmez** —
+            yukarıdaki açıklamaya bakın.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/monitors:
+    get:
+      tags: [Monitörler]
+      operationId: listMonitors
+      summary: Monitör listesi ve anlık durumları
+      parameters:
+        - $ref: "#/components/parameters/CollectionLimit"
+      responses:
+        "200":
+          description: Monitörler
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hostId: { type: integer, example: 1 }
+                  monitors:
+                    type: array
+                    items: { $ref: "#/components/schemas/Monitor" }
+                  hasMore: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    post:
+      tags: [Monitörler]
+      operationId: createMonitor
+      summary: Monitör oluştur
+      description: "İzin: `monitors.manage`"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MonitorInput" }
+      responses:
+        "201":
+          description: Oluşturuldu
+          headers:
+            Location:
+              description: Oluşan kaynağın adresi
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  monitor: { $ref: "#/components/schemas/Monitor" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/monitors/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Monitörler]
+      operationId: getMonitor
+      summary: Tek monitör
+      responses:
+        "200":
+          description: Monitör
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  monitor: { $ref: "#/components/schemas/Monitor" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    patch:
+      tags: [Monitörler]
+      operationId: patchMonitor
+      summary: Kısmi güncelleme
+      description: |
+        **Gerçek birleştirme:** gönderilmeyen alan korunur. Bir alanı
+        boşaltmak için `null` gönder — JSON'da `undefined` yok, dolayısıyla
+        anahtarın gövdede bulunması onu kastettiğin anlamına gelir.
+
+        (Panelin kendi `/api/monitors/{id}` ucu böyle davranmaz; orada gövde
+        tam kayıt olarak yorumlanır. v1'de düzeltildi.)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MonitorPatch" }
+      responses:
+        "200":
+          description: Güncellendi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  monitor: { $ref: "#/components/schemas/Monitor" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    delete:
+      tags: [Monitörler]
+      operationId: deleteMonitor
+      summary: Monitörü sil
+      responses:
+        "200": { $ref: "#/components/responses/Deleted" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/monitors/{id}/check:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    post:
+      tags: [Monitörler]
+      operationId: checkMonitor
+      summary: Monitörü hemen kontrol et
+      description: |
+        Gövde gerektirmez. `Idempotency-Key` kapsam dışı: bir kontrolü iki kez
+        çalıştırmak yalnızca iki ölçüm demek, kalıcı bir yan etki değil.
+      responses:
+        "200":
+          description: Kontrol sonucu
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  latencyMs: { type: integer, nullable: true }
+                  error: { type: string, nullable: true }
+                  attempts: { type: integer }
+                  monitor:
+                    # OpenAPI 3.0 bir $ref'i doğrudan nullable yapamıyor;
+                    # type + allOf sarmalayıcısı bunun standart karşılığı.
+                    type: object
+                    nullable: true
+                    allOf: [{ $ref: "#/components/schemas/Monitor" }]
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/maintenance:
+    get:
+      tags: [Monitörler]
+      operationId: listMaintenance
+      summary: Bakım pencereleri
+      parameters:
+        - $ref: "#/components/parameters/CollectionLimit"
+      responses:
+        "200":
+          description: Pencereler
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hostId: { type: integer, example: 1 }
+                  maintenance:
+                    type: array
+                    items: { $ref: "#/components/schemas/Maintenance" }
+                  hasMore: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    post:
+      tags: [Monitörler]
+      operationId: createMaintenance
+      summary: Bakım penceresi oluştur
+      description: "İzin: `monitors.manage`"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MaintenanceInput" }
+      responses:
+        "201":
+          description: Oluşturuldu
+          headers:
+            Location:
+              description: Oluşan kaynağın adresi
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  maintenance: { $ref: "#/components/schemas/Maintenance" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/maintenance/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Monitörler]
+      operationId: getMaintenance
+      summary: Tek bakım penceresi
+      responses:
+        "200":
+          description: Pencere
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  maintenance: { $ref: "#/components/schemas/Maintenance" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    patch:
+      tags: [Monitörler]
+      operationId: patchMaintenance
+      summary: Kısmi güncelleme
+      description: |
+        Birleştirme burada özellikle önemli: `kind` gövdede yoksa `once`
+        varsayılır. Birleştirme olmasaydı haftalık bir pencereyi
+        `{"enabled": false}` ile kapatmak, onu sessizce tek seferliğe çevirip
+        `weekdays` listesini silerdi.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MaintenancePatch" }
+      responses:
+        "200":
+          description: Güncellendi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  maintenance: { $ref: "#/components/schemas/Maintenance" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    delete:
+      tags: [Monitörler]
+      operationId: deleteMaintenance
+      summary: Bakım penceresini sil
+      responses:
+        "200": { $ref: "#/components/responses/Deleted" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/apps:
+    get:
+      tags: [Katalog]
+      operationId: listApps
+      summary: Uygulama kartları
+      description: |
+        Ham `url` döner, `{host}` yer tutucusu çözülmez: dış bir istemcinin
+        isteğinden çözülen adres, o istemci için anlamsız bir değer
+        üretebilirdi. Yorumu çağırana ait.
+      parameters:
+        - $ref: "#/components/parameters/CollectionLimit"
+      responses:
+        "200":
+          description: Kartlar
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hostId: { type: integer, example: 1 }
+                  apps:
+                    type: array
+                    items: { $ref: "#/components/schemas/App" }
+                  hasMore: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    post:
+      tags: [Katalog]
+      operationId: createApp
+      summary: Kart oluştur
+      description: |
+        İzin: `apps.manage`
+
+        **Widget yapılandırması v1'de yok.** O yapılandırma servis parolaları
+        taşıyor ve şifreli saklanıyor; bir bearer token'ın parola yazabildiği
+        bir uç, token'ın kapsamını "ayarları görüntüle"den "panelin sakladığı
+        sırları değiştir"e taşırdı.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AppInput" }
+      responses:
+        "201":
+          description: Oluşturuldu
+          headers:
+            Location:
+              description: Oluşan kaynağın adresi
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  app: { $ref: "#/components/schemas/App" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/apps/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Katalog]
+      operationId: getApp
+      summary: Tek kart
+      responses:
+        "200":
+          description: Kart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  app: { $ref: "#/components/schemas/App" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    patch:
+      tags: [Katalog]
+      operationId: patchApp
+      summary: Kısmi güncelleme
+      description: |
+        Kartın logosu, rengi ve panel içi adresi v1 şeklinde dönmez —
+        dolayısıyla gönderilemez ve güncelleme sırasında **korunur**.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AppPatch" }
+      responses:
+        "200":
+          description: Güncellendi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  app: { $ref: "#/components/schemas/App" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    delete:
+      tags: [Katalog]
+      operationId: deleteApp
+      summary: Kartı sil
+      description: Logo dosyası ve widget önbelleği kartla birlikte silinir.
+      responses:
+        "200": { $ref: "#/components/responses/Deleted" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/bookmarks:
+    get:
+      tags: [Katalog]
+      operationId: listBookmarks
+      summary: Bookmark listesi (düz, gruplanmamış)
+      description: |
+        İç uç grupları hazır kurulmuş döndürüyor çünkü ana sayfa öyle çiziyor.
+        Gruplama bir sunum kararı ve kuralı değişebilir; sözleşmeye girmesi o
+        kararı dondururdu. `group` alanı listede duruyor, toplamayı isteyen
+        istemci kendi yapar.
+      parameters:
+        - $ref: "#/components/parameters/CollectionLimit"
+      responses:
+        "200":
+          description: Bookmark'lar
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hostId: { type: integer, example: 1 }
+                  bookmarks:
+                    type: array
+                    items: { $ref: "#/components/schemas/Bookmark" }
+                  hasMore: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    post:
+      tags: [Katalog]
+      operationId: createBookmark
+      summary: Bookmark oluştur
+      description: "İzin: `apps.manage` — \"bookmark eklemek\" ile \"kart eklemek\" aynı karar."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BookmarkInput" }
+      responses:
+        "201":
+          description: Oluşturuldu
+          headers:
+            Location:
+              description: Oluşan kaynağın adresi
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bookmark: { $ref: "#/components/schemas/Bookmark" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/bookmarks/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Katalog]
+      operationId: getBookmark
+      summary: Tek bookmark
+      responses:
+        "200":
+          description: Bookmark
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bookmark: { $ref: "#/components/schemas/Bookmark" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    patch:
+      tags: [Katalog]
+      operationId: patchBookmark
+      summary: Kısmi güncelleme
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BookmarkPatch" }
+      responses:
+        "200":
+          description: Güncellendi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bookmark: { $ref: "#/components/schemas/Bookmark" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    delete:
+      tags: [Katalog]
+      operationId: deleteBookmark
+      summary: Bookmark'ı sil
+      responses:
+        "200": { $ref: "#/components/responses/Deleted" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/events:
+    get:
+      tags: [Olaylar]
+      operationId: listEvents
+      summary: Olay geçmişi (imleçli sayfalama)
+      description: |
+        `offset` değil `cursor`: `events` sürekli yeni satır alan bir tablo ve
+        offset ile sayfa gezerken araya yeni kayıt girdiğinde sayfa kayar.
+        İmleç bu sınıf hatayı yapısal olarak imkânsız kılıyor.
+
+        İmleç **opaktır** — çözümleme, üretme, biçimine güvenme. Bozuk imleç
+        `400` döner; sessizce başa dönmez.
+      parameters:
+        - name: since
+          in: query
+          schema: { type: integer }
+          description: Unix zaman damgası
+        - name: until
+          in: query
+          schema: { type: integer }
+          description: Unix zaman damgası
+        - name: severity
+          in: query
+          schema: { type: string }
+          description: Olay seviyesi; bilinmeyen değer 400 döner
+        - name: source
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100, maximum: 500 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+          description: Bir önceki yanıtın `nextCursor` değeri
+      responses:
+        "200":
+          description: Olaylar
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hostId: { type: integer, example: 1 }
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Event" }
+                  nextCursor: { type: string, nullable: true }
+                  hasMore: { type: boolean }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/host/power:
+    post:
+      tags: [Host]
+      operationId: hostPower
+      summary: Sunucuyu yeniden başlat / kapat / planı iptal et
+      description: |
+        İzin: `host.power`
+
+        `Idempotency-Key` **önerilir**. Ağ zaman aşımında istemci isteği
+        tekrarlar; ilk komut ulaşmışsa ikincisi art arda ikinci bir komut
+        olur. Başlık göndermezsen tekrar koruması **yoktur**.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [reboot, shutdown, cancel]
+                delayMinutes:
+                  type: integer
+                  default: 1
+                  minimum: 0
+                  maximum: 1440
+                  description: |
+                    Komutun kaç dakika sonra çalışacağı. Aralık dışı değer
+                    sınıra kırpılır. `action: cancel` için yok sayılır.
+      responses:
+        "200":
+          description: Komut kabul edildi
+          headers:
+            Idempotency-Replayed:
+              $ref: "#/components/headers/IdempotencyReplayed"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HelperResult" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "502": { $ref: "#/components/responses/UpstreamError" }
+        "503": { $ref: "#/components/responses/HelperUnavailable" }
+
+  /api/v1/host/services/{unit}/actions:
+    parameters:
+      - name: unit
+        in: path
+        required: true
+        description: systemd birim adı
+        schema: { type: string, example: docker }
+    post:
+      tags: [Host]
+      operationId: hostServiceAction
+      summary: systemd birimi üzerinde eylem
+      description: "İzin: `host.service`"
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [restart, start, stop, status]
+      responses:
+        "200":
+          description: Komut çalıştı
+          headers:
+            Idempotency-Replayed:
+              $ref: "#/components/headers/IdempotencyReplayed"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HelperResult" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "502": { $ref: "#/components/responses/UpstreamError" }
+        "503": { $ref: "#/components/responses/HelperUnavailable" }
+
+  /api/v1/host/compose:
+    post:
+      tags: [Host]
+      operationId: hostCompose
+      summary: Host üzerinde docker compose komutu
+      description: |
+        İzin: `host.service`
+
+        `dir` **mutlak yol** olmalı; göreli yol `400` döner.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, dir]
+              properties:
+                action:
+                  type: string
+                  enum: [up, down, pull, restart, ps]
+                dir:
+                  type: string
+                  description: compose dosyasının bulunduğu MUTLAK dizin
+                  example: /opt/stacks/medya
+      responses:
+        "200":
+          description: Komut çalıştı
+          headers:
+            Idempotency-Replayed:
+              $ref: "#/components/headers/IdempotencyReplayed"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HelperResult" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "502": { $ref: "#/components/responses/UpstreamError" }
+        "503": { $ref: "#/components/responses/HelperUnavailable" }
+
+  /metrics:
+    get:
+      tags: [Sistem]
+      operationId: getPrometheusMetrics
+      summary: Prometheus exposition
+      description: |
+        İki şaltere birden bağlıdır: `api.enabled` **ve**
+        `integration.prometheus.enabled`. İkisinden biri kapalıysa `404`.
+
+        Etiketlerde container **adı** kullanılır, id değil: id her recreate'te
+        değişir ve Prometheus için her seferinde yepyeni bir zaman serisi
+        demektir. Container metrikleri varsayılan olarak kapalıdır
+        (`integration.prometheus.include_containers`).
+      responses:
+        "200":
+          description: Prometheus text exposition (0.0.4)
+          content:
+            text/plain:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        `Authorization: Bearer pnl_...` — Hesabım → API Anahtarları'ndan
+        üretilir. Panelin çerez oturumu da kabul edilir ama o yolda
+        `x-csrf-token` başlığı zorunludur.
+
+  headers:
+    ApiVersion:
+      description: Bilgi amaçlı sürüm; pazarlık için değil
+      schema: { type: string, example: "1" }
+    IdempotencyReplayed:
+      description: |
+        `true` ise bu yanıt kayıtlı bir yanıtın tekrarıdır ve komut
+        yeniden ÇALIŞTIRILMAMIŞTIR.
+      schema: { type: string, example: "true" }
+
+  parameters:
+    ContainerId:
+      name: id
+      in: path
+      required: true
+      description: Container adı, tam id veya id öneki — üçü de çalışır
+      schema: { type: string }
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      description: |
+        Kaynağın sayısal kimliği. Bozuk bir kimlik (`abc`) `400` döner,
+        `404` değil — istemci kimliğinin bozuk olduğunu değil, kaydın
+        silindiğini sanmasın diye.
+      schema: { type: integer }
+    CollectionLimit:
+      name: limit
+      in: query
+      description: |
+        Kaç kayıt. Tavanı aşan değer **sessizce kırpılır** (hata değil):
+        fazla veri istemek bir hata değil, karşılanamayan bir istek.
+      schema: { type: integer, default: 200, maximum: 500 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        En fazla 128 karakter, yalnızca `A-Z a-z 0-9 _ . : -`. Aynı anahtarla
+        pencere içinde gelen ikinci istek komutu tekrar çalıştırmaz.
+        Anahtarlar kullanıcıya göre ayrılmıştır.
+      schema:
+        type: string
+        maxLength: 128
+        pattern: "^[A-Za-z0-9_.:-]{1,128}$"
+
+  responses:
+    Unauthorized:
+      description: |
+        Geçerli anahtar yok. Sebep dışarı verilmez — "iptal edilmiş" ile
+        "böyle bir anahtar yok" arasındaki fark, tarama yapan birine bilgi
+        olurdu.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Kimlik doğru, izin yetersiz
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Kaynak yok — **ya da `api.enabled` kapalı**
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    InvalidRequest:
+      description: Gövde, parametre veya başlık hatalı
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    BodyTooLarge:
+      description: Gövde `api.max_body_bytes` sınırını aşıyor (varsayılan 64 KB)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    UnsupportedMediaType:
+      description: "`Content-Type` `application/json` değil"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: |
+        Aynı `Idempotency-Key` ile gönderilen komut host tarafında zaten
+        görülmüş. Anlamı **belirsizlik değil, kesinlik**: ilk komut çalışmıştır.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RateLimited:
+      description: İstek sınırı aşıldı
+      headers:
+        Retry-After:
+          description: Kaç saniye sonra tekrar denenebilir
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    UpstreamError:
+      description: Docker ya da host-helper hata döndürdü
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    HelperUnavailable:
+      description: |
+        host-helper kurulu değil ya da sokete ulaşılamıyor. Mesaj kurulum
+        talimatını taşır.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Deleted:
+      description: |
+        Silindi. Silinen kaydın gövdesi dönmez, yalnızca kimliği —
+        istemciye artık var olmayan bir şeyi işlemeye devam edebileceğini
+        düşündürmemek için.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              deleted: { type: boolean, example: true }
+              id: { type: integer }
+
+  schemas:
+    Error:
+      type: object
+      description: |
+        v1'in hata zarfı iç uçlardan bilerek farklı. Kod sabittir, mesaj insan
+        içindir ve DEĞİŞEBİLİR — istemci `code`'a bakar, `message`'a değil.
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - unauthorized
+                - forbidden
+                - not_found
+                - invalid_request
+                - conflict
+                - rate_limited
+                - upstream_error
+                - internal_error
+            message:
+              type: string
+
+    System:
+      type: object
+      properties:
+        hostId:
+          type: integer
+          example: 1
+          description: |
+            Çok-host hazırlığı (T7). Bugün her zaman 1. Alanı sonradan
+            eklemek kırıcı değil ama ANLAMINI sonradan değiştirmek — "bu
+            liste artık tüm host'ları kapsıyor" — kırıcı olurdu.
+        hostname: { type: string }
+        platform: { type: string }
+        kernel:
+          type: string
+          description: İç ad `release`; dışarıda `kernel` çünkü ne olduğunu söylüyor
+        osName: { type: string, nullable: true }
+        arch: { type: string }
+        cpuModel: { type: string }
+        cpuCount: { type: integer }
+        totalMemoryBytes: { type: integer }
+        uptimeSeconds: { type: integer }
+        metrics:
+          type: object
+          properties:
+            measuredAt: { type: integer, nullable: true }
+            cpuPercent: { type: number, nullable: true }
+            cpuIowaitPercent: { type: number, nullable: true }
+            memoryUsedPercent: { type: number, nullable: true }
+            memoryUsedBytes: { type: integer, nullable: true }
+            memoryTotalBytes: { type: integer, nullable: true }
+            swapUsedPercent: { type: number, nullable: true }
+            load1: { type: number, nullable: true }
+            load5: { type: number, nullable: true }
+            load15: { type: number, nullable: true }
+            disks:
+              type: array
+              items:
+                type: object
+                properties:
+                  mount: { type: string }
+                  usedPercent: { type: number }
+                  usedBytes: { type: integer }
+                  freeBytes: { type: integer }
+                  totalBytes: { type: integer }
+            interfaces:
+              type: array
+              items:
+                type: object
+                properties:
+                  name: { type: string }
+                  rxBytesPerSecond: { type: number }
+                  txBytesPerSecond: { type: number }
+
+    Hardware:
+      type: object
+      properties:
+        hostId: { type: integer, example: 1 }
+        reportedAt: { type: integer, nullable: true }
+        virtualization: { type: string, nullable: true }
+        notes:
+          type: array
+          description: Verinin neden eksik olduğu
+          items: { type: string }
+        temperatures:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              source: { type: string }
+              label: { type: string }
+              celsius: { type: number }
+              highCelsius: { type: number, nullable: true }
+              criticalCelsius: { type: number, nullable: true }
+        disks:
+          type: array
+          items:
+            type: object
+            properties:
+              device: { type: string }
+              model: { type: string }
+              serial: { type: string, nullable: true }
+              sizeBytes: { type: integer, nullable: true }
+              health: { type: string }
+              temperatureCelsius: { type: number, nullable: true }
+              powerOnHours: { type: integer, nullable: true }
+              reallocatedSectors: { type: integer, nullable: true }
+              pendingSectors: { type: integer, nullable: true }
+              uncorrectableErrors: { type: integer, nullable: true }
+              percentageUsed: { type: number, nullable: true }
+        pools:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              kind: { type: string }
+              state: { type: string }
+              healthy: { type: boolean }
+              detail: { type: string }
+              lastScrubAt: { type: integer, nullable: true }
+              scrubResult: { type: string, nullable: true }
+
+    MetricSeries:
+      type: object
+      properties:
+        hostId: { type: integer, example: 1 }
+        range: { type: string }
+        tier:
+          type: string
+          description: Hangi katmandan okundu (ham / 1dk / 1sa / 1gün)
+        resolutionSeconds: { type: integer }
+        from: { type: integer }
+        to: { type: integer }
+        series:
+          type: array
+          items:
+            type: object
+            properties:
+              metric: { type: string }
+              label: { type: string }
+              points:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    ts: { type: integer }
+                    avg: { type: number, nullable: true }
+                    min: { type: number, nullable: true }
+                    max: { type: number, nullable: true }
+
+    Container:
+      type: object
+      description: |
+        `labels` ve `networks` bilerek dışarı verilmiyor: etiketler üçüncü
+        taraf imajların koyduğu her şeyi içeriyor (bazen ortam bilgisi, bazen
+        yol) ve sözleşmeye girmeleri ileride daraltılamayacak bir yüzey
+        açardı. Gerçekten gerekirse eklemek serbest; çıkarmak değil.
+      properties:
+        hostId: { type: integer, example: 1 }
+        id: { type: string }
+        name: { type: string }
+        image: { type: string }
+        state: { type: string }
+        status: { type: string }
+        health: { type: string, nullable: true }
+        createdAt: { type: integer }
+        ports:
+          type: array
+          items:
+            type: object
+            properties:
+              hostIp: { type: string, nullable: true }
+              hostPort: { type: integer, nullable: true }
+              containerPort: { type: integer }
+              protocol: { type: string }
+        compose:
+          type: object
+          properties:
+            project: { type: string, nullable: true }
+            service: { type: string, nullable: true }
+        metrics:
+          type: object
+          properties:
+            cpuPercent: { type: number, nullable: true }
+            memoryUsedBytes: { type: integer, nullable: true }
+            memoryPercent: { type: number, nullable: true }
+            restartCount: { type: integer, nullable: true }
+            restartsInWindow: { type: integer, nullable: true }
+            restartWindowMinutes: { type: integer }
+
+    Task:
+      type: object
+      properties:
+        id: { type: string }
+        kind: { type: string }
+        target: { type: string }
+        status:
+          type: string
+          enum: [running, succeeded, failed]
+          description: |
+            `cancelled` diye bir değer YOKTUR. Görev kaydı bulunamazsa yanıt
+            `404`'tür, sahte bir durum değil.
+        progress: { type: string }
+        detail: { type: string }
+        error: { type: string, nullable: true }
+        startedAt: { type: integer }
+        finishedAt: { type: integer, nullable: true }
+
+    Monitor:
+      type: object
+      description: |
+        60 günlük uptime şeridi (`days`) dışarı verilmiyor: monitör başına 60
+        nesne, liste ucunu on katına çıkarırdı ve bir script'in ihtiyacı olan
+        şey monitörün ŞU ANKİ durumu. Geçmiş isteyen `/api/v1/events`e bakar.
+      properties:
+        hostId: { type: integer, example: 1 }
+        id: { type: integer }
+        name: { type: string }
+        type:
+          type: string
+          enum: [http, tcp, ping, dns, container]
+        target: { type: string }
+        enabled: { type: boolean }
+        status:
+          type: string
+          enum: [up, down, bilinmiyor]
+        inMaintenance: { type: boolean }
+        lastCheckAt: { type: integer, nullable: true }
+        lastChangeAt: { type: integer, nullable: true }
+        lastLatencyMs: { type: integer, nullable: true }
+        lastError: { type: string, nullable: true }
+        nextCheckAt: { type: integer, nullable: true }
+        consecutiveFailures: { type: integer }
+        uptime24hPercent: { type: number, nullable: true }
+        uptime30dPercent: { type: number, nullable: true }
+        intervalSeconds:
+          type: integer
+          description: |
+            ÇÖZÜMLENMİŞ değer — istemci "null = ayardaki varsayılan" kuralını
+            bilmek zorunda kalmasın diye.
+        timeoutSeconds: { type: integer }
+
+    MonitorInput:
+      type: object
+      required: [name, type, target]
+      properties:
+        name: { type: string }
+        type:
+          type: string
+          enum: [http, tcp, ping, dns, container]
+        target:
+          type: string
+          description: |
+            `http` için tam adres, `tcp` için `sunucu:port`, `ping`/`dns`
+            için ad ya da IP, `container` için container adı.
+        expected:
+          type: string
+          description: Tipe göre anlamı değişir; boş bırakılabilir
+        enabled: { type: boolean, default: true }
+        ignoreTls: { type: boolean, default: false }
+        intervalSeconds:
+          type: integer
+          nullable: true
+          minimum: 10
+          maximum: 3600
+          description: "`null` = ayardaki global değeri kullan"
+        timeoutSeconds:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 120
+        retries:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 10
+        downThreshold:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 20
+
+    MonitorPatch:
+      type: object
+      description: |
+        Gönderilmeyen alan **korunur**. Bir alanı boşaltmak için `null`
+        gönder.
+      properties:
+        name: { type: string }
+        type:
+          type: string
+          enum: [http, tcp, ping, dns, container]
+        target: { type: string }
+        expected: { type: string }
+        enabled: { type: boolean }
+        ignoreTls: { type: boolean }
+        intervalSeconds: { type: integer, nullable: true }
+        timeoutSeconds: { type: integer, nullable: true }
+        retries: { type: integer, nullable: true }
+        downThreshold: { type: integer, nullable: true }
+
+    Maintenance:
+      type: object
+      properties:
+        hostId: { type: integer, example: 1 }
+        id: { type: integer }
+        name: { type: string }
+        kind:
+          type: string
+          enum: [once, weekly]
+        startsAt: { type: integer, nullable: true }
+        endsAt: { type: integer, nullable: true }
+        weekdays:
+          type: array
+          description: "0 = Pazar. `kind: weekly` dışında her zaman boş."
+          items: { type: integer, minimum: 0, maximum: 6 }
+        startMinute: { type: integer, nullable: true, minimum: 0, maximum: 1439 }
+        endMinute: { type: integer, nullable: true, minimum: 0, maximum: 1439 }
+        monitorId:
+          type: integer
+          nullable: true
+          description: "`null` = tüm monitörler"
+        enabled: { type: boolean }
+        active:
+          type: boolean
+          description: |
+            Pencere ŞU AN yürürlükte mi — SUNUCUDA hesaplanır. İstemcinin
+            `weekdays` + `startMinute` üçlüsünden yeniden hesaplaması, panelin
+            hangi saat diliminde çalıştığını bilmesini gerektirirdi ve yanlış
+            bir "aktif" değeri, bir otomasyonun bakım sırasında alarm üretmesi
+            demek.
+
+    MaintenanceInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        kind:
+          type: string
+          enum: [once, weekly]
+          default: once
+        startsAt:
+          type: integer
+          nullable: true
+          description: "`kind: once` için zorunlu (unix ts)"
+        endsAt: { type: integer, nullable: true }
+        weekdays:
+          type: array
+          description: "`kind: weekly` için en az bir gün zorunlu. 0 = Pazar."
+          items: { type: integer, minimum: 0, maximum: 6 }
+        startMinute: { type: integer, nullable: true }
+        endMinute: { type: integer, nullable: true }
+        monitorId: { type: integer, nullable: true }
+        enabled: { type: boolean, default: true }
+
+    MaintenancePatch:
+      type: object
+      description: Gönderilmeyen alan korunur — `kind` dâhil.
+      properties:
+        name: { type: string }
+        kind:
+          type: string
+          enum: [once, weekly]
+        startsAt: { type: integer, nullable: true }
+        endsAt: { type: integer, nullable: true }
+        weekdays:
+          type: array
+          items: { type: integer }
+        startMinute: { type: integer, nullable: true }
+        endMinute: { type: integer, nullable: true }
+        monitorId: { type: integer, nullable: true }
+        enabled: { type: boolean }
+
+    App:
+      type: object
+      description: |
+        `internalUrl`, `icon`, `color`, `widgetConfigured` dışarıda.
+        `internalUrl` panelin kendi ağından çözülen adres — dış bir istemci
+        için ulaşılamaz olabilir ve "çalışmayan adres" olarak görünürdü.
+        Diğerleri saf sunum bilgisi.
+      properties:
+        hostId: { type: integer, example: 1 }
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string }
+        url:
+          type: string
+          description: |
+            HAM adres — `{host}` yer tutucusu çözülmez. Dış bir istemcinin
+            isteğinden çözülen adres o istemci için anlamsız olabilirdi.
+        categoryId: { type: integer, nullable: true }
+        containerName: { type: string }
+        monitorId: { type: integer, nullable: true }
+        source:
+          type: string
+          enum: [manual, docker]
+        enabled: { type: boolean }
+        sortOrder: { type: integer }
+
+    AppInput:
+      type: object
+      required: [name, url]
+      properties:
+        name: { type: string }
+        url: { type: string }
+        description: { type: string }
+        categoryId: { type: integer, nullable: true }
+        monitorId: { type: integer, nullable: true }
+        containerName: { type: string }
+        openNewTab: { type: boolean, default: true }
+        enabled: { type: boolean, default: true }
+        showOnLogin:
+          type: boolean
+          default: false
+          description: |
+            Kart karşılama sayfasında oturumsuz da listelensin mi. Diğer iki
+            bayrağın TERSİ yönde varsayılan: eksik ya da bozuk bir gövde kartı
+            dışarı açmamalı.
+
+    AppPatch:
+      type: object
+      description: |
+        Gönderilmeyen alan korunur — v1 şeklinde görünmeyen `icon`, `color`
+        ve `internalUrl` dâhil.
+      properties:
+        name: { type: string }
+        url: { type: string }
+        description: { type: string }
+        categoryId: { type: integer, nullable: true }
+        monitorId: { type: integer, nullable: true }
+        containerName: { type: string }
+        openNewTab: { type: boolean }
+        enabled: { type: boolean }
+        showOnLogin: { type: boolean }
+
+    Bookmark:
+      type: object
+      properties:
+        hostId: { type: integer, example: 1 }
+        id: { type: integer }
+        group: { type: string }
+        title: { type: string }
+        url: { type: string }
+        sortOrder: { type: integer }
+
+    BookmarkInput:
+      type: object
+      required: [group, title, url]
+      properties:
+        group: { type: string }
+        title: { type: string }
+        url: { type: string }
+
+    BookmarkPatch:
+      type: object
+      description: Gönderilmeyen alan korunur.
+      properties:
+        group: { type: string }
+        title: { type: string }
+        url: { type: string }
+
+    Event:
+      type: object
+      properties:
+        hostId: { type: integer, example: 1 }
+        id: { type: integer }
+        ts: { type: integer }
+        severity: { type: string }
+        source: { type: string }
+        alertKey: { type: string }
+        title: { type: string }
+        detail: { type: string }
+        notifiedChannels:
+          type: array
+          items: { type: string }
+        suppressedReason: { type: string, nullable: true }
+        acknowledgedAt: { type: integer, nullable: true }
+        acknowledgedBy: { type: string, nullable: true }
+
+    HelperResult:
+      type: object
+      description: host-helper'ın döndürdüğü sonuç
+      properties:
+        ok: { type: boolean }
+        output: { type: string }
+        detail: { type: string }

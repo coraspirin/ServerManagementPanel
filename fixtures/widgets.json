@@ -1,0 +1,15 @@
+{
+  "pihole": {
+    "stats": [
+      { "label": "Sorgu (24 sa)", "value": "48.2B" },
+      { "label": "Engellendi", "value": "9.7B", "tone": "ok" },
+      { "label": "Oran", "value": "%20.1", "tone": "ok" }
+    ],
+    "lines": [
+      { "label": "En çok engellenen", "value": "graph.facebook.com (412)" },
+      { "label": "Engel listesi", "value": "146B alan adı" }
+    ],
+    "note": null,
+    "availableActions": ["disable"]
+  }
+}

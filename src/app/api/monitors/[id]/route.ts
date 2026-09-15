@@ -1,0 +1,67 @@
+import { guardApi } from "@/lib/auth/api";
+import { audit } from "@/lib/auth/audit";
+import {
+  deleteMonitor,
+  getMonitor,
+  monitorViews,
+  parseMonitorInput,
+  updateMonitor,
+} from "@/lib/monitors/store";
+
+export const dynamic = "force-dynamic";
+
+type Context = { params: Promise<{ id: string }> };
+
+export async function PATCH(request: Request, { params }: Context) {
+  const guard = await guardApi(request, "monitors.manage");
+  if (!guard.ok) return guard.response;
+
+  const id = Number((await params).id);
+  const existing = getMonitor(id);
+  if (!existing) return Response.json({ error: "monitör bulunamadı" }, { status: 404 });
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+  }
+
+  const parsed = parseMonitorInput(body);
+  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+
+  updateMonitor(id, parsed.input);
+
+  audit({
+    userId: guard.session.user.id,
+    username: guard.session.user.username,
+    action: "monitors.update",
+    targetId: String(id),
+    detail: `${existing.target} → ${parsed.input.target}`,
+    result: "ok",
+  });
+
+  return Response.json({ ok: true, monitors: monitorViews() });
+}
+
+export async function DELETE(request: Request, { params }: Context) {
+  const guard = await guardApi(request, "monitors.manage");
+  if (!guard.ok) return guard.response;
+
+  const id = Number((await params).id);
+  const existing = getMonitor(id);
+  if (!existing) return Response.json({ error: "monitör bulunamadı" }, { status: 404 });
+
+  deleteMonitor(id);
+
+  audit({
+    userId: guard.session.user.id,
+    username: guard.session.user.username,
+    action: "monitors.delete",
+    targetId: String(id),
+    detail: existing.name,
+    result: "ok",
+  });
+
+  return Response.json({ ok: true, monitors: monitorViews() });
+}

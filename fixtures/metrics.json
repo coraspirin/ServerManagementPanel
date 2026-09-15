@@ -1,0 +1,13 @@
+{
+  "cpu": { "basePct": 14, "swingPct": 16, "iowaitBasePct": 1.2 },
+  "memory": { "totalBytes": 16706494464, "baseUsedPct": 46, "swingPct": 9 },
+  "swap": { "totalBytes": 4294967296, "baseUsedPct": 4, "swingPct": 2 },
+  "load": { "base": 0.55, "swing": 0.9 },
+  "disks": [
+    { "mount": "/", "totalBytes": 479117541376, "baseUsedPct": 58, "growthPctPerMonth": 0.6 },
+    { "mount": "/mnt/veri", "totalBytes": 1998678917120, "baseUsedPct": 34, "growthPctPerMonth": 1.4 }
+  ],
+  "interfaces": [
+    { "name": "enp3s0", "baseRxBps": 1450000, "baseTxBps": 310000, "swing": 0.85 }
+  ]
+}

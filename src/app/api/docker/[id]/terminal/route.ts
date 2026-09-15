@@ -1,0 +1,109 @@
+import { guardApi } from "@/lib/auth/api";
+import { audit } from "@/lib/auth/audit";
+import { startSession } from "@/lib/docker/exec";
+import { getDockerProvider } from "@/lib/providers";
+import { isMockMode } from "@/lib/env";
+
+export const dynamic = "force-dynamic";
+
+/** İstemciden kabul edilen kabuklar (M3.34). Dışındaki değer yok sayılıyor. */
+const SHELLS = ["auto", "/bin/bash", "/bin/sh", "/bin/zsh", "/bin/ash"];
+
+/** `docker exec -u` biçimi: ad, uid ya da uid:gid. */
+const USER_RE = /^[a-z_][a-z0-9_-]{0,31}$|^[0-9]{1,10}(:[0-9]{1,10})?$/i;
+
+/**
+ * Terminal oturumu başlatır (M1.9).
+ *
+ * Container içinde kabuk açmak, o container'da genelde **root** olmak
+ * demektir; bu yüzden ayrı bir izin (`docker.exec`) isteniyor ve her oturum
+ * başlangıcı audit'e düşüyor. Oturumun kime ait olduğu bellekte tutuluyor:
+ * oturum kimliğini ele geçiren başka bir kullanıcı da bağlanamaz.
+ */
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const guard = await guardApi(request, "docker.exec");
+  if (!guard.ok) return guard.response;
+
+  if (isMockMode()) {
+    return Response.json(
+      { error: "MOCK_MODE açıkken terminal kullanılamaz — gerçek bir container gerekiyor." },
+      { status: 503 },
+    );
+  }
+
+  const id = (await params).id;
+
+  let body: { cols?: unknown; rows?: unknown; shell?: unknown; user?: unknown };
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    body = {};
+  }
+
+  const cols = clamp(Number(body.cols ?? 80), 20, 500);
+  const rows = clamp(Number(body.rows ?? 24), 5, 200);
+
+  /*
+    Kabuk ve kullanıcı seçimi (M3.34) BEYAZ LİSTEDEN geçiyor.
+
+    İkisi de `docker exec`e komut ve `-u` olarak gidiyor; istemciden gelen ham
+    dizeyi doğrudan geçirmek, bir kullanıcıya container içinde istediği
+    ikiliyi çalıştırma imkânı vermek olurdu. `docker.exec` izni zaten kabuk
+    açma izni ama izin listesi, izni OLMAYAN bir yoldan (ör. ileride eklenecek
+    bir otomasyon ucundan) gelen isteklerde de dar kalmayı sağlıyor.
+  */
+  const shell = SHELLS.includes(String(body.shell ?? "")) ? String(body.shell) : "";
+  const user = USER_RE.test(String(body.user ?? "")) ? String(body.user) : "";
+
+  const state = await getDockerProvider().inspect(id);
+  if (!state) return Response.json({ error: "container bulunamadı" }, { status: 404 });
+  if (!state.running) {
+    return Response.json(
+      { error: "container çalışmıyor — durmuş bir container'da kabuk açılamaz" },
+      { status: 409 },
+    );
+  }
+
+  try {
+    const session = await startSession({
+      containerId: id,
+      containerName: state.name,
+      username: guard.session.user.username,
+      cols,
+      rows,
+      shell,
+      user,
+    });
+
+    audit({
+      userId: guard.session.user.id,
+      username: guard.session.user.username,
+      action: "docker.exec",
+      targetType: "container",
+      targetId: state.name,
+      detail:
+        `terminal açıldı (${cols}×${rows})` +
+        (shell ? ` · kabuk: ${shell}` : "") +
+        (user ? ` · kullanıcı: ${user}` : ""),
+      result: "ok",
+    });
+
+    return Response.json({ sessionId: session.id, container: state.name });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "terminal açılamadı";
+    audit({
+      userId: guard.session.user.id,
+      username: guard.session.user.username,
+      action: "docker.exec",
+      targetType: "container",
+      targetId: state.name,
+      detail: message,
+      result: "error",
+    });
+    return Response.json({ error: message }, { status: 500 });
+  }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Number.isFinite(value) ? Math.min(Math.max(Math.round(value), min), max) : min;
+}

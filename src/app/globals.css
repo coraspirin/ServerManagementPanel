@@ -1,0 +1,317 @@
+@import "tailwindcss";
+
+/* Sınıf tabanlı koyu tema — M0.4'teki tema seçici `.dark` sınıfını yönetecek. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --canvas: #f6f7f9;
+  --surface: #ffffff;
+  --line: #e4e7ec;
+  --ink: #10151f;
+  --subtle: #63708b;
+  --brand: #2563eb;
+  --ok: #15803d;
+  --warn: #b45309;
+  --danger: #b91c1c;
+
+  /*
+    Yapışkan üstbarın yüksekliği. Tek kaynak olarak burada duruyor çünkü iki
+    yerde birden lazım: başlığın kendi yüksekliği ve `scroll-padding-top`.
+    Çentik boşluğu da içinde — üstbar ekranın en tepesinde durduğu için
+    durum çubuğunun altına girmemesi gerekiyor.
+  */
+  --header-h: calc(3.5rem + env(safe-area-inset-top));
+}
+
+.dark {
+  --canvas: #0a0e17;
+  --surface: #121826;
+  --line: #222a3a;
+  --ink: #e6e9ef;
+  --subtle: #94a1ba;
+  --brand: #5b8cff;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --danger: #f87171;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-subtle: var(--subtle);
+  --color-brand: var(--brand);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@layer base {
+  html {
+    /*
+      Yapışkan üstbarın klasik yan etkisi: bir çapaya (`#hash`) ya da
+      `scrollIntoView` ile bir öğeye gidildiğinde hedef başlığın ALTINDA
+      kalır. Kaydırma dolgusu bunu tarayıcı seviyesinde çözüyor.
+    */
+    scroll-padding-top: var(--header-h);
+  }
+
+  body {
+    background-color: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    /* Telefon yatay çevrildiğinde tarayıcı yazıyı kendiliğinden büyütmesin. */
+    text-size-adjust: 100%;
+  }
+
+  /*
+    `<dialog>`u ekranın ortasında tutan tek şey tarayıcının kendi
+    `margin: auto` kuralıydı. Tailwind v4'ün preflight'ı ise margin'i EVRENSEL
+    seçiciyle sıfırlıyor (`*, ::before, ::after, ::backdrop { margin: 0 }`) ve
+    onu da öldürüyor: `inset: 0` + `width/height: fit-content` + `margin: 0`
+    aşırı kısıtlanmış bir kutu demek, tarayıcı sağ/alt kenarı yok sayıyor ve
+    modal SOL ÜST KÖŞEYE yapışıyor. (Tailwind v3'te bu kural yalnızca `p`,
+    `h1-h6` gibi sayılı öğelere uygulanıyordu; kırılma v4'e özgü.)
+
+    Kural bilerek `@layer base` içinde: preflight ile aynı katmanda ama daha
+    özgül olduğu için onu yeniyor, buna karşılık `utilities` katmanındaki
+    sınıflar (Modal'ın `max-sm:mb-0`ı gibi) bunu ezmeye devam edebiliyor —
+    mobildeki alttan açılan yaprak bu yüzden bozulmuyor.
+  */
+  dialog {
+    margin: auto;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Mobil yardımcıları
+   ---------------------------------------------------------------------------
+   Buradan aşağısı bilerek katmansız (`@layer` dışında) yazıldı. Tailwind'in
+   `utilities` katmanı katmansız CSS'in altında kalır; yani bu kurallar
+   `text-sm`, `min-w-[52rem]` gibi sınıfları `!important` kullanmadan yener.
+   Amaç bu: mobil davranışın, yüzlerce dosyaya serpiştirilmiş masaüstü
+   ölçülerini tek yerden geçersiz kılması.
+--------------------------------------------------------------------------- */
+
+/*
+  Çentik/ev düğmesi boşlukları — layout.tsx'teki viewportFit:"cover" karşılığı.
+  Hazır bir `safe-b` yardımcısı bilerek tanımlanmadı: `padding-bottom`u tek
+  başına yazan böyle bir sınıf, yanındaki `p-4`ün alt boşluğunu ezer ve normal
+  tarayıcıda env() sıfır olduğu için boşluk büsbütün kaybolur. Kullanım yerinde
+  `pb-[max(1rem,env(safe-area-inset-bottom))]` yazmak hem doğru hem okunur.
+*/
+
+/*
+  `<main>` boşluğu (eski hali: `p-4 sm:p-6`) ile güvenli alanın birleşimi.
+  Tek bir yerde kullanıldığı için ölçüler burada sabit; `max()` sayesinde
+  normal tarayıcıda (env() = 0) eski boşluklar aynen korunuyor.
+*/
+@utility pad-main {
+  padding: 1rem;
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+
+  @media (width >= 40rem) {
+    padding: 1.5rem;
+    padding-left: max(1.5rem, env(safe-area-inset-left));
+    padding-right: max(1.5rem, env(safe-area-inset-right));
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* Yatay kayan sekme/araç çubukları için: kaydırma var, çubuk görünmüyor. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  /*
+    iOS Safari, 16px'ten küçük yazılı bir alana odaklanınca sayfayı
+    yakınlaştırır ve bir daha geri döndürmez. Panelde alanların çoğu
+    `text-sm`/`text-xs`; hepsini tek tek büyütmek yerine dokunmatikte
+    tabanı 16px'e çekiyoruz. Onay kutuları bunun dışında — onlarda yazı
+    boyutu kutunun boyutunu değiştirmez, hizayı bozar.
+  */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: max(1rem, 100%);
+  }
+
+  /*
+    Dokunma hedefi tabanı. Paneldeki simge düğmeleri `p-1` + `size-4` ile
+    ~24px kalıyor; parmak için en az ~36px gerekiyor. Yalnız kaba işaretçide
+    uygulanıyor, masaüstünde yoğun tablolar aynen korunuyor.
+  */
+  button,
+  select,
+  summary,
+  [role="button"] {
+    min-block-size: 2.25rem;
+  }
+  button {
+    min-inline-size: 2.25rem;
+  }
+  /* Tam ekran perde düğmeleri ve satır içi bağlantı görünümlüler hariç. */
+  button.tap-auto {
+    min-block-size: auto;
+    min-inline-size: auto;
+  }
+
+  /* Dokununca beliren gri kutu, kendi hover/active durumlarımızla çakışıyor. */
+  a,
+  button,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   `rtable` — dar ekranda kart yığınına dönüşen tablo
+   ---------------------------------------------------------------------------
+   Paneldeki geniş tablolar `overflow-x-auto` + `min-w-[52rem]` ile çözülmüştü;
+   telefonda bu, 7 sütunu görmek için yatay kaydırma demek. `rtable` sınıfı
+   md altında başlık satırını gizler, her satırı bir karta çevirir ve her
+   hücrenin başlığını `data-label` özniteliğinden yazar.
+
+   Kullanımı: <table class="... rtable"> + her <td data-label="Sütun adı">.
+   Etiket istenmeyen hücrede `data-label=""` bırakılır (örn. işlem düğmeleri).
+--------------------------------------------------------------------------- */
+@media (width < 48rem) {
+  table.rtable {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  table.rtable thead {
+    /* Görsel olarak gizli ama ekran okuyucudan da kaldırılıyor: kart
+       düzeninde her hücre etiketini zaten kendisi taşıyor. */
+    display: none;
+  }
+
+  table.rtable tbody,
+  table.rtable tfoot {
+    display: block;
+  }
+
+  table.rtable tr {
+    display: block;
+    padding: 0.625rem 0.875rem;
+    /*
+      `border-top: 0` şart: bu tabloların çoğunda `divide-y` var ve o, ayırıcıyı
+      satırın ÜSTÜNE koyuyor. Kart düzeninde kendi alt çizgimizle üst üste
+      binip her satır arasında çift çizgi bırakırdı.
+    */
+    border-top: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  table.rtable tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  table.rtable td {
+    display: grid;
+    grid-template-columns: minmax(5.5rem, 34%) 1fr;
+    gap: 0.75rem;
+    align-items: baseline;
+    padding: 0.1875rem 0;
+    border: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  table.rtable td::before {
+    content: attr(data-label);
+    color: var(--subtle);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.45;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  /* Etiketsiz hücreler (işlem düğmeleri, colspan'lı "kayıt yok" satırları)
+     kartın tam genişliğini kullanır. */
+  table.rtable td:not([data-label]),
+  table.rtable td[data-label=""],
+  table.rtable td[colspan] {
+    grid-template-columns: 1fr;
+    padding-top: 0.375rem;
+  }
+  table.rtable td:not([data-label])::before,
+  table.rtable td[data-label=""]::before,
+  table.rtable td[colspan]::before {
+    display: none;
+  }
+
+  /* `truncate` kartta anlamsız — tek satıra sıkışmak yerine metin sarabilir. */
+  table.rtable td.truncate,
+  table.rtable td .truncate {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Duyuru metni (M3.45)
+
+   `welcome.notice` artık zengin metin: kalın, italik, liste ve bağlantı
+   içerebiliyor. Tailwind preflight'ı `ul`/`ol` işaretlerini ve `strong`
+   kalınlığını sıfırladığı için kaydedilen biçimlendirme HİÇ görünmüyordu —
+   düzenleyicide görünen ile sayfada görünen ayrışıyordu. Bu blok ikisini
+   aynı yere getiriyor.
+
+   Aynı sınıf hem düzenleyici kutusunda hem karşılama sayfasındaki şeritte
+   kullanılıyor; tek kaynak olması "editörde başka görünüyordu" şikâyetinin
+   tekrarını engelliyor.
+   -------------------------------------------------------------------------- */
+.prose-notice > * + * {
+  margin-top: 0.5rem;
+}
+.prose-notice strong,
+.prose-notice b {
+  font-weight: 600;
+}
+.prose-notice em,
+.prose-notice i {
+  font-style: italic;
+}
+.prose-notice u {
+  text-decoration: underline;
+}
+.prose-notice ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+.prose-notice ol {
+  list-style: decimal;
+  padding-left: 1.25rem;
+}
+.prose-notice li + li {
+  margin-top: 0.125rem;
+}
+.prose-notice a {
+  color: var(--brand);
+  text-decoration: underline;
+}
+.prose-notice code {
+  font-family: var(--font-mono, ui-monospace), monospace;
+  font-size: 0.9em;
+}
+.prose-notice blockquote {
+  border-left: 2px solid var(--line);
+  padding-left: 0.625rem;
+  color: var(--subtle);
+}

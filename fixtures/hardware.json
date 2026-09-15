@@ -1,0 +1,53 @@
+{
+  "temperatures": [
+    { "id": "coretemp/temp1", "source": "coretemp", "label": "Package id 0", "celsius": 52.0, "highC": 84, "criticalC": 100 },
+    { "id": "coretemp/temp2", "source": "coretemp", "label": "Core 0", "celsius": 49.0, "highC": 84, "criticalC": 100 },
+    { "id": "coretemp/temp3", "source": "coretemp", "label": "Core 1", "celsius": 51.0, "highC": 84, "criticalC": 100 },
+    { "id": "nvme/temp1", "source": "nvme", "label": "Composite", "celsius": 74.0, "highC": 78, "criticalC": 85 },
+    { "id": "acpitz/temp1", "source": "acpitz", "label": "Kasa", "celsius": 38.0, "highC": null, "criticalC": null }
+  ],
+  "disks": [
+    {
+      "device": "/dev/sda",
+      "model": "Samsung SSD 870 EVO 500GB",
+      "serial": "S6PXNZ0T123456A",
+      "sizeBytes": 500107862016,
+      "health": "PASSED",
+      "temperatureC": 41,
+      "powerOnHours": 19842,
+      "reallocatedSectors": 0,
+      "pendingSectors": 0,
+      "uncorrectableErrors": 0,
+      "percentageUsed": 7
+    },
+    {
+      "device": "/dev/sdb",
+      "model": "WDC WD20EFRX-68EUZN0",
+      "serial": "WD-WCC4M1234567",
+      "sizeBytes": 2000398934016,
+      "health": "PASSED",
+      "temperatureC": 39,
+      "powerOnHours": 41205,
+      "reallocatedSectors": 8,
+      "pendingSectors": 2,
+      "uncorrectableErrors": 0,
+      "percentageUsed": null
+    }
+  ],
+  "pools": [
+    {
+      "name": "veri",
+      "kind": "zfs",
+      "state": "ONLINE",
+      "healthy": true,
+      "detail": "mirror-0 · 2 disk",
+      "devices": [
+        { "name": "sdb", "state": "ONLINE" },
+        { "name": "sdc", "state": "ONLINE" }
+      ],
+      "lastScrubAt": 1784600000,
+      "scrubResult": "hatasız tamamlandı"
+    }
+  ],
+  "reportedAt": 1785000000
+}

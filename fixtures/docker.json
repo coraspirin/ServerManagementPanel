@@ -1,0 +1,689 @@
+{
+  "containers": [
+    {
+      "id": "c1a2b3",
+      "name": "homeassistant",
+      "image": "ghcr.io/home-assistant/home-assistant:stable",
+      "running": true,
+      "status": "running",
+      "health": "healthy",
+      "restartCount": 0,
+      "startedAt": "2026-07-21T22:05:11.000Z"
+    },
+    {
+      "id": "d4e5f6",
+      "name": "mosquitto",
+      "image": "eclipse-mosquitto:2",
+      "running": true,
+      "status": "running",
+      "health": null,
+      "restartCount": 0,
+      "startedAt": "2026-07-21T22:05:09.000Z"
+    },
+    {
+      "id": "a7b8c9",
+      "name": "zigbee2mqtt",
+      "image": "koenkk/zigbee2mqtt:latest",
+      "running": true,
+      "status": "running",
+      "health": "healthy",
+      "restartCount": 2,
+      "startedAt": "2026-07-24T06:41:53.000Z"
+    },
+    {
+      "id": "e1f2a3",
+      "name": "pihole",
+      "image": "pihole/pihole:latest",
+      "running": true,
+      "status": "running",
+      "health": "healthy",
+      "restartCount": 0,
+      "startedAt": "2026-07-21T22:05:10.000Z"
+    },
+    {
+      "id": "b4c5d6",
+      "name": "cirkin-servis",
+      "image": "eski/servis:0.9",
+      "running": true,
+      "status": "running",
+      "health": "unhealthy",
+      "restartCount": 17,
+      "startedAt": "2026-07-25T22:58:00.000Z"
+    },
+    {
+      "id": "f7a8b9",
+      "name": "eski-servis",
+      "image": "arsiv/servis:1.0",
+      "running": false,
+      "status": "exited",
+      "health": null,
+      "restartCount": 0,
+      "startedAt": "2026-06-02T11:20:00.000Z"
+    }
+  ],
+  "summaries": [
+    {
+      "id": "c1a2b3",
+      "name": "homeassistant",
+      "image": "ghcr.io/home-assistant/home-assistant:stable",
+      "imageId": "sha256:aa11",
+      "state": "running",
+      "status": "Up 4 days (healthy)",
+      "health": "healthy",
+      "createdAt": 1784500000,
+      "ports": [],
+      "composeProject": "homeassistant",
+      "composeService": "homeassistant",
+      "labels": {
+        "panel.enable": "true",
+        "panel.name": "Home Assistant",
+        "panel.category": "Ev Otomasyonu",
+        "panel.port": "8123",
+        "panel.description": "Ev otomasyonu",
+        "com.docker.compose.project": "homeassistant"
+      }
+    },
+    {
+      "id": "d4e5f6",
+      "name": "mosquitto",
+      "image": "eclipse-mosquitto:2",
+      "imageId": "sha256:bb22",
+      "state": "running",
+      "status": "Up 4 days",
+      "health": null,
+      "createdAt": 1784500000,
+      "ports": [
+        {
+          "hostIp": "0.0.0.0",
+          "hostPort": 1883,
+          "containerPort": 1883,
+          "protocol": "tcp"
+        }
+      ],
+      "composeProject": "mosquitto",
+      "composeService": "mosquitto",
+      "labels": {
+        "panel.enable": "true",
+        "com.docker.compose.project": "mosquitto"
+      }
+    },
+    {
+      "id": "a7b8c9",
+      "name": "zigbee2mqtt",
+      "image": "koenkk/zigbee2mqtt:latest",
+      "imageId": "sha256:cc33",
+      "state": "running",
+      "status": "Up 2 days (healthy)",
+      "health": "healthy",
+      "createdAt": 1784600000,
+      "ports": [
+        {
+          "hostIp": "0.0.0.0",
+          "hostPort": 8099,
+          "containerPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "composeProject": "zigbee2mqtt",
+      "composeService": "zigbee2mqtt",
+      "labels": {
+        "panel.enable": "true",
+        "panel.category": "Ev Otomasyonu",
+        "com.docker.compose.project": "zigbee2mqtt"
+      }
+    },
+    {
+      "id": "e1f2a3",
+      "name": "pihole",
+      "image": "pihole/pihole:latest",
+      "imageId": "sha256:dd44",
+      "state": "running",
+      "status": "Up 4 days (healthy)",
+      "health": "healthy",
+      "createdAt": 1784500000,
+      "ports": [
+        {
+          "hostIp": "0.0.0.0",
+          "hostPort": 53,
+          "containerPort": 53,
+          "protocol": "tcp"
+        },
+        {
+          "hostIp": "0.0.0.0",
+          "hostPort": 53,
+          "containerPort": 53,
+          "protocol": "udp"
+        },
+        {
+          "hostIp": "0.0.0.0",
+          "hostPort": 8081,
+          "containerPort": 80,
+          "protocol": "tcp"
+        }
+      ],
+      "composeProject": "pihole",
+      "composeService": "pihole",
+      "labels": {
+        "panel.enable": "true",
+        "panel.name": "Pi-hole",
+        "panel.category": "Ag",
+        "panel.path": "/admin",
+        "com.docker.compose.project": "pihole"
+      }
+    },
+    {
+      "id": "b4c5d6",
+      "name": "cirkin-servis",
+      "image": "eski/servis:0.9",
+      "imageId": "sha256:ee55",
+      "state": "running",
+      "status": "Up 12 seconds (unhealthy)",
+      "health": "unhealthy",
+      "createdAt": 1784900000,
+      "ports": [
+        {
+          "hostIp": "0.0.0.0",
+          "hostPort": 9100,
+          "containerPort": 9100,
+          "protocol": "tcp"
+        }
+      ],
+      "composeProject": null,
+      "composeService": null,
+      "labels": {}
+    },
+    {
+      "id": "f7a8b9",
+      "name": "eski-servis",
+      "image": "arsiv/servis:1.0",
+      "imageId": "sha256:ff66",
+      "state": "exited",
+      "status": "Exited (0) 3 weeks ago",
+      "health": null,
+      "createdAt": 1780000000,
+      "ports": [],
+      "composeProject": null,
+      "composeService": null,
+      "labels": {}
+    }
+  ],
+  "details": [
+    {
+      "id": "c1a2b3",
+      "name": "homeassistant",
+      "image": "ghcr.io/home-assistant/home-assistant:stable",
+      "imageId": "sha256:aa11",
+      "state": "running",
+      "status": "running",
+      "health": "healthy",
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8123/ || exit 1"
+        ],
+        "intervalSeconds": 30,
+        "lastOutput": "HTTP 200",
+        "failingStreak": 0
+      },
+      "restartPolicy": {
+        "name": "unless-stopped",
+        "maximumRetryCount": 0
+      },
+      "restartCount": 0,
+      "createdAt": 1784500000,
+      "startedAt": "2026-07-21T22:05:11.000Z",
+      "ports": [
+        {
+          "hostIp": "0.0.0.0",
+          "hostPort": 8123,
+          "containerPort": 8123,
+          "protocol": "tcp"
+        }
+      ],
+      "env": [
+        {
+          "key": "TZ",
+          "value": "Europe/Istanbul"
+        },
+        {
+          "key": "PATH",
+          "value": "/usr/local/bin:/usr/bin:/bin"
+        }
+      ],
+      "mounts": [
+        {
+          "type": "volume",
+          "source": "/var/lib/docker/volumes/ha_config/_data",
+          "destination": "/config",
+          "readOnly": false,
+          "volumeName": "ha_config"
+        }
+      ],
+      "networks": [
+        "homeassistant_default"
+      ],
+      "networkMode": "homeassistant_default",
+      "volumesFrom": [],
+      "composeProject": "homeassistant",
+      "composeService": "homeassistant"
+    },
+    {
+      "id": "d4e5f6",
+      "name": "mosquitto",
+      "image": "eclipse-mosquitto:2",
+      "imageId": "sha256:bb22",
+      "state": "running",
+      "status": "running",
+      "health": "healthy",
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "mosquitto_sub",
+          "-t",
+          "$SYS/#",
+          "-C",
+          "1"
+        ],
+        "intervalSeconds": 60,
+        "lastOutput": "",
+        "failingStreak": 0
+      },
+      "restartPolicy": {
+        "name": "unless-stopped",
+        "maximumRetryCount": 0
+      },
+      "restartCount": 0,
+      "createdAt": 1784400000,
+      "startedAt": "2026-07-21T22:04:02.000Z",
+      "ports": [
+        {
+          "hostIp": "0.0.0.0",
+          "hostPort": 1883,
+          "containerPort": 1883,
+          "protocol": "tcp"
+        }
+      ],
+      "env": [
+        {
+          "key": "TZ",
+          "value": "Europe/Istanbul"
+        }
+      ],
+      "mounts": [
+        {
+          "type": "volume",
+          "source": "/var/lib/docker/volumes/mosquitto_data/_data",
+          "destination": "/mosquitto/data",
+          "readOnly": false,
+          "volumeName": "mosquitto_data"
+        }
+      ],
+      "networks": [
+        "homeassistant_default"
+      ],
+      "networkMode": "homeassistant_default",
+      "volumesFrom": [],
+      "composeProject": "homeassistant",
+      "composeService": "mosquitto"
+    },
+    {
+      "id": "a7b8c9",
+      "name": "zigbee2mqtt",
+      "image": "koenkk/zigbee2mqtt:latest",
+      "imageId": "sha256:cc33",
+      "state": "running",
+      "status": "running",
+      "health": "healthy",
+      "healthcheck": null,
+      "restartPolicy": {
+        "name": "unless-stopped",
+        "maximumRetryCount": 0
+      },
+      "restartCount": 2,
+      "createdAt": 1784450000,
+      "startedAt": "2026-07-22T06:11:40.000Z",
+      "ports": [
+        {
+          "hostIp": "0.0.0.0",
+          "hostPort": 8080,
+          "containerPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "env": [
+        {
+          "key": "TZ",
+          "value": "Europe/Istanbul"
+        }
+      ],
+      "mounts": [
+        {
+          "type": "volume",
+          "source": "/var/lib/docker/volumes/mosquitto_data/_data",
+          "destination": "/paylasilan",
+          "readOnly": true,
+          "volumeName": "mosquitto_data"
+        }
+      ],
+      "networks": [
+        "homeassistant_default"
+      ],
+      "networkMode": "homeassistant_default",
+      "volumesFrom": [],
+      "composeProject": "homeassistant",
+      "composeService": "zigbee2mqtt"
+    },
+    {
+      "id": "e1f2a3",
+      "name": "pihole",
+      "image": "pihole/pihole:latest",
+      "imageId": "sha256:dd44",
+      "state": "running",
+      "status": "running",
+      "health": "healthy",
+      "healthcheck": null,
+      "restartPolicy": {
+        "name": "always",
+        "maximumRetryCount": 0
+      },
+      "restartCount": 0,
+      "createdAt": 1784300000,
+      "startedAt": "2026-07-20T18:00:00.000Z",
+      "ports": [
+        {
+          "hostIp": "0.0.0.0",
+          "hostPort": 53,
+          "containerPort": 53,
+          "protocol": "udp"
+        }
+      ],
+      "env": [
+        {
+          "key": "WEBPASSWORD",
+          "value": "gizli"
+        }
+      ],
+      "mounts": [],
+      "networks": [
+        "pihole_default"
+      ],
+      "networkMode": "pihole_default",
+      "volumesFrom": [],
+      "composeProject": "pihole",
+      "composeService": "pihole"
+    },
+    {
+      "id": "b4c5d6",
+      "name": "cirkin-servis",
+      "image": "eski/servis:0.9",
+      "imageId": "sha256:ee55",
+      "state": "running",
+      "status": "running",
+      "health": "unhealthy",
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "test -f /tmp/hazir"
+        ],
+        "intervalSeconds": 15,
+        "lastOutput": "test: /tmp/hazir: böyle bir dosya yok",
+        "failingStreak": 7
+      },
+      "restartPolicy": {
+        "name": "on-failure",
+        "maximumRetryCount": 5
+      },
+      "restartCount": 14,
+      "createdAt": 1784200000,
+      "startedAt": "2026-07-25T09:30:00.000Z",
+      "ports": [],
+      "env": [],
+      "mounts": [],
+      "networks": [],
+      "networkMode": "container:c1a2b3",
+      "volumesFrom": [
+        "d4e5f6"
+      ],
+      "composeProject": null,
+      "composeService": null
+    },
+    {
+      "id": "f7a8b9",
+      "name": "eski-servis",
+      "image": "arsiv/servis:1.0",
+      "imageId": "sha256:ff66",
+      "state": "exited",
+      "status": "exited",
+      "health": null,
+      "healthcheck": null,
+      "restartPolicy": {
+        "name": "no",
+        "maximumRetryCount": 0
+      },
+      "restartCount": 0,
+      "createdAt": 1780000000,
+      "startedAt": null,
+      "ports": [],
+      "env": [],
+      "mounts": [
+        {
+          "type": "volume",
+          "source": "/var/lib/docker/volumes/eski_veri/_data",
+          "destination": "/veri",
+          "readOnly": false,
+          "volumeName": "eski_veri"
+        }
+      ],
+      "networks": [
+        "bridge"
+      ],
+      "networkMode": "bridge",
+      "volumesFrom": [],
+      "composeProject": null,
+      "composeService": null
+    }
+  ],
+  "images": [
+    {
+      "id": "sha256:aa11",
+      "tags": [
+        "ghcr.io/home-assistant/home-assistant:stable"
+      ],
+      "createdAt": 1784000000,
+      "sizeBytes": 1932735283,
+      "usedBy": [
+        "homeassistant"
+      ],
+      "dangling": false
+    },
+    {
+      "id": "sha256:bb22",
+      "tags": [
+        "eclipse-mosquitto:2"
+      ],
+      "createdAt": 1783000000,
+      "sizeBytes": 16777216,
+      "usedBy": [
+        "mosquitto"
+      ],
+      "dangling": false
+    },
+    {
+      "id": "sha256:cc33",
+      "tags": [
+        "koenkk/zigbee2mqtt:latest"
+      ],
+      "createdAt": 1784100000,
+      "sizeBytes": 419430400,
+      "usedBy": [
+        "zigbee2mqtt"
+      ],
+      "dangling": false
+    },
+    {
+      "id": "sha256:dd44",
+      "tags": [
+        "pihole/pihole:latest"
+      ],
+      "createdAt": 1783500000,
+      "sizeBytes": 314572800,
+      "usedBy": [
+        "pihole"
+      ],
+      "dangling": false
+    },
+    {
+      "id": "sha256:ee55",
+      "tags": [
+        "eski/servis:0.9"
+      ],
+      "createdAt": 1780000000,
+      "sizeBytes": 104857600,
+      "usedBy": [
+        "cirkin-servis"
+      ],
+      "dangling": false
+    },
+    {
+      "id": "sha256:ff66",
+      "tags": [
+        "arsiv/servis:1.0"
+      ],
+      "createdAt": 1779000000,
+      "sizeBytes": 88080384,
+      "usedBy": [
+        "eski-servis"
+      ],
+      "dangling": false
+    },
+    {
+      "id": "sha256:1122",
+      "tags": [
+        "eski/servis:0.8"
+      ],
+      "createdAt": 1770000000,
+      "sizeBytes": 103809024,
+      "usedBy": [],
+      "dangling": false
+    },
+    {
+      "id": "sha256:3344",
+      "tags": [],
+      "createdAt": 1769000000,
+      "sizeBytes": 268435456,
+      "usedBy": [],
+      "dangling": true
+    }
+  ],
+  "volumes": [
+    {
+      "name": "ha_config",
+      "driver": "local",
+      "mountpoint": "/var/lib/docker/volumes/ha_config/_data",
+      "createdAt": 1784000000,
+      "usedBy": [
+        "homeassistant"
+      ],
+      "composeProject": "homeassistant"
+    },
+    {
+      "name": "mosquitto_data",
+      "driver": "local",
+      "mountpoint": "/var/lib/docker/volumes/mosquitto_data/_data",
+      "createdAt": 1784000000,
+      "usedBy": [
+        "mosquitto",
+        "zigbee2mqtt"
+      ],
+      "composeProject": "homeassistant"
+    },
+    {
+      "name": "eski_veri",
+      "driver": "local",
+      "mountpoint": "/var/lib/docker/volumes/eski_veri/_data",
+      "createdAt": 1779000000,
+      "usedBy": [
+        "eski-servis"
+      ],
+      "composeProject": null
+    },
+    {
+      "name": "oksuz_volume",
+      "driver": "local",
+      "mountpoint": "/var/lib/docker/volumes/oksuz_volume/_data",
+      "createdAt": 1775000000,
+      "usedBy": [],
+      "composeProject": null
+    }
+  ],
+  "networks": [
+    {
+      "id": "net-bridge",
+      "name": "bridge",
+      "driver": "bridge",
+      "scope": "local",
+      "builtin": true,
+      "subnet": "172.17.0.0/16",
+      "attached": [
+        "eski-servis"
+      ],
+      "composeProject": null
+    },
+    {
+      "id": "net-host",
+      "name": "host",
+      "driver": "host",
+      "scope": "local",
+      "builtin": true,
+      "subnet": null,
+      "attached": [],
+      "composeProject": null
+    },
+    {
+      "id": "net-none",
+      "name": "none",
+      "driver": "null",
+      "scope": "local",
+      "builtin": true,
+      "subnet": null,
+      "attached": [],
+      "composeProject": null
+    },
+    {
+      "id": "net-ha",
+      "name": "homeassistant_default",
+      "driver": "bridge",
+      "scope": "local",
+      "builtin": false,
+      "subnet": "172.20.0.0/16",
+      "attached": [
+        "homeassistant",
+        "mosquitto",
+        "zigbee2mqtt"
+      ],
+      "composeProject": "homeassistant"
+    },
+    {
+      "id": "net-pihole",
+      "name": "pihole_default",
+      "driver": "bridge",
+      "scope": "local",
+      "builtin": false,
+      "subnet": "172.21.0.0/16",
+      "attached": [
+        "pihole"
+      ],
+      "composeProject": "pihole"
+    },
+    {
+      "id": "net-bos",
+      "name": "kullanilmayan_ag",
+      "driver": "bridge",
+      "scope": "local",
+      "builtin": false,
+      "subnet": "172.22.0.0/16",
+      "attached": [],
+      "composeProject": null
+    }
+  ]
+}

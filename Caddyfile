@@ -1,0 +1,88 @@
+# Panelin giriş noktası (M0.2, M3.45'te düz HTTP'ye çevrildi).
+#
+# Panel container'ı dışarıya HİÇ port açmaz; tek giriş noktası burasıdır.
+#
+# ---------------------------------------------------------------------------
+# PANEL ARTIK HTTPS SUNMUYOR
+# ---------------------------------------------------------------------------
+# Önceden `tls internal` ile Caddy'nin yerel CA'sı kullanılıyordu ve panelin
+# adresi https'ti. Bu, yerel ağda kullanıcının HER ziyarette tarayıcı
+# sertifika uyarısını tıklamasına yol açıyordu — güvenlik kazancı olmadan
+# (yerel CA'yı hiçbir cihaz tanımıyor), sadece sürtünme olarak. Panel yerel
+# ağda çalışıyor ve dışarıya kendi başına açılmıyor; karar bilinçli olarak
+# "sadece HTTP".
+#
+# ⚠️ Sonuç: panele giden trafik (parola, oturum çerezi, web terminal) YEREL
+# AĞDA ŞİFRESİZ taşınır. Paneli internete açacaksan bu dosyayı `https://`
+# adresleriyle geri çevirmen ve `tls` satırını eklemen gerekir — oturum
+# çerezinin `secure` bayrağı isteğin şemasından okunduğu için (bkz.
+# lib/auth/session.ts) kodda başka bir değişiklik gerekmez.
+#
+# `tls internal`, `default_sni` ve `PANEL_HTTPS_PORT` bu yüzden panelin kendi
+# bloğundan düştü. 443 hâlâ yayınlanıyor: PANELDEN YAYINLANAN siteler kendi
+# TLS ayarına sahip (Ayarlar → Proxy & DDNS) ve o bloklar aşağıdaki `import`
+# ile geliyor.
+
+{
+	# Admin API yalnızca CONTAINER İÇİ loopback'te (M2.8).
+	#
+	# `admin off` idi; ama panelin yayınlama ekranı `caddy reload` çalıştırıyor
+	# ve reload admin API üzerinden konuşuyor. Kapalıyken reload çalışmaz, tek
+	# seçenek container'ı yeniden başlatmak olurdu — o da panelin kendi
+	# oturumu dahil tüm açık bağlantıları düşürürdü.
+	#
+	# 2019 portu YAYINLANMIYOR: yalnızca `docker exec` ile aynı container
+	# içinden erişilebilir. Dışarıya açılsaydı yapılandırmayı değiştirebilen
+	# kimliksiz bir uç olurdu.
+	admin localhost:2019
+
+	# HTTP→HTTPS otomatik YÖNLENDİRMESİ kapalı, sertifika yönetimi AÇIK.
+	#
+	# `off` DEĞİL `disable_redirects`: `off` otomatik HTTPS'in tamamını —
+	# sertifika alma ve yenilemeyi de — kapatırdı ve panelden yayınlanan,
+	# `tls` yazan siteler sertifikasız kalırdı. Kapatılması gereken tek şey
+	# yönlendirme: panelin kendi adresi artık http ve Caddy'nin varsayılan
+	# "http'yi https'e 308'le" davranışı, 443'te panel bloğu olmadığı için
+	# paneli erişilemez yapardı.
+	auto_https disable_redirects
+}
+
+# Panelin kendi bloğu. Varsayılan `:80` bir YAKALAYICI: hangi IP ya da
+# host adıyla gelinirse gelinsin panel açılıyor. TLS kalktığı için artık
+# adresleri tek tek saymak gerekmiyor — o zorunluluk sertifikanın hangi
+# isim için üretileceğini bildirmekten geliyordu.
+#
+# Yayınlanan siteler kendi host adlarıyla daha ÖZEL blok tanımlıyor ve
+# Caddy en özel eşleşmeyi seçiyor; yakalayıcı yalnızca artakalanı alıyor.
+{$PANEL_SITE_ADDRESSES::80} {
+	encode zstd gzip
+
+	# Gerçek istemci IP'si panele iletilir — rate limit ve audit için (T6).
+	#
+	# `X-Forwarded-Proto` Caddy tarafından zaten ekleniyor ve panel oturum
+	# çerezinin `secure` bayrağını ona bakarak veriyor.
+	reverse_proxy panel:3000 {
+		header_up X-Real-IP {remote_host}
+	}
+
+	log {
+		output stderr
+		format console
+	}
+}
+
+# Panelden yayınlanan alan adları (M2.8).
+#
+# Bu dosyayı PANEL üretir; buradaki `import` onu devreye alır. Ayrı tutulmasının
+# sebebi somut: panelin ürettiği hatalı bir satır ana Caddyfile'da olsaydı,
+# panel kendi girişini de bozabilirdi. Ayrı dosyada en kötü ihtimalle reload
+# reddedilir ve eski yapılandırma çalışmaya devam eder.
+#
+# Yayınlanan siteler HTTPS kullanmaya devam edebilir (Let's Encrypt ya da
+# Caddy'nin yerel CA'sı) — `auto_https off` yalnızca otomatik YÖNLENDİRMEYİ
+# kapatır, bloklarında `tls` yazan siteler kendi sertifikalarını almayı
+# sürdürür.
+#
+# Glob hiçbir şeyle eşleşmezse Caddy sessizce geçer — henüz hiçbir alan adı
+# yayınlanmamışken de kurulum çalışır.
+import /etc/caddy/proxy/*.caddy

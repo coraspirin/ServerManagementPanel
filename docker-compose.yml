@@ -1,0 +1,175 @@
+services:
+  panel:
+    build:
+      context: .
+      args:
+        APP_VERSION: ${APP_VERSION:-1.9.0}
+    image: server-panel:local
+    restart: unless-stopped
+    # docker.sock kök:docker sahipliğinde ve 0660 modunda; panel root olmayan
+    # bir kullanıcı (uid 1001) ile çalıştığı için soketi ancak host'un docker
+    # grubuna eklenerek okuyabiliyor. GID host'a göre değişir:
+    #   getent group docker | cut -d: -f3
+    # ⚠️ Bu, docker.sock erişiminin zaten getirdiği yetkiyi genişletmiyor —
+    #    aynı yetkiyi KULLANILABİLİR kılıyor. Soket erişimi pratikte host'ta
+    #    root demektir; alternatifi M1.6'da değerlendirilecek socket-proxy'dir.
+    group_add:
+      - "${DOCKER_GID:?DOCKER_GID tanimli degil - bkz .env.example}"
+    environment:
+      # T10 — sorun ayıklarken 1 yapılıp panel sahte veriyle ayağa kaldırılabilir.
+      MOCK_MODE: ${MOCK_MODE:-0}
+      APP_VERSION: ${APP_VERSION:-1.9.0}
+      TZ: ${TZ:-Europe/Istanbul}
+      # T3 — secret şifreleme anahtarı. Yoksa panel açılmaz.
+      # Panel dışında AYRI bir yerde de saklanmalı; yedeğe girmez.
+      MASTER_KEY: ${MASTER_KEY:?MASTER_KEY tanimli degil - bkz .env.example}
+      # İlk kurulumda admin parolası (boşsa rastgele üretilip loga yazılır).
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # T4 — host-helper ile paylaşılan HMAC sırrı. Boşsa host işlemleri
+      # (güç, systemd, compose) kapalıdır ve panel bunu açıkça söyler.
+      HELPER_SECRET: ${HELPER_SECRET:-}
+      # M2.8 — Caddy'nin 443 ve 80'i host'ta hangi portlara bağlandığı.
+      #
+      # Panelin bunu BİLMESİ gerekiyor: yayınlanan adresi ekranda gösterirken
+      # portu da yazmalı. Yaşanmış olay — panel "pihole.myserver.local" yazdı,
+      # kullanıcı portsuz denedi ve bağlanamadı; oysa Caddy 5000'deydi.
+      # Yalnızca caddy servisinin `ports:` satırında durduğu sürece panelin
+      # bunu öğrenmesinin bir yolu yoktu.
+      #
+      # İKİSİ birden lazım: panelin kendisi ve TLS'i kapalı yayınlar 80'de,
+      # TLS'i açık yayınlar 443'te sunuluyor. Tek port bilinseydi adres
+      # "http://alan.adı:443" gibi çalışmayan bir şey olurdu.
+      #
+      # M3.45: panel artık 443'te DEĞİL, 80'de. HTTPS portu yalnızca
+      # yayınlanan siteler için duruyor.
+      PANEL_HTTPS_PORT: ${PANEL_HTTPS_PORT:-8443}
+      PANEL_HTTP_PORT: ${PANEL_HTTP_PORT:-8080}
+    volumes:
+      # Kalıcı panel verisi: sqlite.db, migration öncesi kopyalar, logolar (M0.3)
+      - panel-data:/app/data
+
+      # M2.8 — panelin ürettiği Caddy yapılandırması.
+      # Panel YAZAR, caddy salt-okunur OKUR. Aynı named volume iki container'a
+      # farklı yetkiyle bağlanıyor: Caddy'nin bu dosyayı değiştirmesi için bir
+      # sebep yok ve yazma yetkisi vermemek en ucuz sınır.
+      - proxy-config:/app/proxy
+
+      # Docker yönetimi (M1.6+).
+      # ⚠️ GÜVENLİK: docker.sock erişimi pratikte host'ta root yetkisine eşittir.
+      #    `:ro` bunu ENGELLEMEZ — salt-okunur bayrağı dosya düğümüne uygulanır,
+      #    soket üzerinden giden API çağrılarına değil. Bu yüzden buraya bilerek
+      #    `:ro` yazılmadı; yanlış bir güvenlik hissi vermesin.
+      #    M1.6'da docker-socket-proxy ile API uçlarını kısıtlamayı değerlendir.
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # T4 — host-helper soketi (M1.13).
+      #
+      # ⚠️ Bu soket docker.sock'tan FARKLIDIR: root vermez. Ne çalıştırılacağına
+      #    host'taki /etc/panel-helper/allow.conf karar verir ve o dosya
+      #    container'a mount EDİLMEZ — panel ele geçirilse bile listeyi
+      #    genişletemez.
+      #
+      # Host'ta `sudo host-helper/install.sh` çalıştırılmamışsa dizin boştur:
+      # panel ayağa kalkar ama host işlemleri "soket yok" diyerek reddedilir.
+      # Helper kullanılmayan bir kurulumda bu satır yorumlanabilir.
+      #
+      # ⚠️ DOSYA DEĞİL DİZİN bağlanıyor — sebebi yaşanmış bir arıza:
+      #    Docker tek bir dosyayı mount ederken yola değil INODE'a bağlanır.
+      #    Helper her yeniden başlayışında soketi silip yeniden yaratıyor;
+      #    dosyayı mount eden container o andan sonra silinmiş inode'a bakar
+      #    ve her istek ECONNREFUSED alır. Sunucuda helper 26 Ağustos'ta
+      #    yeniden başladı ve 21 Ağustos'tan beri ayakta olan panel bir daha
+      #    hiçbir host komutu çalıştıramadı. Dizin mount'ları içeriği canlı
+      #    çözdüğü için soketin yeniden yaratılması artık şeffaf.
+      #
+      #    Bunun ikinci faydası: Docker, bind-mount kaynağı yokken onu DİZİN
+      #    olarak yaratıyor ve eskiden bu felaketti (helper soketi açamaz,
+      #    container "dizini dosyanın üstüne mount edemem" der). Artık zaten
+      #    dizin beklediğimiz için Docker'ın yaratması zararsız.
+      - /run/panel-helper:/run/panel-helper
+
+      # M2.10 — tailscaled yerel API soketi (SALT-OKUNUR).
+      # Panel yalnızca GET yapıyor: durum ve peer listesi okunuyor, tailnet'e
+      # katılma/ayrılma gibi işlemler bilerek dışarıda (T4 — yerleri
+      # host-helper'ın izin listesi). Tailscale kurulu değilse bu satır
+      # yorumlanmalı, yoksa compose ayağa kalkmaz.
+      - /var/run/tailscale/tailscaled.sock:/run/tailscale/tailscaled.sock:ro
+
+      # Host sistem metrikleri (M1.1) — container'ın kendi /proc'u değil,
+      # host'unki okunmalı. Özellikle /proc/net/dev ağ namespace'ine tabidir:
+      # mount olmadan container'ın eth0'ı ölçülürdü, sunucunun ağ kartı değil.
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+
+      # Disk doluluğu hiçbir /proc dosyasında yok; `statfs` gerçek bir yol ister.
+      # ⚠️ GÜVENLİK: bu, host'un TÜM dosya sistemini container'a salt-okunur
+      #    açar (/etc/shadow dahil). Bilinçli bir taviz: panelin işi zaten
+      #    sunucuyu yönetmek ve aynı container docker.sock'a da erişiyor —
+      #    yani bu mount mevcut yetki sınırını GENİŞLETMİYOR. Yine de panelin
+      #    docker.sock'suz çalıştırıldığı bir kurulumda bu satır kaldırılıp
+      #    yalnızca izlenmek istenen bölümler tek tek mount edilebilir:
+      #      - /mnt/veri:/host/root/mnt/veri:ro
+      #    rslave: host'ta sonradan bağlanan diskler container'da da görünsün.
+      - /:/host/root:ro,rslave
+
+      # S.M.A.R.T ve ZFS raporu (M1.4). Host'ta cron ile çalışan
+      # scripts/hardware.sh buraya JSON bırakır; panel YALNIZCA OKUR.
+      # smartctl ham disk erişimi (CAP_SYS_RAWIO) ister — container'a vermek
+      # yerine veriyi host'ta üretip salt-okunur aktarmak tercih edildi (T4).
+      - ${PANEL_REPORTS_DIR:-./reports}:/app/reports:ro
+      - /etc/os-release:/host/etc/os-release:ro
+      # Container'ın kendi UTS namespace'i kendi kimliğini döndürür; panelin
+      # göstermesi gereken SUNUCU adı buradan okunur.
+      - /etc/hostname:/host/etc/hostname:ro
+    expose:
+      - "3000"
+    # Dışarıya port AÇILMAZ: tek giriş noktası caddy.
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - panel
+    ports:
+      # PANELİN KENDİSİ burada (M3.45). TLS'i kapalı yayınlar da 80'de.
+      - "${PANEL_HTTP_PORT:-8080}:80"
+      # 443 yalnızca panelden YAYINLANAN, TLS kullanan siteler için duruyor.
+      # Panel bu portta sunulmuyor; kaldırılırsa yayınlarda `tls` seçeneği
+      # çalışmaz hale gelir.
+      - "${PANEL_HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # M2.8 — panelin ürettiği yayınlama kuralları (salt-okunur).
+      - proxy-config:/etc/caddy/proxy:ro
+      # Yerel CA ve sertifikalar burada kalıcı olur; yoksa her yeniden
+      # başlatmada yeni sertifika üretilir.
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      TZ: ${TZ:-Europe/Istanbul}
+      # Panelin dinleyeceği adresler. Varsayılan `:80` bir yakalayıcı: hangi
+      # IP ya da host adıyla gelinirse gelinsin panel açılıyor.
+      #
+      # Adresleri tek tek saymak (ve `PANEL_DEFAULT_SNI` ayarı) yalnızca TLS
+      # varken zorunluydu — sertifikanın hangi isim için üretileceğini ve
+      # SNI'siz bağlantıda hangisinin sunulacağını bildirmek için. Panel düz
+      # HTTP'ye geçince ikisi de gereksizleşti (M3.45).
+      PANEL_SITE_ADDRESSES: ${PANEL_SITE_ADDRESSES:-:80}
+
+volumes:
+  panel-data:
+  caddy-data:
+  caddy-config:
+  proxy-config:
+
+networks:
+  default:
+    # Alt ağ SABİTLENİYOR (M1.2). Sebep: container'dan host'un kendi portlarına
+    # (ör. host ağında çalışan Home Assistant) erişim ufw tarafından düşürülür ve
+    # bunu açan güvenlik duvarı kuralı alt ağa göre yazılır. Docker alt ağı
+    # kendiliğinden atarsa ağ her yeniden oluşturulduğunda değişebilir ve kural
+    # sessizce işlevsiz kalır. Çakışma olursa .env'den değiştirilebilir.
+    ipam:
+      config:
+        - subnet: ${PANEL_SUBNET:-172.28.0.0/16}

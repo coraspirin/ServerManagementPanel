@@ -1,0 +1,11 @@
+{
+  "hostname": "homelab",
+  "platform": "linux",
+  "release": "6.8.0-51-generic",
+  "osName": "Ubuntu 24.04.3 LTS",
+  "arch": "x64",
+  "cpuModel": "Intel(R) Core(TM) i5-8500T CPU @ 2.10GHz",
+  "cpuCount": 6,
+  "totalMemBytes": 16706494464,
+  "uptimeSeconds": 1197340
+}
