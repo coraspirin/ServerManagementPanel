@@ -11,6 +11,7 @@ Designed at home-server (homelab) scale: a single container, embedded SQLite, no
 ## Table of Contents
 
 - [Features](#features)
+- [Screenshots](#screenshots)
 - [Architecture](#architecture)
 - [Security model](#security-model)
 - [Requirements](#requirements)
@@ -75,6 +76,89 @@ Designed at home-server (homelab) scale: a single container, embedded SQLite, no
 - **Audit Logs:** who changed what, and when. Filterable and exportable as CSV.
 - **Panel Jobs:** the latest results of background jobs (metric collection, rollups, health checks, backups, certificate checks, network scans, ...) and the ability to trigger them manually.
 - **Settings:** more than 180 settings are auto-rendered from a single schema (`src/settings.schema.ts`) and organized into 20 categories. None of the thresholds, intervals, retention periods, or schedules are hardcoded. Every change is recorded in the audit log. Settings can be reset to defaults and exported/imported as JSON.
+
+---
+
+## Screenshots
+
+<table>
+<tr>
+<td width="50%">
+
+**Overview**
+![Overview](screenshots/genel-bakis.png)
+Live status, service cards, and maintenance widgets in one place.
+
+</td>
+<td width="50%">
+
+**Monitoring**
+![Monitoring](screenshots/izleme.png)
+CPU, memory, disk and network history with adjustable time ranges.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**Service Status**
+![Service Status](screenshots/servis-durumu.png)
+HTTP/TCP/ping/container probes with a 60-day uptime strip.
+
+</td>
+<td width="50%">
+
+**Events**
+![Events](screenshots/olaylar.png)
+Notification channels and the merged event feed.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**Docker**
+![Docker](screenshots/docker.png)
+Container list with live status, CPU/memory, and quick actions.
+
+</td>
+<td width="50%">
+
+**Backup**
+![Backup](screenshots/yedekleme.png)
+restic-based scheduled backups and run history.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**Server**
+![Server](screenshots/sunucu.png)
+Console, power controls, systemd units, and compose stacks.
+
+</td>
+<td width="50%">
+
+**Panel Jobs**
+![Panel Jobs](screenshots/panel-isleri.png)
+Background job schedule, status, and run/error counts.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**Host Tasks**
+![Host Tasks](screenshots/host-gorevleri.png)
+Panel-managed and host crontab tasks side by side.
+
+</td>
+<td width="50%">
+
+</td>
+</tr>
+</table>
 
 ---
 
