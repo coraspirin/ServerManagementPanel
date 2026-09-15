@@ -10,9 +10,6 @@
 !.yarn/releases
 !.yarn/versions
 
-#AI
-*.md
-
 # testing
 /coverage
 
