@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { getDockerProvider } from "@/lib/providers";
@@ -27,17 +28,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     payload = (await request.json()) as typeof payload;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const name = payload.name as RestartPolicy["name"];
   if (!POLICIES.includes(name)) {
-    return Response.json({ error: "geçersiz politika" }, { status: 400 });
+    return Response.json({ error: serverT("api.docker.invalidPolicy") }, { status: 400 });
   }
 
   const retry = Number(payload.maximumRetryCount ?? 0);
   if (!Number.isInteger(retry) || retry < 0 || retry > 100) {
-    return Response.json({ error: "deneme sayısı 0–100 arasında olmalı" }, { status: 400 });
+    return Response.json({ error: serverT("api.docker.retryRange") }, { status: 400 });
   }
 
   const policy: RestartPolicy = { name, maximumRetryCount: retry };
@@ -45,7 +46,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     await getDockerProvider().setRestartPolicy(id, policy);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "bilinmeyen hata";
+    const message = error instanceof Error ? error.message : serverT("api.unknownError");
     audit({
       userId: guard.session.user.id,
       username: guard.session.user.username,
@@ -62,7 +63,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     username: guard.session.user.username,
     action: "docker.restart_policy",
     targetId: id,
-    detail: name === "on-failure" ? `on-failure (en fazla ${retry})` : name,
+    detail: name === "on-failure" ? `on-failure (${serverT("api.docker.maxRetries", { retry })})` : name,
     result: "ok",
   });
 

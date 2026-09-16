@@ -4,6 +4,8 @@ import { unacknowledgedCount } from "@/lib/alerts/store";
 import { getDb } from "@/lib/db/client";
 import { latestSnapshot } from "@/lib/metrics/collect";
 import { listMonitors } from "@/lib/monitors/store";
+import { currentDictionary } from "@/lib/i18n/runtime";
+import { translateLoose } from "@/lib/i18n/translate";
 import { getDockerProvider } from "@/lib/providers";
 
 /**
@@ -29,7 +31,6 @@ export type Sample = {
 function push(
   into: Sample[],
   name: string,
-  help: string,
   value: number | null | undefined,
   options: { labels?: Record<string, string>; type?: "gauge" | "counter"; unit?: string } = {},
 ): void {
@@ -39,7 +40,8 @@ function push(
   if (value === null || value === undefined || !Number.isFinite(value)) return;
   into.push({
     name,
-    help,
+    // Açıklama dil dosyasından: MQTT'de Home Assistant'ın varlık adı oluyor.
+    help: translateLoose(currentDictionary(), `metricsHelp.${name}`),
     type: options.type ?? "gauge",
     labels: options.labels ?? {},
     value,
@@ -51,47 +53,47 @@ export async function collectSamples(): Promise<Sample[]> {
   const samples: Sample[] = [];
   const snapshot = latestSnapshot();
 
-  push(samples, "panel_cpu_percent", "Toplam CPU kullanımı (%)", snapshot.cpuPct, {
+  push(samples, "panel_cpu_percent", snapshot.cpuPct, {
     unit: "%",
   });
-  push(samples, "panel_cpu_iowait_percent", "CPU'nun disk beklediği oran (%)", snapshot.cpuIowaitPct, {
+  push(samples, "panel_cpu_iowait_percent", snapshot.cpuIowaitPct, {
     unit: "%",
   });
-  push(samples, "panel_memory_percent", "Kullanılan bellek oranı (%)", snapshot.memUsedPct, {
+  push(samples, "panel_memory_percent", snapshot.memUsedPct, {
     unit: "%",
   });
-  push(samples, "panel_memory_used_bytes", "Kullanılan bellek", snapshot.memUsed, {
+  push(samples, "panel_memory_used_bytes", snapshot.memUsed, {
     unit: "B",
   });
-  push(samples, "panel_memory_total_bytes", "Toplam bellek", snapshot.memTotal, { unit: "B" });
-  push(samples, "panel_swap_percent", "Kullanılan takas alanı oranı (%)", snapshot.swapUsedPct, {
+  push(samples, "panel_memory_total_bytes", snapshot.memTotal, { unit: "B" });
+  push(samples, "panel_swap_percent", snapshot.swapUsedPct, {
     unit: "%",
   });
-  push(samples, "panel_load1", "1 dakikalık yük ortalaması", snapshot.load1);
-  push(samples, "panel_load5", "5 dakikalık yük ortalaması", snapshot.load5);
-  push(samples, "panel_load15", "15 dakikalık yük ortalaması", snapshot.load15);
-  push(samples, "panel_uptime_seconds", "Sunucunun açık kalma süresi", snapshot.uptimeSeconds, {
+  push(samples, "panel_load1", snapshot.load1);
+  push(samples, "panel_load5", snapshot.load5);
+  push(samples, "panel_load15", snapshot.load15);
+  push(samples, "panel_uptime_seconds", snapshot.uptimeSeconds, {
     unit: "s",
   });
 
   for (const disk of snapshot.disks) {
     const labels = { mount: disk.mount };
-    push(samples, "panel_disk_percent", "Disk doluluk oranı (%)", disk.usedPct, {
+    push(samples, "panel_disk_percent", disk.usedPct, {
       labels,
       unit: "%",
     });
-    push(samples, "panel_disk_used_bytes", "Kullanılan disk alanı", disk.used, { labels, unit: "B" });
-    push(samples, "panel_disk_free_bytes", "Boş disk alanı", disk.free, { labels, unit: "B" });
-    push(samples, "panel_disk_total_bytes", "Toplam disk alanı", disk.total, { labels, unit: "B" });
+    push(samples, "panel_disk_used_bytes", disk.used, { labels, unit: "B" });
+    push(samples, "panel_disk_free_bytes", disk.free, { labels, unit: "B" });
+    push(samples, "panel_disk_total_bytes", disk.total, { labels, unit: "B" });
   }
 
   for (const iface of snapshot.interfaces) {
     const labels = { interface: iface.name };
-    push(samples, "panel_network_rx_bytes_per_second", "Arayüz indirme hızı", iface.rxBps, {
+    push(samples, "panel_network_rx_bytes_per_second", iface.rxBps, {
       labels,
       unit: "B/s",
     });
-    push(samples, "panel_network_tx_bytes_per_second", "Arayüz yükleme hızı", iface.txBps, {
+    push(samples, "panel_network_tx_bytes_per_second", iface.txBps, {
       labels,
       unit: "B/s",
     });
@@ -102,24 +104,22 @@ export async function collectSamples(): Promise<Sample[]> {
   // Grafana'da CPU grafiğini de karartmak olurdu.
   try {
     const containers = await getDockerProvider().list(true);
-    push(samples, "panel_containers_total", "Tanımlı container sayısı", containers.length);
+    push(samples, "panel_containers_total", containers.length);
     push(
       samples,
       "panel_containers_running",
-      "Çalışan container sayısı",
       containers.filter((container) => container.state === "running").length,
     );
     for (const container of containers) {
       push(
         samples,
         "panel_container_up",
-        "Container çalışıyor mu (1/0)",
         container.state === "running" ? 1 : 0,
         { labels: { container: container.name } },
       );
     }
   } catch {
-    push(samples, "panel_docker_reachable", "Docker API erişilebilir mi (1/0)", 0);
+    push(samples, "panel_docker_reachable", 0);
   }
 
   for (const monitor of listMonitors()) {
@@ -128,11 +128,11 @@ export async function collectSamples(): Promise<Sample[]> {
     // "bilinmiyor" 0 yazılmıyor: hiç kontrol edilmemiş bir servisi "kapalı"
     // diye raporlamak yanlış alarm üretirdi.
     if (monitor.status !== "bilinmiyor") {
-      push(samples, "panel_monitor_up", "Servis ayakta mı (1/0)", monitor.status === "up" ? 1 : 0, {
+      push(samples, "panel_monitor_up", monitor.status === "up" ? 1 : 0, {
         labels,
       });
     }
-    push(samples, "panel_monitor_latency_ms", "Son yanıt süresi", monitor.lastLatencyMs, {
+    push(samples, "panel_monitor_latency_ms", monitor.lastLatencyMs, {
       labels,
       unit: "ms",
     });
@@ -141,7 +141,6 @@ export async function collectSamples(): Promise<Sample[]> {
   push(
     samples,
     "panel_events_unacknowledged",
-    "Okunmamış uyarı/kritik olay sayısı",
     unacknowledgedCount(),
   );
 
@@ -164,19 +163,18 @@ export async function collectSamples(): Promise<Sample[]> {
     fail_count: number;
   }[];
 
-  push(samples, "panel_jobs_total", "Kayıtlı arka plan işi sayısı", jobs.length);
+  push(samples, "panel_jobs_total", jobs.length);
   push(
     samples,
     "panel_jobs_failing",
-    "Son çalışması başarısız olan iş sayısı",
     jobs.filter((job) => job.last_status === "hata").length,
   );
   for (const job of jobs) {
-    push(samples, "panel_job_last_run_timestamp", "İşin son çalışma zamanı", job.last_finish_at, {
+    push(samples, "panel_job_last_run_timestamp", job.last_finish_at, {
       labels: { job: job.key },
       unit: "s",
     });
-    push(samples, "panel_job_fail_total", "İşin toplam başarısız çalışma sayısı", job.fail_count, {
+    push(samples, "panel_job_fail_total", job.fail_count, {
       labels: { job: job.key },
       type: "counter",
     });

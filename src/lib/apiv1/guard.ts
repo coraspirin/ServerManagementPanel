@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { currentSession } from "@/lib/auth/session";
 import { resolveApiToken, touchApiToken, type ResolveFailure } from "@/lib/auth/apitoken";
@@ -56,15 +57,15 @@ const TOKEN_FORBIDDEN: ReadonlySet<PermissionKey> = new Set<PermissionKey>([
 function failureDetail(reason: ResolveFailure): string {
   switch (reason) {
     case "revoked":
-      return "iptal edilmiş anahtar";
+      return serverT("apiv1.tokenRevoked");
     case "expired":
-      return "süresi dolmuş anahtar";
+      return serverT("apiv1.tokenExpired");
     case "inactive":
-      return "pasif kullanıcı";
+      return serverT("apiv1.userInactive");
     case "must_change_password":
-      return "parola değiştirilmeden kullanılamaz";
+      return serverT("apiv1.mustChangePassword");
     default:
-      return "tanınmayan anahtar";
+      return serverT("apiv1.tokenUnknown");
   }
 }
 
@@ -74,7 +75,7 @@ export async function guardV1(
 ): Promise<GuardResult> {
   if (!getBool("api.enabled")) {
     // 404, 403 değil: kapalı bir API'nin var olduğunu bile söylememek gerekir.
-    return { ok: false, response: apiError("not_found", "dış API kapalı") };
+    return { ok: false, response: apiError("not_found", serverT("apiv1.disabled")) };
   }
 
   const ip = rateLimitIp(request);
@@ -108,7 +109,7 @@ export async function guardV1(
   if (!actor.ok) return actor;
 
   if (permission !== null && !actor.actor.permissions.includes(permission)) {
-    return { ok: false, response: apiError("forbidden", "bu işlem için yetkiniz yok") };
+    return { ok: false, response: apiError("forbidden", serverT("apiv1.forbidden")) };
   }
 
   return actor;
@@ -117,7 +118,10 @@ export async function guardV1(
 function resolveBearer(header: string, ip: string): GuardResult {
   const match = /^Bearer\s+(.+)$/i.exec(header.trim());
   if (!match) {
-    return { ok: false, response: unauthorizedAfterFailure(ip, "biçimsiz Authorization başlığı") };
+    return {
+      ok: false,
+      response: unauthorizedAfterFailure(ip, serverT("apiv1.malformedAuth")),
+    };
   }
 
   const resolved = resolveApiToken(match[1].trim());
@@ -173,13 +177,13 @@ function unauthorizedAfterFailure(ip: string, detail: string): Response {
   console.warn(`[apiv1] kimlik doğrulanamadı (${ip}): ${detail}`);
   // Sebep DIŞARI VERİLMİYOR: "bu anahtar iptal edilmiş" ile "böyle bir anahtar
   // yok" arasındaki fark, tarama yapan birine bilgi olurdu.
-  return apiError("unauthorized", "geçerli bir API anahtarı gerekli");
+  return apiError("unauthorized", serverT("apiv1.tokenRequired"));
 }
 
 async function resolveCookieSession(request: Request, ip: string): Promise<GuardResult> {
   const session = await currentSession();
   if (!session) {
-    return { ok: false, response: apiError("unauthorized", "geçerli bir API anahtarı gerekli") };
+    return { ok: false, response: apiError("unauthorized", serverT("apiv1.tokenRequired")) };
   }
 
   // Çerez yolunda CSRF hâlâ zorunlu — bearer'daki muafiyet çerez
@@ -187,7 +191,7 @@ async function resolveCookieSession(request: Request, ip: string): Promise<Guard
   if (!SAFE_METHODS.has(request.method)) {
     const header = request.headers.get(CSRF_HEADER) ?? "";
     if (!header || !safeEquals(header, session.csrfToken)) {
-      return { ok: false, response: apiError("forbidden", "CSRF doğrulaması başarısız") };
+      return { ok: false, response: apiError("forbidden", serverT("apiv1.csrfFailed")) };
     }
   }
 

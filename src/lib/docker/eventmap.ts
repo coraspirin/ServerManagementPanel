@@ -24,6 +24,8 @@
  */
 
 import { notifiable } from "./labels.ts";
+import { translateLoose } from "../i18n/translate.ts";
+import { currentDictionary, serverT } from "../i18n/runtime.ts";
 
 /** Kaydedilen container eylemleri; gerisi (image pull, network connect…) atlanıyor. */
 export const TRACKED = new Set([
@@ -73,18 +75,19 @@ export type ClassifiedEvent = {
   exitCode: number | null;
 };
 
-const BASLIK: Record<string, string> = {
-  create: "oluşturuldu",
-  start: "başlatıldı",
-  stop: "durduruldu",
-  die: "sonlandı",
-  kill: "öldürüldü",
-  restart: "yeniden başlatıldı",
-  pause: "duraklatıldı",
-  unpause: "sürdürüldü",
-  oom: "BELLEK YETMEDİ (OOM)",
-  health_status: "sağlık durumu değişti",
-};
+/** Başlığa eklenen eylem metni — `dockerEvent.action.<eylem>` (dil dosyası). */
+const BASLIK = new Set([
+  "create",
+  "start",
+  "stop",
+  "die",
+  "kill",
+  "restart",
+  "pause",
+  "unpause",
+  "oom",
+  "health_status",
+]);
 
 /**
  * Ham Docker olayını panelin olay kaydına çevirir; ilgilenmediğimiz olaylarda
@@ -143,17 +146,17 @@ export function classify(raw: DockerEventRaw): ClassifiedEvent | null {
   if (!notifiable(attrs)) notify = false;
 
   const ad = containerName || containerId.slice(0, 12) || "container";
-  const baslik = `${ad} ${BASLIK[action] ?? action}${durum ? `: ${durum}` : ""}`;
+  const eylem = BASLIK.has(action)
+    ? translateLoose(currentDictionary(), `dockerEvent.action.${action}`)
+    : action;
+  const baslik = `${ad} ${eylem}${durum ? `: ${durum}` : ""}`; // i18n-ignore
 
   const parcalar: string[] = [];
-  if (image) parcalar.push(`imaj: ${image}`);
-  if (composeProject) parcalar.push(`yığın: ${composeProject}`);
-  if (exitCode !== null) parcalar.push(`çıkış kodu: ${exitCode}`);
+  if (image) parcalar.push(serverT("dockerEvent.image", { image }));
+  if (composeProject) parcalar.push(serverT("dockerEvent.stack", { stack: composeProject }));
+  if (exitCode !== null) parcalar.push(serverT("dockerEvent.exitCode", { code: exitCode }));
   if (action === "oom") {
-    parcalar.push(
-      "Container'a ayrılan bellek sınırı aşıldı ve çekirdek onu öldürdü. " +
-        "Sınırı yükseltmek ya da uygulamanın bellek kullanımını düşürmek gerekiyor.",
-    );
+    parcalar.push(serverT("dockerEvent.oomDetail"));
   }
 
   return {

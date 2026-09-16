@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import {
@@ -17,14 +18,14 @@ export async function PATCH(request: Request, { params }: Context) {
 
   const id = Number((await params).id);
   if (!listMaintenanceWindows().some((w) => w.id === id)) {
-    return Response.json({ error: "bakım penceresi bulunamadı" }, { status: 404 });
+    return Response.json({ error: serverT("api.notFound.maintenance") }, { status: 404 });
   }
 
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const parsed = parseMaintenanceInput(body);
@@ -51,7 +52,7 @@ export async function DELETE(request: Request, { params }: Context) {
   const id = Number((await params).id);
   const existing = listMaintenanceWindows().find((w) => w.id === id);
   if (!existing) {
-    return Response.json({ error: "bakım penceresi bulunamadı" }, { status: 404 });
+    return Response.json({ error: serverT("api.notFound.maintenance") }, { status: 404 });
   }
 
   deleteMaintenance(id);

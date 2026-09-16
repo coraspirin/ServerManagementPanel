@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { impactOfStopping } from "@/lib/docker/graph";
 import { getRunbook } from "@/lib/docker/runbooks";
@@ -23,7 +24,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   try {
     const detail = await provider.detail(id);
-    if (!detail) return Response.json({ error: "container bulunamadı" }, { status: 404 });
+    if (!detail) return Response.json({ error: serverT("api.notFound.container") }, { status: 404 });
 
     const summaries = await provider.list(true);
     const others = await Promise.all(
@@ -40,7 +41,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     });
   } catch (error) {
     return Response.json(
-      { error: error instanceof Error ? error.message : "Docker'a ulaşılamadı" },
+      { error: error instanceof Error ? error.message : serverT("api.docker.unreachable") },
       { status: 502 },
     );
   }

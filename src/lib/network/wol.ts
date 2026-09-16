@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import dgram from "node:dgram";
 import net from "node:net";
@@ -78,13 +79,13 @@ export type WolInput = {
 };
 
 export function validateWol(input: WolInput): string | null {
-  if (!input.name.trim()) return "Ad boş olamaz.";
-  if (!normalizeMac(input.mac)) return "MAC adresi 12 onaltılık karakter olmalı.";
+  if (!input.name.trim()) return serverT("monitorStore.nameEmpty");
+  if (!normalizeMac(input.mac)) return serverT("wolLib.mac");
   if (input.broadcast.trim() && !net.isIPv4(input.broadcast.trim())) {
-    return "Yayın adresi geçerli bir IPv4 olmalı (ör. 192.168.61.255).";
+    return serverT("wolLib.broadcast");
   }
   if (!Number.isInteger(input.port) || input.port < 1 || input.port > 65535) {
-    return "Port 1–65535 arasında olmalı.";
+    return serverT("proxyStore.portRange");
   }
   return null;
 }

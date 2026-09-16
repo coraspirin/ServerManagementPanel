@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { auditAction } from "@/lib/apiv1/action";
 import { maintenancePatchBase, mergePatch, parseId } from "@/lib/apiv1/crud";
 import { guardV1 } from "@/lib/apiv1/guard";
@@ -21,10 +22,10 @@ export async function GET(request: Request, { params }: Context) {
   if (!guard.ok) return guard.response;
 
   const id = parseId((await params).id);
-  if (id === null) return apiError("invalid_request", "geçersiz bakım penceresi kimliği");
+  if (id === null) return apiError("invalid_request", serverT("api.v1.invalidMaintenanceId"));
 
   const window = listMaintenanceWindows().find((entry) => entry.id === id);
-  if (!window) return apiError("not_found", "bakım penceresi bulunamadı");
+  if (!window) return apiError("not_found", serverT("api.notFound.maintenance"));
 
   return apiOk({ maintenance: serializeMaintenance(window) });
 }
@@ -42,10 +43,10 @@ export async function PATCH(request: Request, { params }: Context) {
   if (!guard.ok) return guard.response;
 
   const id = parseId((await params).id);
-  if (id === null) return apiError("invalid_request", "geçersiz bakım penceresi kimliği");
+  if (id === null) return apiError("invalid_request", serverT("api.v1.invalidMaintenanceId"));
 
   const existing = listMaintenanceWindows().find((entry) => entry.id === id);
-  if (!existing) return apiError("not_found", "bakım penceresi bulunamadı");
+  if (!existing) return apiError("not_found", serverT("api.notFound.maintenance"));
 
   const body = await readJsonBody(request, getNumber("api.max_body_bytes"));
   if (!body.ok) return body.response;
@@ -71,10 +72,10 @@ export async function DELETE(request: Request, { params }: Context) {
   if (!guard.ok) return guard.response;
 
   const id = parseId((await params).id);
-  if (id === null) return apiError("invalid_request", "geçersiz bakım penceresi kimliği");
+  if (id === null) return apiError("invalid_request", serverT("api.v1.invalidMaintenanceId"));
 
   const existing = listMaintenanceWindows().find((entry) => entry.id === id);
-  if (!existing) return apiError("not_found", "bakım penceresi bulunamadı");
+  if (!existing) return apiError("not_found", serverT("api.notFound.maintenance"));
 
   deleteMaintenance(id);
 

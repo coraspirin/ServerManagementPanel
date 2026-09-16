@@ -1,6 +1,7 @@
 import "server-only";
 
 import { audit } from "@/lib/auth/audit";
+import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 import { getNumber, getString } from "@/lib/settings";
 import { looksLikeMissingLs, normalizePath, parseListing, type FileEntry } from "./listing";
@@ -57,24 +58,24 @@ export async function cloneVolume(
   target: string,
   actor: { username: string; userId: number },
 ): Promise<VolumeOutcome> {
-  if (!AD_RE.test(source)) return { ok: false, message: "Kaynak volume adı geçersiz." };
+  if (!AD_RE.test(source)) return { ok: false, message: serverT("volumes.invalidSource") };
   if (!AD_RE.test(target)) {
     return {
       ok: false,
-      message: "Hedef volume adı geçersiz (harf/rakamla başlamalı, 2-64 karakter).",
+      message: serverT("volumes.invalidTarget"),
     };
   }
-  if (source === target) return { ok: false, message: "Kaynak ve hedef aynı olamaz." };
+  if (source === target) return { ok: false, message: serverT("volumes.sameName") };
 
   const provider = getDockerProvider();
 
   const mevcut = await provider.volumes();
   if (!mevcut.some((entry) => entry.name === source)) {
-    return { ok: false, message: `Kaynak volume bulunamadı: ${source}` };
+    return { ok: false, message: serverT("volumes.sourceMissing", { name: source }) };
   }
   if (mevcut.some((entry) => entry.name === target)) {
     // Var olanın üzerine kopyalamak, hedefteki veriyi sessizce ezmek olurdu.
-    return { ok: false, message: `"${target}" zaten var. Başka bir ad seç.` };
+    return { ok: false, message: serverT("volumes.targetExists", { name: target }) };
   }
 
   /*
@@ -97,7 +98,7 @@ export async function cloneVolume(
       ),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "volume oluşturulamadı";
+    const message = error instanceof Error ? error.message : serverT("volumes.createFailed");
     audit({
       userId: actor.userId,
       username: actor.username,
@@ -143,11 +144,11 @@ export async function cloneVolume(
     await provider.removeResource("volume", target, false).catch(() => {});
     return {
       ok: false,
-      message: `Kopyalama başarısız, hedef volume kaldırıldı: ${result.output.slice(0, 300)}`,
+      message: serverT("volumes.copyFailed", { output: result.output.slice(0, 300) }),
     };
   }
 
-  return { ok: true, message: `"${source}" → "${target}" kopyalandı.` };
+  return { ok: true, message: serverT("volumes.copied", { source, target }) };
 }
 
 export type ExportResult =
@@ -165,7 +166,7 @@ export async function exportVolume(
   name: string,
   actor: { username: string; userId: number },
 ): Promise<ExportResult> {
-  if (!AD_RE.test(name)) return { ok: false, message: "Volume adı geçersiz." };
+  if (!AD_RE.test(name)) return { ok: false, message: serverT("volumes.invalidName") };
 
   const provider = getDockerProvider();
 
@@ -185,9 +186,10 @@ export async function exportVolume(
     return {
       ok: false,
       message:
-        `Volume ${(boyut / 1024 ** 3).toFixed(2)} GB — dışa aktarma sınırı ` +
-        `${(azami / 1024 ** 2).toFixed(0)} MB. Ayarlardan sınırı yükseltebilir ya da ` +
-        "bu volume için yedekleme motorunu (restic) kullanabilirsin.",
+        serverT("volumes.tooLarge", {
+          size: (boyut / 1024 ** 3).toFixed(2),
+          limit: (azami / 1024 ** 2).toFixed(0),
+        }),
     };
   }
 
@@ -228,13 +230,13 @@ export async function exportVolume(
       action: "docker.export_volume",
       targetType: "volume",
       targetId: name,
-      detail: `${(archive.length / 1024 ** 2).toFixed(1)} MB arşiv`,
+      detail: serverT("volumes.archiveSize", { size: (archive.length / 1024 ** 2).toFixed(1) }),
       result: "ok",
     });
 
     return { ok: true, archive, filename: `${name}.tar` };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "arşiv oluşturulamadı";
+    const message = error instanceof Error ? error.message : serverT("volumes.archiveFailed");
     audit({
       userId: actor.userId,
       username: actor.username,
@@ -276,12 +278,12 @@ export async function listVolumePath(
   name: string,
   input: string,
 ): Promise<{ ok: true; path: string; entries: FileEntry[] } | { ok: false; message: string }> {
-  if (!AD_RE.test(name)) return { ok: false, message: "Volume adı geçersiz." };
+  if (!AD_RE.test(name)) return { ok: false, message: serverT("volumes.invalidName") };
 
   const rel = normalizePath(input || "/");
   const target = rel === "/" ? KAYNAK : `${KAYNAK}${rel}`;
   if (target !== KAYNAK && !target.startsWith(`${KAYNAK}/`)) {
-    return { ok: false, message: "Yol volume dışına çıkıyor." };
+    return { ok: false, message: serverT("volumes.pathEscape") };
   }
 
   const result = await getDockerProvider().runThrowaway({
@@ -301,7 +303,7 @@ export async function listVolumePath(
     return {
       ok: false,
       message: looksLikeMissingLs(result.output)
-        ? "Yardımcı imajda `ls` yok; ayarlardaki yardımcı imajı değiştirmen gerekiyor."
+        ? serverT("volumes.noLs")
         : result.output.slice(0, 300) || "Dizin listelenemedi.",
     };
   }
@@ -330,14 +332,14 @@ export async function readVolumeFile(
   name: string,
   input: string,
 ): Promise<{ ok: true; filename: string; bytes: Buffer } | { ok: false; message: string }> {
-  if (!AD_RE.test(name)) return { ok: false, message: "Volume adı geçersiz." };
+  if (!AD_RE.test(name)) return { ok: false, message: serverT("volumes.invalidName") };
 
   const rel = normalizePath(input);
-  if (rel === "/") return { ok: false, message: "Dosya yolu gerekli." };
+  if (rel === "/") return { ok: false, message: serverT("volumes.pathRequired") };
 
   const target = `${KAYNAK}${rel}`;
   if (!target.startsWith(`${KAYNAK}/`)) {
-    return { ok: false, message: "Yol volume dışına çıkıyor." };
+    return { ok: false, message: serverT("volumes.pathEscape") };
   }
 
   const provider = getDockerProvider();
@@ -354,7 +356,7 @@ export async function readVolumeFile(
     const entries = readTar(archive).filter((entry) => entry.type === "dosya");
 
     if (entries.length === 0) {
-      return { ok: false, message: "Dosya bulunamadı ya da bir dizin." };
+      return { ok: false, message: serverT("volumes.fileMissing") };
     }
 
     return {
@@ -365,7 +367,7 @@ export async function readVolumeFile(
   } catch (error) {
     return {
       ok: false,
-      message: error instanceof Error ? error.message : "dosya okunamadı",
+      message: error instanceof Error ? error.message : serverT("volumes.readFailed"),
     };
   } finally {
     if (containerId) await provider.removeContainer(containerId, true).catch(() => {});
@@ -388,7 +390,7 @@ export async function createVolume(
   if (!AD_RE.test(name)) {
     return {
       ok: false,
-      message: "Volume adı geçersiz (harf/rakamla başlamalı, 2-64 karakter).",
+      message: serverT("volumes.invalidTarget"),
     };
   }
 
@@ -408,7 +410,7 @@ export async function createVolume(
       labels: input.labels,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "volume oluşturulamadı";
+    const message = error instanceof Error ? error.message : serverT("volumes.createFailed");
     audit({
       userId: actor.userId,
       username: actor.username,
@@ -431,5 +433,5 @@ export async function createVolume(
     result: "ok",
   });
 
-  return { ok: true, message: `"${name}" volume'ü oluşturuldu.` };
+  return { ok: true, message: serverT("volumes.created", { name }) };
 }

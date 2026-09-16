@@ -14,7 +14,8 @@ import {
 
 import { containerLink, portLink } from "@/lib/docker/labels";
 import { formatBytes } from "@/lib/metrics/catalog";
-import { useFormat } from "@/lib/i18n/client";
+import { useFormat, useT } from "@/lib/i18n/client";
+import type { MessageKey, TFunction } from "@/lib/i18n/translate";
 import type { ContainerView } from "@/lib/docker/types";
 import type { ContainerAction } from "@/lib/providers/types";
 import type { DrawerTab } from "./ContainerDrawer";
@@ -47,12 +48,13 @@ const HEALTH_STYLE: Record<string, string> = {
   starting: "text-warn",
 };
 
-export const ACTION_LABEL: Record<ContainerAction, string> = {
-  start: "Başlat",
-  stop: "Durdur",
-  restart: "Yeniden başlat",
-  pause: "Duraklat",
-  unpause: "Sürdür",
+/** Eylem adlarının dil dosyasındaki anahtarları. */
+export const ACTION_KEY: Record<ContainerAction, MessageKey> = {
+  start: "docker.action.start",
+  stop: "docker.action.stop",
+  restart: "docker.action.restart",
+  pause: "docker.action.pause",
+  unpause: "docker.action.unpause",
 };
 
 /**
@@ -83,6 +85,7 @@ function portLabel(port: ContainerView["ports"][number]): string {
 const MAX_PORT_ROZETI = 3;
 
 function PortCell({ container, publicHost }: { container: ContainerView; publicHost: string }) {
+  const t = useT();
   if (container.ports.length === 0) return <span className="text-subtle">—</span>;
 
   const gosterilen = container.ports.slice(0, MAX_PORT_ROZETI);
@@ -121,7 +124,7 @@ function PortCell({ container, publicHost }: { container: ContainerView; publicH
             href={href}
             target="_blank"
             rel="noreferrer noopener"
-            title={`${href} — yeni sekmede açar`}
+            title={t("docker.row.openInNewTab", { href })}
             className="inline-flex items-center gap-0.5 rounded border border-line px-1 transition-colors hover:border-brand hover:text-brand"
           >
             {özel ? özel.label : etiket}
@@ -174,6 +177,7 @@ export function ContainerRow({
   indent?: boolean;
   handlers: RowHandlers;
 }) {
+  const t = useT();
   const f = useFormat();
   const { open, runAction, removeContainer, toggleSelect } = handlers;
 
@@ -210,8 +214,8 @@ export function ContainerRow({
               disabled
               checked={false}
               readOnly
-              aria-label={`${container.name} toplu işleme alınamaz`}
-              title="Panelin çalışması buna bağlı — toplu işleme alınamaz. Tek tek işlemler açık."
+              aria-label={t("docker.row.lockedAria", { name: container.name })}
+              title={t("docker.row.lockedTitle")}
               className="size-3.5 accent-[var(--brand)] opacity-40"
             />
           ) : (
@@ -219,7 +223,7 @@ export function ContainerRow({
               type="checkbox"
               checked={selected}
               onChange={() => toggleSelect(container.id)}
-              aria-label={`${container.name} seç`}
+              aria-label={t("docker.row.select", { name: container.name })}
               className="size-3.5 accent-[var(--brand)]"
             />
           )}
@@ -283,7 +287,7 @@ export function ContainerRow({
       </td>
 
       {visible.has("image") && (
-        <td data-label="Image" className="px-4 py-3 md:whitespace-nowrap">
+        <td data-label={t("docker.columns.image.head")} className="px-4 py-3 md:whitespace-nowrap">
           <span
             className="block max-w-[16rem] truncate font-mono text-[11px] text-subtle"
             title={container.image}
@@ -294,7 +298,7 @@ export function ContainerRow({
       )}
 
       {visible.has("state") && (
-        <td data-label="Durum" className="px-4 py-3 md:whitespace-nowrap">
+        <td data-label={t("docker.columns.state.head")} className="px-4 py-3 md:whitespace-nowrap">
           {/*
             Durum, sağlık ve Docker'ın `Status` metni TEK SATIRDA. `status`
             eskiden alta ikinci bir satır olarak yazılıyordu ve satır
@@ -329,19 +333,19 @@ export function ContainerRow({
       )}
 
       {visible.has("uptime") && (
-        <td data-label="Çalışma" className="px-4 py-3 text-xs text-subtle md:whitespace-nowrap">
-          {formatUptime(container)}
+        <td data-label={t("docker.columns.uptime.head")} className="px-4 py-3 text-xs text-subtle md:whitespace-nowrap">
+          {formatUptime(container, t)}
         </td>
       )}
 
       {visible.has("cpu") && (
-        <td data-label="CPU" className="px-4 py-3 text-xs md:whitespace-nowrap">
+        <td data-label={t("docker.columns.cpu.head")} className="px-4 py-3 text-xs md:whitespace-nowrap">
           {container.cpuPct === null ? "—" : f.pct(container.cpuPct)}
         </td>
       )}
 
       {visible.has("memory") && (
-        <td data-label="Bellek" className="px-4 py-3 text-xs md:whitespace-nowrap">
+        <td data-label={t("docker.columns.memory.head")} className="px-4 py-3 text-xs md:whitespace-nowrap">
           {container.memUsed === null ? (
             "—"
           ) : (
@@ -356,20 +360,20 @@ export function ContainerRow({
       )}
 
       {visible.has("net") && (
-        <td data-label="Ağ G/Ç" className="px-4 py-3 font-mono text-[11px]">
+        <td data-label={t("docker.columns.net.head")} className="px-4 py-3 font-mono text-[11px]">
           <IoCell inValue={container.netRx} outValue={container.netTx} />
         </td>
       )}
 
       {visible.has("disk") && (
-        <td data-label="Disk G/Ç" className="px-4 py-3 font-mono text-[11px]">
+        <td data-label={t("docker.columns.disk.head")} className="px-4 py-3 font-mono text-[11px]">
           <IoCell inValue={container.blkRead} outValue={container.blkWrite} />
         </td>
       )}
 
       {visible.has("ip") && (
         <td
-          data-label="IP"
+          data-label={t("docker.columns.ip.head")}
           className="px-4 py-3 font-mono text-[11px] text-subtle md:whitespace-nowrap"
         >
           {container.ipAddress || (container.networkMode === "host" ? "host" : "—")}
@@ -377,20 +381,22 @@ export function ContainerRow({
       )}
 
       {visible.has("ports") && (
-        <td data-label="Portlar" className="px-4 py-3 font-mono text-[11px] md:whitespace-nowrap">
+        <td data-label={t("docker.columns.ports.head")} className="px-4 py-3 font-mono text-[11px] md:whitespace-nowrap">
           <PortCell container={container} publicHost={publicHost} />
         </td>
       )}
 
       {visible.has("restarts") && (
-        <td data-label="Restart" className="px-4 py-3 text-xs md:whitespace-nowrap">
+        <td data-label={t("docker.columns.restarts.head")} className="px-4 py-3 text-xs md:whitespace-nowrap">
           {container.restartCount === null ? (
             "—"
           ) : (container.restartsInWindow ?? 0) > 0 ? (
             <span className="text-danger">
-              {container.restartCount} · son{" "}
-              {container.restartLoopWindowMinutes} dk&apos;da{" "}
-              {container.restartsInWindow}
+              {t("docker.row.restartsInWindow", {
+                count: container.restartCount,
+                minutes: container.restartLoopWindowMinutes ?? 0,
+                inWindow: container.restartsInWindow ?? 0,
+              })}
             </span>
           ) : (
             container.restartCount
@@ -399,7 +405,7 @@ export function ContainerRow({
       )}
 
       {visible.has("stack") && (
-        <td data-label="Yığın" className="px-4 py-3 text-[11px] text-subtle md:whitespace-nowrap">
+        <td data-label={t("docker.columns.stack.head")} className="px-4 py-3 text-[11px] text-subtle md:whitespace-nowrap">
           <span className="block md:max-w-[10rem] md:truncate" title={container.composeProject ?? ""}>
             {container.composeProject ?? "—"}
           </span>
@@ -415,14 +421,14 @@ export function ContainerRow({
       <td data-label="" className="px-4 py-3 md:w-px md:whitespace-nowrap">
         <div className="flex flex-wrap items-center justify-end gap-1 max-md:justify-start md:flex-nowrap">
           <IconButton
-            title="Detay, bağımlılıklar ve runbook"
+            title={t("docker.row.details")}
             onClick={() => open(container, "genel")}
           >
             <Info className="size-3.5" />
           </IconButton>
 
           <IconButton
-            title="Logları göster"
+            title={t("docker.row.logs")}
             onClick={() => open(container, "loglar")}
           >
             <ScrollText className="size-3.5" />
@@ -430,7 +436,7 @@ export function ContainerRow({
 
           {canExec && container.state === "running" && (
             <IconButton
-              title="Terminal aç"
+              title={t("docker.row.terminal")}
               onClick={() => open(container, "terminal")}
             >
               <TerminalIcon className="size-3.5" />
@@ -439,7 +445,7 @@ export function ContainerRow({
 
           {canAct && container.state !== "running" && (
             <IconButton
-              title={ACTION_LABEL.start}
+              title={t(ACTION_KEY.start)}
               disabled={busyId === container.id}
               onClick={() => void runAction(container, "start")}
             >
@@ -450,21 +456,21 @@ export function ContainerRow({
           {canAct && container.state === "running" && (
             <>
               <IconButton
-                title={ACTION_LABEL.restart}
+                title={t(ACTION_KEY.restart)}
                 disabled={busyId === container.id}
                 onClick={() => void runAction(container, "restart")}
               >
                 <RotateCw className="size-3.5" />
               </IconButton>
               <IconButton
-                title={ACTION_LABEL.pause}
+                title={t(ACTION_KEY.pause)}
                 disabled={busyId === container.id}
                 onClick={() => void runAction(container, "pause")}
               >
                 <Pause className="size-3.5" />
               </IconButton>
               <IconButton
-                title={ACTION_LABEL.stop}
+                title={t(ACTION_KEY.stop)}
                 danger
                 disabled={busyId === container.id}
                 onClick={() => void runAction(container, "stop")}
@@ -476,7 +482,7 @@ export function ContainerRow({
 
           {canAct && container.state === "paused" && (
             <IconButton
-              title={ACTION_LABEL.unpause}
+              title={t(ACTION_KEY.unpause)}
               disabled={busyId === container.id}
               onClick={() => void runAction(container, "unpause")}
             >
@@ -495,7 +501,7 @@ export function ContainerRow({
           */}
           {canAct && container.state !== "running" && (
             <IconButton
-              title="Container'ı sil"
+              title={t("docker.row.remove")}
               danger
               disabled={busyId === container.id}
               onClick={() => void removeContainer(container)}
@@ -536,15 +542,15 @@ function IoCell({ inValue, outValue }: { inValue: number | null; outValue: numbe
  * Durmuş container'da başlangıç zamanı anlamsız; oluşturma zamanına düşmek de
  * yanıltıcı olurdu, bu yüzden tire gösteriliyor.
  */
-function formatUptime(container: ContainerView): string {
+function formatUptime(container: ContainerView, t: TFunction): string {
   if (container.state !== "running") return "—";
 
   const saniye = Math.floor(Date.now() / 1000) - container.createdAt;
   if (saniye < 0) return "—";
-  if (saniye < 60) return `${saniye} sn`;
-  if (saniye < 3600) return `${Math.floor(saniye / 60)} dk`;
-  if (saniye < 86400) return `${Math.floor(saniye / 3600)} saat`;
-  return `${Math.floor(saniye / 86400)} gün`;
+  if (saniye < 60) return t("docker.row.uptime.seconds", { count: saniye });
+  if (saniye < 3600) return t("docker.row.uptime.minutes", { count: Math.floor(saniye / 60) });
+  if (saniye < 86400) return t("docker.row.uptime.hours", { count: Math.floor(saniye / 3600) });
+  return t("docker.row.uptime.days", { count: Math.floor(saniye / 86400) });
 }
 
 export function IconButton({

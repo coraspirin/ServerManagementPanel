@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { runMonitorNow } from "@/lib/monitors/run";
 import { monitorViews } from "@/lib/monitors/store";
@@ -10,7 +11,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!guard.ok) return guard.response;
 
   const outcome = await runMonitorNow(Number((await params).id));
-  if (!outcome) return Response.json({ error: "monitör bulunamadı" }, { status: 404 });
+  if (!outcome) return Response.json({ error: serverT("api.notFound.monitor") }, { status: 404 });
 
   return Response.json({
     ok: outcome.result.ok,

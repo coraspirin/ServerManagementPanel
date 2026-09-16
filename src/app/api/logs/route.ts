@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { collectLogs } from "@/lib/logs/collect";
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
     userId: guard.session.user.id,
     username: guard.session.user.username,
     action: "logs.collect",
-    detail: `${outcome.collected} satır / ${outcome.sources} kaynak`,
+    detail: serverT("api.logs.collected", { lines: outcome.collected, sources: outcome.sources }),
     result: outcome.errors.length > 0 ? "error" : "ok",
   });
 

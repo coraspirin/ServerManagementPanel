@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { SEVERITY_ORDER, isSeverity, type ChannelStatus, type Severity } from "@/lib/alerts/types";
 import { getBool, getString } from "@/lib/settings";
@@ -81,7 +82,7 @@ export async function dispatch(
         result.sent.push(channel.key);
       } catch (error) {
         result.failed[channel.key] =
-          error instanceof Error ? error.message : "bilinmeyen hata";
+          error instanceof Error ? error.message : serverT("api.unknownError");
       }
     }),
   );
@@ -92,7 +93,7 @@ export async function dispatch(
 /** Ayarlar doğru mu diye tek kanala deneme gönderir. */
 export async function sendTest(key: string): Promise<{ ok: boolean; error?: string }> {
   const channel = findChannel(key);
-  if (!channel) return { ok: false, error: "bilinmeyen kanal" };
+  if (!channel) return { ok: false, error: serverT("notify.unknownChannel") };
 
   const problem = channel.problem();
   if (problem) return { ok: false, error: problem };
@@ -100,13 +101,15 @@ export async function sendTest(key: string): Promise<{ ok: boolean; error?: stri
   try {
     await channel.send({
       severity: "info",
-      title: "Sunucu Paneli — deneme bildirimi",
-      detail:
-        "Bu bir testtir. Bu mesajı gördüysen kanal ayarları doğru ve alarmlar buraya düşecek.",
+      title: serverT("notifyLib.testTitle"),
+      detail: serverT("notifyLib.testDetail"),
     });
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "bilinmeyen hata" };
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : serverT("console.unknownError"),
+    };
   }
 }
 

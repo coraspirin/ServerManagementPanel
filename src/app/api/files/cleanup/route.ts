@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { runCleanup, scanCleanup } from "@/lib/files/cleanup";
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as { id?: unknown };
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const id = String(body.id ?? "");

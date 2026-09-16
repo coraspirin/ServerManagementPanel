@@ -6,6 +6,8 @@ import { FileCode, HelpCircle, Upload, XCircle } from "lucide-react";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import type { InstalledStack } from "@/lib/appstore/install";
 import type { PreflightResult } from "@/lib/appstore/preflight";
+import { useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 /**
  * Compose yığınları.
@@ -75,6 +77,7 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
     host-helper'a bir istek atıyor ve yığın listesinin her tazelenmesinde bunu
     yapmanın anlamı yok — kurulum formu açılmadan gerekmiyor.
   */
+  const t = useT();
   const [data, setData] = useState<Payload | null>(null);
   const [name, setName] = useState("");
   const [compose, setCompose] = useState("");
@@ -98,14 +101,14 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
           signal: controller.signal,
         });
         if (response.ok) apply((await response.json()) as Payload);
-        else setError("Kurulum bilgisi alınamadı.");
+        else setError(t("docker.installer.infoFailed"));
       } catch (fetchError) {
-        if ((fetchError as Error)?.name !== "AbortError") setError("Sunucuya ulaşılamadı.");
+        if ((fetchError as Error)?.name !== "AbortError") setError(t("common.errors.network"));
       }
     })();
 
     return () => controller.abort();
-  }, [apply]);
+  }, [apply, t]);
 
   // Tek bir engel bile kurulumu durdurur; uyarı ve öneriler durdurmaz.
   const blocked = (findings ?? []).some((entry) => entry.severity === "engel");
@@ -130,7 +133,7 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
       const payload = await response.json();
       if (payload.ok === false) {
         setFindings([
-          { severity: "engel", service: "", title: "YAML okunamadı", detail: payload.error ?? "" },
+          { severity: "engel", service: "", title: t("docker.installer.yamlUnreadable"), detail: payload.error ?? "" },
         ]);
         return;
       }
@@ -138,7 +141,7 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
       // Düzeltme uygulandıysa kutudaki metin de güncellenmeli.
       if (fixes.length > 0 && typeof payload.compose === "string") setCompose(payload.compose);
     } catch {
-      setError("Ön kontrol yapılamadı.");
+      setError(t("docker.installer.checkFailed"));
     } finally {
       setChecking(false);
     }
@@ -174,13 +177,13 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
       if (response.ok && payload.ok !== false) onInstalled();
 
       if (!response.ok || payload.ok === false) {
-        setError(payload.error ?? "İşlem başarısız.");
+        setError(payload.error ?? t("common.errors.actionFailed"));
         return false;
       }
-      setNotice(payload.message ?? "Tamam.");
+      setNotice(payload.message ?? t("docker.installer.ok"));
       return true;
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
       return false;
     } finally {
       setBusy(false);
@@ -194,8 +197,7 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
 
     if (file.size > MAX_COMPOSE_BYTES) {
       setError(
-        `"${file.name}" çok büyük (${formatSize(file.size)}). Üst sınır 256 KB — ` +
-          "bir compose dosyası için bu fazlasıyla yeterli, muhtemelen yanlış dosya seçildi.",
+        t("docker.composeImport.tooLarge", { name: file.name, size: formatSize(file.size) }),
       );
       return;
     }
@@ -217,7 +219,7 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
     return (
       <div className="space-y-2">
         {error && <p className="text-sm text-danger">{error}</p>}
-        {!error && <p className="text-sm text-subtle">yükleniyor…</p>}
+        {!error && <p className="text-sm text-subtle">{t("common.states.loadingInline")}</p>}
       </div>
     );
   }
@@ -245,10 +247,13 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
         <div className="flex flex-wrap items-center gap-2 border-b border-line px-5 py-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
             <FileCode className="size-4 text-subtle" aria-hidden />
-            Compose dosyası yükle
+            {t("docker.installer.uploadTitle")}
           </h2>
           <span className="ml-auto text-xs text-subtle">
-            Kurulum dizini: <code className="font-mono">{data.stacksRoot}</code>
+            <Rich
+              text={t("docker.installer.installDir")}
+              values={{ path: <code className="font-mono">{data.stacksRoot}</code> }}
+            />
           </span>
         </div>
 
@@ -270,7 +275,10 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
           >
             <Upload className="size-6 text-subtle" aria-hidden />
             <p className="text-sm text-subtle">
-              <code className="font-mono">docker-compose.yml</code> dosyanı buraya sürükle
+              <Rich
+                text={t("docker.composeImport.dropHere")}
+                values={{ file: <code className="font-mono">docker-compose.yml</code> }}
+              />
             </p>
             <input
               ref={fileRef}
@@ -284,7 +292,7 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
               onClick={() => fileRef.current?.click()}
               className="rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand"
             >
-              Dosya seç
+              {t("docker.composeImport.chooseFile")}
             </button>
             {fileInfo && (
               <p className="text-xs text-subtle">
@@ -294,31 +302,37 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
                   onClick={clearFile}
                   className="ml-2 underline transition-colors hover:text-ink"
                 >
-                  temizle
+                  {t("docker.composeImport.clear")}
                 </button>
               </p>
             )}
           </div>
 
           <label className="block text-sm">
-            <span className="text-subtle">Yığın adı</span>
+            <span className="text-subtle">{t("docker.installer.stackName")}</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="ornek-uygulama"
+              placeholder={t("docker.create.namePlaceholder")}
               className={`${inputClass} font-mono`}
             />
             <span className="mt-1 block text-xs text-subtle">
-              Küçük harf, rakam ve tire. Kurulum dizininin adı olur:{" "}
-              <code className="font-mono">
-                {data.stacksRoot}/{name.trim() || "…"}
-              </code>
+              <Rich
+                text={t("docker.installer.stackNameHelp")}
+                values={{
+                  path: (
+                    <code className="font-mono">
+                      {data.stacksRoot}/{name.trim() || "…"}
+                    </code>
+                  ),
+                }}
+              />
             </span>
           </label>
 
           <label className="block text-sm">
             <span className="text-subtle">
-              İçerik — kurulumdan önce düzenleyebilirsin
+              {t("docker.installer.content")}
             </span>
             <textarea
               value={compose}
@@ -328,18 +342,19 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
               }}
               rows={16}
               spellCheck={false}
-              placeholder={
-                "Dosya seç ya da doğrudan buraya yaz:\n\n" +
-                "services:\n  app:\n    image: ornek/imaj:1\n    restart: unless-stopped"
-              }
+              placeholder={t("docker.installer.contentPlaceholder")}
               className={`${inputClass} font-mono text-xs leading-relaxed`}
             />
           </label>
 
           <p className="rounded-md bg-brand/5 px-3 py-2 text-xs leading-relaxed text-subtle">
-            Panel dosyayı yazdıktan sonra önce <code className="font-mono">compose config</code>{" "}
-            ile doğrular; YAML geçersizse hiçbir şey başlatılmaz. Var olan bir compose dosyasının
-            üzerine <strong>yazmaz</strong>.
+            <Rich
+              text={t("docker.installer.validateNote")}
+              values={{
+                cmd: <code className="font-mono">compose config</code>,
+                strong: <strong>{t("docker.installer.noOverwrite")}</strong>,
+              }}
+            />
           </p>
 
           {findings !== null && <Findings findings={findings} onFix={check} busy={checking} />}
@@ -351,12 +366,12 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
               onClick={() => void check()}
               className="rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
             >
-              {checking ? "Kontrol ediliyor…" : "Ön kontrol"}
+              {checking ? t("docker.installer.checking") : t("docker.installer.precheck")}
             </button>
             <button
               type="button"
               disabled={busy || !name.trim() || !compose.trim() || blocked}
-              title={blocked ? "Önce engelleri gider." : undefined}
+              title={blocked ? t("docker.installer.fixBlockers") : undefined}
               onClick={async () => {
                 const ok = await send({ action: "install", name: name.trim(), compose });
                 if (ok) {
@@ -367,7 +382,7 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
               }}
               className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              {busy ? "Kuruluyor…" : "Kur ve başlat"}
+              {busy ? t("docker.installer.installing") : t("docker.installer.install")}
             </button>
           </div>
         </div>
@@ -385,6 +400,7 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
  * şeyi hata gibi göstermek, uyarının kendisine olan güveni yok eder.
  */
 function PreflightBanner({ result }: { result: PreflightResult }) {
+  const t = useT();
   if (result.status === "ok") return null;
 
   const blocked = result.status === "blocked";
@@ -402,7 +418,7 @@ function PreflightBanner({ result }: { result: PreflightResult }) {
         }`}
       >
         <Icon className="size-4 shrink-0" aria-hidden />
-        {blocked ? "Kurulum çalışmayacak" : "Kurulum sınanamadı"}
+        {blocked ? t("docker.installer.blocked") : t("docker.installer.untested")}
       </h2>
       <p className="mt-1.5 whitespace-pre-wrap text-xs leading-relaxed text-subtle">
         {result.detail}
@@ -410,12 +426,14 @@ function PreflightBanner({ result }: { result: PreflightResult }) {
       {result.allowLines && (
         <>
           <p className="mt-2 text-[11px] text-subtle">
-            Host{"'"}ta root olarak <code className="font-mono">/etc/panel-helper/allow.conf</code>{" "}
-            dosyasına:
+            <Rich
+              text={t("docker.installer.allowConf")}
+              values={{ file: <code className="font-mono">/etc/panel-helper/allow.conf</code> }}
+            />
           </p>
           <pre className="mt-1 overflow-x-auto rounded border border-line bg-canvas px-3 py-2 font-mono text-[11px] leading-relaxed">
             {result.allowLines}
-            {"\n\n# sonra: systemctl restart panel-helper"}
+            {`\n\n${t("docker.installer.allowThen")}`}
           </pre>
         </>
       )}
@@ -444,10 +462,11 @@ function Findings({
   onFix: (fixes: { service: string; kind: "restart" | "logging" }[]) => void;
   busy: boolean;
 }) {
+  const t = useT();
   if (findings.length === 0) {
     return (
       <p className="rounded-md border border-ok/40 bg-ok/5 px-3 py-2 text-xs text-ok">
-        Ön kontrol temiz — engel, uyarı ya da öneri yok.
+        {t("docker.installer.clean")}
       </p>
     );
   }
@@ -458,9 +477,9 @@ function Findings({
     oneri: "border-line bg-canvas text-subtle",
   };
   const label: Record<Finding["severity"], string> = {
-    engel: "engel",
-    uyari: "uyarı",
-    oneri: "öneri",
+    engel: t("docker.installer.severity.engel"),
+    uyari: t("docker.installer.severity.uyari"),
+    oneri: t("docker.installer.severity.oneri"),
   };
 
   return (

@@ -1,4 +1,6 @@
 import "server-only";
+import { formatPct } from "@/lib/i18n/format";
+import { currentDictionary, serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
 import { getNumber } from "@/lib/settings";
@@ -81,50 +83,50 @@ const SPIKE_RULES: SpikeRule[] = [
     metric: "cpu.pct",
     setting: "alerts.timeline_jump_pct",
     label: () => "CPU",
-    format: (value) => `%${value.toFixed(0)}`,
+    format: (value) => formatPct(value, currentDictionary(), 0),
   },
   {
     metric: "mem.used_pct",
     setting: "alerts.timeline_jump_pct",
-    label: () => "Bellek",
-    format: (value) => `%${value.toFixed(0)}`,
+    label: () => serverT("timelineLib.memory"),
+    format: (value) => formatPct(value, currentDictionary(), 0),
   },
   {
     metric: "disk.used_pct",
     setting: "alerts.timeline_jump_pct",
     label: (label) => `Disk ${label}`,
-    format: (value) => `%${value.toFixed(1)}`,
+    format: (value) => formatPct(value, currentDictionary(), 1),
   },
   {
     metric: "swap.used_pct",
     setting: "alerts.timeline_jump_pct",
-    label: () => "Takas alanı",
-    format: (value) => `%${value.toFixed(0)}`,
+    label: () => serverT("timelineLib.swap"),
+    format: (value) => formatPct(value, currentDictionary(), 0),
   },
   {
     metric: "docker.cpu_pct",
     setting: "alerts.timeline_jump_pct",
     label: (label) => `${label} CPU`,
-    format: (value) => `%${value.toFixed(0)}`,
+    format: (value) => formatPct(value, currentDictionary(), 0),
   },
   {
     metric: "docker.mem_pct",
     setting: "alerts.timeline_jump_pct",
-    label: (label) => `${label} bellek`,
-    format: (value) => `%${value.toFixed(0)}`,
+    label: (label) => serverT("timelineLib.containerMemory", { name: label }),
+    format: (value) => formatPct(value, currentDictionary(), 0),
   },
   {
     metric: "net.rx_bps",
     setting: "alerts.timeline_net_jump_mbps",
-    label: (label) => `${label} indirme`,
-    format: (value) => `${(value / 1_000_000).toFixed(1)} Mbit/sn`,
+    label: (label) => serverT("timelineLib.download", { name: label }),
+    format: (value) => serverT("timelineLib.mbps", { value: (value / 1_000_000).toFixed(1) }),
     scale: 1_000_000,
   },
   {
     metric: "net.tx_bps",
     setting: "alerts.timeline_net_jump_mbps",
-    label: (label) => `${label} yükleme`,
-    format: (value) => `${(value / 1_000_000).toFixed(1)} Mbit/sn`,
+    label: (label) => serverT("timelineLib.upload", { name: label }),
+    format: (value) => serverT("timelineLib.mbps", { value: (value / 1_000_000).toFixed(1) }),
     scale: 1_000_000,
   },
 ];
@@ -176,7 +178,7 @@ function findSpikes(since: number, until: number): TimelineEntry[] {
         ts: Number(row.ts),
         kind: "spike",
         severity: "info",
-        title: `${rule.label(String(row.label))} sıçradı`,
+        title: serverT("timelineLib.spiked", { label: rule.label(String(row.label)) }),
         detail:
           `${rule.format(Number(row.previous))} → ${rule.format(Number(row.avg_value))} ` +
           `(+${rule.format(jump)})`,

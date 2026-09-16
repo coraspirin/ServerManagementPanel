@@ -20,6 +20,8 @@ import type {
   PermissionInfo,
   UserSession,
 } from "@/lib/auth/users";
+import { useFormat, useT } from "@/lib/i18n/client";
+import type { MessageKey } from "@/lib/i18n/translate";
 
 /**
  * M3.1 — kullanıcı, rol ve oturum yönetimi tek ekranda.
@@ -41,14 +43,6 @@ function readCsrfToken(): string {
   return match ? decodeURIComponent(match[1]) : "";
 }
 
-function timeAgo(seconds: number | null): string {
-  if (!seconds) return "hiç";
-  const diff = Math.floor(Date.now() / 1000) - seconds;
-  if (diff < 60) return "az önce";
-  if (diff < 3600) return `${Math.floor(diff / 60)} dk önce`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} sa önce`;
-  return `${Math.floor(diff / 86400)} gün önce`;
-}
 
 /** İzinler nokta öncesi ön ekle gruplanıyor: 30 satırlık düz liste okunmuyor. */
 function groupPermissions(permissions: PermissionInfo[]): [string, PermissionInfo[]][] {
@@ -59,31 +53,38 @@ function groupPermissions(permissions: PermissionInfo[]): [string, PermissionInf
     if (bucket) bucket.push(permission);
     else groups.set(prefix, [permission]);
   }
-  return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], "tr"));
+  return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 }
 
-const GROUP_LABELS: Record<string, string> = {
-  panel: "Panel",
-  metrics: "İzleme",
-  monitors: "Servis izleme",
-  logs: "Loglar",
-  docker: "Docker",
-  host: "Sunucu",
-  apps: "Uygulamalar",
-  kiosk: "Kiosk",
-  proxy: "Proxy",
-  network: "Ağ",
-  files: "Dosyalar",
-  db: "Veritabanı",
-  backup: "Yedekleme",
-  security: "Güvenlik",
-  cron: "Zamanlanmış görevler",
-  repos: "Depolar",
-  vault: "Şifre kasası",
-  settings: "Ayarlar",
-  users: "Kullanıcılar",
-  audit: "Denetim",
+const GROUP_LABELS: Record<string, MessageKey> = {
+  panel: "users.group.panel",
+  metrics: "users.group.metrics",
+  monitors: "users.group.monitors",
+  logs: "users.group.logs",
+  docker: "users.group.docker",
+  host: "users.group.host",
+  apps: "users.group.apps",
+  kiosk: "users.group.kiosk",
+  proxy: "users.group.proxy",
+  network: "users.group.network",
+  files: "users.group.files",
+  db: "users.group.db",
+  backup: "users.group.backup",
+  security: "users.group.security",
+  cron: "users.group.cron",
+  repos: "users.group.repos",
+  vault: "users.group.vault",
+  settings: "users.group.settings",
+  users: "users.group.users",
+  audit: "users.group.audit",
 };
+
+/** Son giriş / son etkinlik: hiç yoksa "hiç", varsa göreli süre. */
+function useTimeAgo() {
+  const t = useT();
+  const f = useFormat();
+  return (seconds: number | null) => (seconds ? f.relative(seconds * 1000) : t("users.never"));
+}
 
 type Tab = "users" | "roles" | "sessions";
 
@@ -94,6 +95,7 @@ export function UsersScreen({
   initial: Directory;
   currentUserId: number;
 }) {
+  const t = useT();
   const [directory, setDirectory] = useState(initial);
   const [tab, setTab] = useState<Tab>("users");
   const [error, setError] = useState<string | null>(null);
@@ -110,13 +112,13 @@ export function UsersScreen({
       });
       const data = (await response.json()) as Record<string, unknown>;
       if (!response.ok) {
-        setError(String(data.error ?? "İşlem başarısız."));
+        setError(String(data.error ?? t("common.errors.actionFailed")));
         return false;
       }
       if (data.users) setDirectory(data as unknown as Directory);
       return true;
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
       return false;
     } finally {
       setBusy(false);
@@ -124,9 +126,9 @@ export function UsersScreen({
   }
 
   const tabs: { key: Tab; label: string; count: number; icon: typeof Users }[] = [
-    { key: "users", label: "Kullanıcılar", count: directory.users.length, icon: Users },
-    { key: "roles", label: "Roller", count: directory.roles.length, icon: ShieldCheck },
-    { key: "sessions", label: "Oturumlar", count: directory.sessions.length, icon: Monitor },
+    { key: "users", label: t("users.tab.users"), count: directory.users.length, icon: Users },
+    { key: "roles", label: t("users.tab.roles"), count: directory.roles.length, icon: ShieldCheck },
+    { key: "sessions", label: t("users.tab.sessions"), count: directory.sessions.length, icon: Monitor },
   ];
 
   return (
@@ -186,6 +188,8 @@ function UsersTab({
   busy: boolean;
   call: CallFn;
 }) {
+  const t = useT();
+  const timeAgo = useTimeAgo();
   const [adding, setAdding] = useState(false);
   const [resetting, setResetting] = useState<ManagedUser | null>(null);
 
@@ -197,7 +201,7 @@ function UsersTab({
           onClick={() => setAdding(true)}
           className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
         >
-          <UserPlus className="size-4" /> Kullanıcı ekle
+          <UserPlus className="size-4" /> {t("users.addUser")}
         </button>
       </div>
 
@@ -205,12 +209,12 @@ function UsersTab({
         <table className="rtable w-full min-w-[54rem] text-sm">
           <thead className="border-b border-line text-left text-xs text-subtle">
             <tr>
-              <th className="px-4 py-2.5 font-medium">Kullanıcı</th>
-              <th className="px-4 py-2.5 font-medium">Rol</th>
-              <th className="px-4 py-2.5 font-medium">Durum</th>
+              <th className="px-4 py-2.5 font-medium">{t("users.col.user")}</th>
+              <th className="px-4 py-2.5 font-medium">{t("users.col.role")}</th>
+              <th className="px-4 py-2.5 font-medium">{t("users.col.status")}</th>
               <th className="px-4 py-2.5 font-medium">2FA</th>
-              <th className="px-4 py-2.5 font-medium">Son giriş</th>
-              <th className="px-4 py-2.5 font-medium">Oturum</th>
+              <th className="px-4 py-2.5 font-medium">{t("users.col.lastLogin")}</th>
+              <th className="px-4 py-2.5 font-medium">{t("users.col.sessions")}</th>
               <th className="px-4 py-2.5" />
             </tr>
           </thead>
@@ -223,10 +227,10 @@ function UsersTab({
                     <div className="font-medium">{user.displayName}</div>
                     <div className="font-mono text-xs text-subtle">
                       {user.username}
-                      {user.id === currentUserId && " · sen"}
+                      {user.id === currentUserId && t("users.you")}
                     </div>
                   </td>
-                  <td data-label="Rol" className="px-4 py-2.5">
+                  <td data-label={t("users.col.role")} className="px-4 py-2.5">
                     <select
                       value={user.roleId}
                       disabled={busy}
@@ -244,7 +248,7 @@ function UsersTab({
                       ))}
                     </select>
                   </td>
-                  <td data-label="Durum" className="px-4 py-2.5">
+                  <td data-label={t("users.col.status")} className="px-4 py-2.5">
                     <label className="flex items-center gap-1.5 text-xs">
                       <input
                         type="checkbox"
@@ -257,38 +261,40 @@ function UsersTab({
                         }
                         className="size-3.5 accent-[var(--brand)]"
                       />
-                      {user.isActive ? "aktif" : "pasif"}
+                      {user.isActive ? t("users.active") : t("users.inactive")}
                     </label>
                     {locked && (
                       <div className="mt-0.5 text-xs text-warn">
-                        kilitli ({user.failedAttempts} hatalı)
+                        {t("users.locked", { count: user.failedAttempts })}
                       </div>
                     )}
                     {user.mustChangePassword && (
-                      <div className="mt-0.5 text-xs text-subtle">parola değiştirmeli</div>
+                      <div className="mt-0.5 text-xs text-subtle">{t("users.mustChange")}</div>
                     )}
                   </td>
                   <td data-label="2FA" className="px-4 py-2.5">
                     {user.totpEnabled ? (
                       <span className="flex items-center gap-1 text-xs text-ok">
-                        <ShieldCheck className="size-3.5" aria-hidden /> açık
-                        <span className="text-subtle">({user.recoveryLeft} kod)</span>
+                        <ShieldCheck className="size-3.5" aria-hidden /> {t("users.twoFactorOn")}
+                        <span className="text-subtle">
+                          {t("users.recoveryLeft", { count: user.recoveryLeft })}
+                        </span>
                       </span>
                     ) : (
                       <span className="flex items-center gap-1 text-xs text-subtle">
-                        <ShieldOff className="size-3.5" aria-hidden /> kapalı
+                        <ShieldOff className="size-3.5" aria-hidden /> {t("users.twoFactorOff")}
                       </span>
                     )}
                   </td>
-                  <td data-label="Son giriş" className="px-4 py-2.5 text-xs text-subtle">
+                  <td data-label={t("users.col.lastLogin")} className="px-4 py-2.5 text-xs text-subtle">
                     {timeAgo(user.lastLoginAt)}
                   </td>
-                  <td data-label="Oturum" className="px-4 py-2.5 text-xs tabular-nums">{user.activeSessions}</td>
+                  <td data-label={t("users.col.sessions")} className="px-4 py-2.5 text-xs tabular-nums">{user.activeSessions}</td>
                   <td data-label="" className="px-4 py-2.5">
                     <div className="flex flex-wrap justify-end gap-1 max-md:justify-start">
                       <button
                         type="button"
-                        title="Parola sıfırla"
+                        title={t("users.resetPassword")}
                         onClick={() => setResetting(user)}
                         disabled={busy}
                         className="rounded border border-line p-1.5 text-subtle transition-colors hover:text-ink disabled:opacity-50"
@@ -298,7 +304,7 @@ function UsersTab({
                       {locked && (
                         <button
                           type="button"
-                          title="Kilidi aç"
+                          title={t("users.unlock")}
                           onClick={() =>
                             void call(`/api/users/${user.id}`, "POST", { action: "unlock" })
                           }
@@ -311,13 +317,10 @@ function UsersTab({
                       {user.totpEnabled && (
                         <button
                           type="button"
-                          title="2FA'yı sıfırla (telefonunu kaybeden kullanıcı için)"
+                          title={t("users.reset2fa")}
                           onClick={() => {
                             if (
-                              confirm(
-                                `${user.username} için 2FA sıfırlansın mı? Kullanıcı yalnızca ` +
-                                  "parolayla girebilir hâle gelir ve 2FA'yı yeniden kurmalıdır.",
-                              )
+                              confirm(t("users.confirmReset2fa", { name: user.username }))
                             ) {
                               void call(`/api/users/${user.id}`, "POST", { action: "reset-2fa" });
                             }
@@ -331,9 +334,9 @@ function UsersTab({
                       {user.id !== currentUserId && (
                         <button
                           type="button"
-                          title="Sil"
+                          title={t("common.actions.delete")}
                           onClick={() => {
-                            if (confirm(`${user.username} kalıcı olarak silinsin mi?`)) {
+                            if (confirm(t("users.confirmDelete", { name: user.username }))) {
                               void call(`/api/users/${user.id}`, "DELETE");
                             }
                           }}
@@ -396,6 +399,7 @@ function AddUserModal({
   onClose: () => void;
   onSubmit: (body: Record<string, unknown>) => void;
 }) {
+  const t = useT();
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
@@ -406,10 +410,10 @@ function AddUserModal({
     "mt-1 w-full rounded-md border border-line bg-canvas px-3 py-1.5 text-sm outline-none focus:border-brand";
 
   return (
-    <Modal open={open} title="Kullanıcı ekle" onClose={onClose}>
+    <Modal open={open} title={t("users.addUser")} onClose={onClose}>
       <div className="space-y-3">
         <label className="block text-sm">
-          <span className="text-subtle">Kullanıcı adı</span>
+          <span className="text-subtle">{t("users.form.username")}</span>
           <input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -417,7 +421,7 @@ function AddUserModal({
           />
         </label>
         <label className="block text-sm">
-          <span className="text-subtle">Görünen ad</span>
+          <span className="text-subtle">{t("users.form.displayName")}</span>
           <input
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
@@ -425,7 +429,7 @@ function AddUserModal({
           />
         </label>
         <label className="block text-sm">
-          <span className="text-subtle">Başlangıç parolası</span>
+          <span className="text-subtle">{t("users.form.initialPassword")}</span>
           <input
             type="text"
             autoComplete="off"
@@ -434,11 +438,11 @@ function AddUserModal({
             className={`${inputClass} font-mono`}
           />
           <span className="mt-1 block text-xs text-subtle">
-            En az 10 karakter, en az bir harf ve bir rakam.
+            {t("users.form.passwordRule")}
           </span>
         </label>
         <label className="block text-sm">
-          <span className="text-subtle">Rol</span>
+          <span className="text-subtle">{t("users.col.role")}</span>
           <select
             value={roleId}
             onChange={(e) => setRoleId(Number(e.target.value))}
@@ -446,7 +450,7 @@ function AddUserModal({
           >
             {roles.map((role) => (
               <option key={role.id} value={role.id}>
-                {role.name} — {role.permissions.length} izin
+                {t("users.form.rolePermissions", { name: role.name, count: role.permissions.length })}
               </option>
             ))}
           </select>
@@ -458,7 +462,7 @@ function AddUserModal({
             onChange={(e) => setMustChange(e.target.checked)}
             className="size-4 accent-[var(--brand)]"
           />
-          İlk girişte parolasını değiştirsin
+          {t("users.form.mustChangeFirst")}
         </label>
 
         <div className="flex justify-end gap-2 pt-2">
@@ -467,7 +471,7 @@ function AddUserModal({
             onClick={onClose}
             className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
           >
-            Vazgeç
+            {t("common.actions.cancel")}
           </button>
           <button
             type="button"
@@ -477,7 +481,7 @@ function AddUserModal({
             }
             className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            Ekle
+            {t("common.actions.add")}
           </button>
         </div>
       </div>
@@ -496,23 +500,22 @@ function ResetPasswordModal({
   onClose: () => void;
   onSubmit: (password: string, mustChange: boolean) => void;
 }) {
+  const t = useT();
   const [password, setPassword] = useState("");
   const [mustChange, setMustChange] = useState(true);
 
   return (
     <Modal
       open={user !== null}
-      title={`Parola sıfırla — ${user?.username ?? ""}`}
+      title={t("users.resetModal.title", { name: user?.username ?? "" })}
       onClose={onClose}
     >
       <div className="space-y-3">
         <p className="text-xs text-subtle">
-          Yeni parolayı sen belirliyorsun, dolayısıyla sen de biliyorsun. Kullanıcının ilk
-          girişte değiştirmesini istemek varsayılan. Sıfırlama, kullanıcının açık tüm
-          oturumlarını kapatır.
+          {t("users.resetModal.intro")}
         </p>
         <label className="block text-sm">
-          <span className="text-subtle">Yeni parola</span>
+          <span className="text-subtle">{t("users.resetModal.newPassword")}</span>
           <input
             type="text"
             autoComplete="off"
@@ -528,7 +531,7 @@ function ResetPasswordModal({
             onChange={(e) => setMustChange(e.target.checked)}
             className="size-4 accent-[var(--brand)]"
           />
-          İlk girişte değiştirsin
+          {t("users.resetModal.mustChange")}
         </label>
         <div className="flex justify-end gap-2 pt-2">
           <button
@@ -536,7 +539,7 @@ function ResetPasswordModal({
             onClick={onClose}
             className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
           >
-            Vazgeç
+            {t("common.actions.cancel")}
           </button>
           <button
             type="button"
@@ -544,7 +547,7 @@ function ResetPasswordModal({
             onClick={() => onSubmit(password, mustChange)}
             className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            Sıfırla
+            {t("users.resetModal.submit")}
           </button>
         </div>
       </div>
@@ -561,6 +564,7 @@ function RolesTab({
   busy: boolean;
   call: CallFn;
 }) {
+  const t = useT();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -574,7 +578,7 @@ function RolesTab({
           onClick={() => setCreating(true)}
           className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
         >
-          <Plus className="size-4" /> Rol ekle
+          <Plus className="size-4" /> {t("users.roles.add")}
         </button>
       </div>
 
@@ -584,13 +588,13 @@ function RolesTab({
         ))}
       </div>
 
-      <Modal open={creating} title="Rol ekle" onClose={() => setCreating(false)}>
+      <Modal open={creating} title={t("users.roles.add")} onClose={() => setCreating(false)}>
         <div className="space-y-3">
           <p className="text-xs text-subtle">
-            Yeni rol izinsiz başlar; ekledikten sonra kartından izinleri işaretle.
+            {t("users.roles.intro")}
           </p>
           <label className="block text-sm">
-            <span className="text-subtle">Ad</span>
+            <span className="text-subtle">{t("users.roles.name")}</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -598,7 +602,7 @@ function RolesTab({
             />
           </label>
           <label className="block text-sm">
-            <span className="text-subtle">Açıklama</span>
+            <span className="text-subtle">{t("users.roles.description")}</span>
             <input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -611,7 +615,7 @@ function RolesTab({
               onClick={() => setCreating(false)}
               className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
             >
-              Vazgeç
+              {t("common.actions.cancel")}
             </button>
             <button
               type="button"
@@ -625,7 +629,7 @@ function RolesTab({
               }}
               className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              Ekle
+              {t("common.actions.add")}
             </button>
           </div>
         </div>
@@ -645,6 +649,7 @@ function RoleCard({
   busy: boolean;
   call: CallFn;
 }) {
+  const t = useT();
   const [draft, setDraft] = useState<string[]>(role.permissions);
   const dirty =
     draft.length !== role.permissions.length ||
@@ -662,12 +667,16 @@ function RoleCard({
             {role.name}
             {role.isSystem && (
               <span className="rounded border border-line px-1 text-[10px] font-normal text-subtle">
-                sistem rolü
+                {t("users.roles.system")}
               </span>
             )}
           </h3>
           <p className="text-xs text-subtle">
-            {role.description || "—"} · {role.userCount} kullanıcı · {draft.length} izin
+            {t("users.roles.summary", {
+              description: role.description || "—",
+              users: role.userCount,
+              permissions: draft.length,
+            })}
           </p>
         </div>
         <div className="flex gap-2">
@@ -678,7 +687,7 @@ function RoleCard({
                 onClick={() => setDraft(role.permissions)}
                 className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
               >
-                Geri al
+                {t("users.roles.revert")}
               </button>
               <button
                 type="button"
@@ -688,7 +697,7 @@ function RoleCard({
                 }
                 className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
               >
-                Kaydet
+                {t("common.actions.save")}
               </button>
             </>
           )}
@@ -697,7 +706,7 @@ function RoleCard({
               type="button"
               disabled={busy}
               onClick={() => {
-                if (confirm(`${role.name} rolü silinsin mi?`)) {
+                if (confirm(t("users.roles.confirmDelete", { name: role.name }))) {
                   void call(`/api/roles/${role.id}`, "DELETE");
                 }
               }}
@@ -711,8 +720,7 @@ function RoleCard({
 
       {dirty && (
         <p className="border-b border-line bg-warn/5 px-5 py-2 text-xs text-warn">
-          Kaydedince bu rolü kullanan {role.userCount} kullanıcının açık oturumları kapanır —
-          izinler oturuma yazılıyor, yeniden giriş gerekir.
+          {t("users.roles.dirtyNote", { count: role.userCount })}
         </p>
       )}
 
@@ -720,7 +728,7 @@ function RoleCard({
         {groups.map(([prefix, permissions]) => (
           <div key={prefix}>
             <p className="mb-1 text-xs font-semibold text-subtle">
-              {GROUP_LABELS[prefix] ?? prefix}
+              {GROUP_LABELS[prefix] ? t(GROUP_LABELS[prefix]) : prefix}
             </p>
             <ul className="space-y-1">
               {permissions.map((permission) => (
@@ -753,16 +761,19 @@ function SessionsTab({
   busy: boolean;
   call: CallFn;
 }) {
+  const t = useT();
+  const f = useFormat();
+  const timeAgo = useTimeAgo();
   return (
     <div className="overflow-x-auto rounded-lg border border-line bg-surface">
       <table className="rtable w-full min-w-[48rem] text-sm">
         <thead className="border-b border-line text-left text-xs text-subtle">
           <tr>
-            <th className="px-4 py-2.5 font-medium">Kullanıcı</th>
+            <th className="px-4 py-2.5 font-medium">{t("users.col.user")}</th>
             <th className="px-4 py-2.5 font-medium">IP</th>
-            <th className="px-4 py-2.5 font-medium">Tarayıcı</th>
-            <th className="px-4 py-2.5 font-medium">Son etkinlik</th>
-            <th className="px-4 py-2.5 font-medium">Biter</th>
+            <th className="px-4 py-2.5 font-medium">{t("users.sessions.browser")}</th>
+            <th className="px-4 py-2.5 font-medium">{t("users.sessions.lastSeen")}</th>
+            <th className="px-4 py-2.5 font-medium">{t("users.sessions.expires")}</th>
             <th className="px-4 py-2.5" />
           </tr>
         </thead>
@@ -770,7 +781,7 @@ function SessionsTab({
           {directory.sessions.length === 0 && (
             <tr>
               <td colSpan={6} className="px-4 py-8 text-center text-subtle">
-                Açık oturum yok.
+                {t("users.sessions.empty")}
               </td>
             </tr>
           )}
@@ -780,23 +791,23 @@ function SessionsTab({
                 <span className="font-mono">{session.username}</span>
                 {session.current && (
                   <span className="ml-2 rounded bg-brand/10 px-1.5 py-0.5 text-[10px] font-medium text-brand">
-                    bu oturum
+                    {t("users.sessions.current")}
                   </span>
                 )}
               </td>
               <td data-label="IP" className="px-4 py-2.5 font-mono text-xs">{session.ip || "—"}</td>
-              <td data-label="Tarayıcı" className="max-w-xs truncate px-4 py-2.5 text-xs text-subtle" title={session.userAgent}>
+              <td data-label={t("users.sessions.browser")} className="max-w-xs truncate px-4 py-2.5 text-xs text-subtle" title={session.userAgent}>
                 {session.userAgent || "—"}
               </td>
-              <td data-label="Son etkinlik" className="px-4 py-2.5 text-xs text-subtle">{timeAgo(session.lastSeenAt)}</td>
-              <td data-label="Biter" className="px-4 py-2.5 text-xs text-subtle">
-                {new Date(session.expiresAt * 1000).toLocaleString("tr-TR")}
+              <td data-label={t("users.sessions.lastSeen")} className="px-4 py-2.5 text-xs text-subtle">{timeAgo(session.lastSeenAt)}</td>
+              <td data-label={t("users.sessions.expires")} className="px-4 py-2.5 text-xs text-subtle">
+                {f.dateTime(session.expiresAt * 1000)}
               </td>
               <td data-label="" className="px-4 py-2.5 text-right max-md:text-left">
                 {!session.current && (
                   <button
                     type="button"
-                    title="Oturumu kapat"
+                    title={t("users.sessions.close")}
                     disabled={busy}
                     onClick={() => void call(`/api/sessions/${session.id}`, "DELETE")}
                     className="rounded border border-line p-1.5 text-subtle transition-colors hover:text-danger disabled:opacity-50"

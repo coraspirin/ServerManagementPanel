@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import http from "node:http";
 import { randomBytes } from "node:crypto";
 import type {
@@ -62,7 +63,7 @@ function request(
       },
     );
 
-    req.on("timeout", () => req.destroy(new Error("Docker soketi zaman aşımına uğradı")));
+    req.on("timeout", () => req.destroy(new Error(serverT("dockerLive.socketTimeout"))));
     req.on("error", reject);
     if (payload) req.write(payload);
     req.end();
@@ -157,13 +158,13 @@ export const liveDockerProvider: DockerProvider = {
 
     // 304 = zaten istenen durumda (başlatılmış container'ı başlatmak gibi).
     if (response.status === 204 || response.status === 304) return;
-    if (response.status === 404) throw new Error("container bulunamadı");
+    if (response.status === 404) throw new Error(serverT("dockerUpdate.notFound"));
     throw new Error(`Docker API ${response.status}: ${response.body.slice(0, 200)}`);
   },
 
   async *logs(id, options): AsyncGenerator<LogLine> {
     const state = await this.inspect(id);
-    if (!state) throw new Error("container bulunamadı");
+    if (!state) throw new Error(serverT("dockerUpdate.notFound"));
 
     const params = new URLSearchParams({
       stdout: "1",
@@ -730,14 +731,17 @@ export const liveDockerProvider: DockerProvider = {
           }
         } catch (error) {
           throw new Error(
-            `İmaj indirilemedi: ${spec.image} — ${error instanceof Error ? error.message : "?"}`,
+            serverT("dockerLive.pullFailed", {
+              image: spec.image,
+              error: error instanceof Error ? error.message : "?",
+            }),
           );
         }
         created = await request(createPath, 30_000, "POST", payload);
       }
 
       if (created.status === 404) {
-        throw new Error(`İmaj bulunamadı ve indirilemedi: ${spec.image}`);
+        throw new Error(serverT("dockerLive.imageMissing", { image: spec.image }));
       }
       if (created.status !== 201) throw dockerError(created);
       containerId = (JSON.parse(created.body) as { Id: string }).Id;
@@ -803,7 +807,7 @@ function requestBinary(path: string, timeoutMs: number, jsonBody: unknown): Prom
         res.on("end", () => resolve(Buffer.concat(chunks)));
       },
     );
-    req.on("timeout", () => req.destroy(new Error("Docker soketi zaman aşımına uğradı")));
+    req.on("timeout", () => req.destroy(new Error(serverT("dockerLive.socketTimeout"))));
     req.on("error", reject);
     req.write(payload);
     req.end();
@@ -844,7 +848,7 @@ function requestRawStatus(
         );
       },
     );
-    req.on("timeout", () => req.destroy(new Error("Docker soketi zaman aşımına uğradı")));
+    req.on("timeout", () => req.destroy(new Error(serverT("dockerLive.socketTimeout"))));
     req.on("error", reject);
     if (payload) req.write(payload);
     req.end();
@@ -861,7 +865,7 @@ function requestRawGet(path: string, timeoutMs: number): Promise<Buffer> {
         res.on("end", () => resolve(Buffer.concat(chunks)));
       },
     );
-    req.on("timeout", () => req.destroy(new Error("Docker soketi zaman aşımına uğradı")));
+    req.on("timeout", () => req.destroy(new Error(serverT("dockerLive.socketTimeout"))));
     req.on("error", reject);
     req.end();
   });

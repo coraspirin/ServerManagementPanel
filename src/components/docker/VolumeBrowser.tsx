@@ -5,6 +5,8 @@ import { ChevronRight, Download, File as FileIcon, Folder, Home, Link2 } from "l
 
 import { formatBytes } from "@/lib/metrics/catalog";
 import type { FileEntry } from "@/lib/docker/listing";
+import { useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 /**
  * Volume içi dosya tarayıcı (M3.44).
@@ -29,6 +31,7 @@ import type { FileEntry } from "@/lib/docker/listing";
 type Listing = { ok: true; path: string; entries: FileEntry[] } | { ok: false; message: string };
 
 export function VolumeBrowser({ volume, canAct }: { volume: string; canAct: boolean }) {
+  const t = useT();
   const [cwd, setCwd] = useState("/");
   const [entries, setEntries] = useState<FileEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -69,13 +72,13 @@ export function VolumeBrowser({ volume, canAct }: { volume: string; canAct: bool
         if (!controller.signal.aborted) apply(payload);
       } catch (fetchError) {
         if ((fetchError as Error)?.name !== "AbortError") {
-          apply({ ok: false, message: "Sunucuya ulaşılamadı." });
+          apply({ ok: false, message: t("common.errors.network") });
         }
       }
     })();
 
     return () => controller.abort();
-  }, [volume, cwd, apply]);
+  }, [volume, cwd, apply, t]);
 
   // Kırıntı yolu: her parça tıklanabilir, böylece üç dizin yukarı çıkmak için
   // "yukarı" düğmesine üç kez basmak gerekmiyor.
@@ -106,7 +109,7 @@ export function VolumeBrowser({ volume, canAct }: { volume: string; canAct: bool
           </span>
         ))}
 
-        {busy && <span className="ml-2 text-subtle">yükleniyor…</span>}
+        {busy && <span className="ml-2 text-subtle">{t("common.states.loadingInline")}</span>}
       </div>
 
       {error && <p className="text-xs text-danger">{error}</p>}
@@ -114,7 +117,7 @@ export function VolumeBrowser({ volume, canAct }: { volume: string; canAct: bool
       {entries && (
         <div className="max-h-72 overflow-auto rounded-md border border-line">
           {entries.length === 0 ? (
-            <p className="px-3 py-4 text-center text-xs text-subtle">Bu dizin boş.</p>
+            <p className="px-3 py-4 text-center text-xs text-subtle">{t("docker.files.emptyDir")}</p>
           ) : (
             <ul className="divide-y divide-line">
               {entries.map((entry) => {
@@ -167,8 +170,8 @@ export function VolumeBrowser({ volume, canAct }: { volume: string; canAct: bool
                     {canAct && entry.type === "dosya" ? (
                       <a
                         href={`/api/docker/resources?detail=volume-file&id=${encodeURIComponent(volume)}&path=${encodeURIComponent(entry.path)}`}
-                        title={`${entry.name} indir`}
-                        aria-label={`${entry.name} indir`}
+                        title={t("docker.volumeBrowser.download", { name: entry.name })}
+                        aria-label={t("docker.volumeBrowser.download", { name: entry.name })}
                         className="shrink-0 rounded p-1 text-subtle transition-colors hover:text-brand"
                       >
                         <Download className="size-3" aria-hidden />
@@ -185,10 +188,10 @@ export function VolumeBrowser({ volume, canAct }: { volume: string; canAct: bool
       )}
 
       <p className="text-[11px] text-subtle">
-        Salt okunur. Volume kalıcı veri taşıyor ve çoğu zaman çalışan bir
-        veritabanının canlı dosyaları — altından düzenlemek kurtarılamayan bir
-        bozulma olabilir. Değiştirmen gerekiyorsa container&apos;ın kendi{" "}
-        <strong>Dosyalar</strong> sekmesini kullan.
+        <Rich
+          text={t("docker.volumeBrowser.note")}
+          values={{ tab: <strong>{t("docker.drawer.tab.dosyalar")}</strong> }}
+        />
       </p>
     </div>
   );

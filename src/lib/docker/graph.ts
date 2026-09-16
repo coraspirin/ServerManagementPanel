@@ -4,6 +4,7 @@ import type {
   DockerNetwork,
   DockerVolume,
 } from "@/lib/providers/types";
+import { serverT } from "../i18n/runtime.ts";
 
 /**
  * Container bağımlılıkları (M1.8).
@@ -106,7 +107,7 @@ export function impactOfStopping(
         name: other.name,
         kind: "ag-yigini",
         hard: true,
-        reason: "ağ yığınını bu container'dan alıyor — durursa ağ bağlantısı tamamen kesilir",
+        reason: serverT("dependency.networkMode"),
       });
       continue;
     }
@@ -116,7 +117,7 @@ export function impactOfStopping(
         name: other.name,
         kind: "volumes-from",
         hard: true,
-        reason: "mount'larını bu container'dan devralıyor",
+        reason: serverT("dependency.volumesFrom"),
       });
       continue;
     }
@@ -127,7 +128,7 @@ export function impactOfStopping(
         name: other.name,
         kind: "ozel-ag",
         hard: false,
-        reason: `aynı özel ağda (${sharedNetwork}) — bu servise isimle erişiyor olabilir`,
+        reason: serverT("dependency.sharedNetwork", { network: sharedNetwork }),
       });
       continue;
     }
@@ -138,7 +139,7 @@ export function impactOfStopping(
         name: other.name,
         kind: "paylasilan-volume",
         hard: false,
-        reason: `aynı volume'u kullanıyor (${sharedVolume})`,
+        reason: serverT("dependency.sharedVolume", { volume: sharedVolume }),
       });
       continue;
     }
@@ -148,7 +149,7 @@ export function impactOfStopping(
         name: other.name,
         kind: "compose",
         hard: false,
-        reason: `aynı compose yığınında (${target.composeProject})`,
+        reason: serverT("dependency.sameStack", { stack: target.composeProject ?? "" }),
       });
       continue;
     }
@@ -158,7 +159,7 @@ export function impactOfStopping(
         name: other.name,
         kind: "host-agi",
         hard: false,
-        reason: "ikisi de host ağında — birbirlerine localhost üzerinden erişiyor olabilirler",
+        reason: serverT("dependency.hostNetwork"),
       });
     }
   }

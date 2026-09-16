@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
@@ -67,14 +68,14 @@ export function logoDir(): string {
 export type SaveResult = { ok: true; name: string } | { ok: false; error: string };
 
 export function saveLogo(bytes: Buffer): SaveResult {
-  if (bytes.byteLength === 0) return { ok: false, error: "dosya boş" };
+  if (bytes.byteLength === 0) return { ok: false, error: serverT("logosLib.empty") };
   if (bytes.byteLength > MAX_BYTES) {
-    return { ok: false, error: `logo en fazla ${MAX_BYTES / 1024} KB olabilir` };
+    return { ok: false, error: serverT("logosLib.tooLarge", { kb: MAX_BYTES / 1024 }) };
   }
 
   const type = TYPES.find((candidate) => candidate.matches(bytes));
   if (!type) {
-    return { ok: false, error: "desteklenmeyen dosya türü (PNG, JPEG, GIF, WebP, ICO, SVG)" };
+    return { ok: false, error: serverT("logosLib.unsupported") };
   }
 
   // Ad tamamen panelde üretiliyor; kullanıcının verdiği ad hiç kullanılmıyor.

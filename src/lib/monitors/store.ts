@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getDb } from "@/lib/db/client";
+import { serverT } from "@/lib/i18n/runtime";
 import { getNumber } from "@/lib/settings";
 import { isInMaintenance } from "./maintenance";
 import { MONITOR_TYPES } from "./types";
@@ -104,32 +105,32 @@ export type MonitorInput = {
 };
 
 export function validateMonitor(input: MonitorInput): string | null {
-  if (!input.name.trim()) return "Ad boş olamaz.";
-  if (!input.target.trim()) return "Hedef boş olamaz.";
+  if (!input.name.trim()) return serverT("monitorStore.nameEmpty");
+  if (!input.target.trim()) return serverT("monitorStore.targetEmpty");
 
   if (input.type === "http") {
     try {
       const url = new URL(input.target);
       if (url.protocol !== "http:" && url.protocol !== "https:") {
-        return "Adres http:// veya https:// ile başlamalı.";
+        return serverT("monitorStore.httpScheme");
       }
     } catch {
-      return "Geçerli bir adres değil (ör. https://192.168.61.114:8123).";
+      return serverT("monitorStore.invalidUrl");
     }
   }
 
   if (input.type === "tcp" && !/^.+:\d+$/.test(input.target.trim())) {
-    return "Hedef 'sunucu:port' biçiminde olmalı (ör. 192.168.61.114:1883).";
+    return serverT("monitorStore.tcpFormat");
   }
 
   for (const [label, value, min, max] of [
-    ["Aralık", input.intervalSeconds, 10, 3600],
-    ["Zaman aşımı", input.timeoutSeconds, 1, 120],
-    ["Yeniden deneme", input.retries, 0, 10],
-    ["Çevrimdışı eşiği", input.downThreshold, 1, 20],
+    [serverT("monitorStore.interval"), input.intervalSeconds, 10, 3600],
+    [serverT("monitorForm.timeout"), input.timeoutSeconds, 1, 120],
+    [serverT("monitorForm.retries"), input.retries, 0, 10],
+    [serverT("monitorForm.downThreshold"), input.downThreshold, 1, 20],
   ] as const) {
     if (value !== null && (!Number.isInteger(value) || value < min || value > max)) {
-      return `${label} ${min}–${max} arasında olmalı.`;
+      return serverT("monitorStore.range", { label, min, max });
     }
   }
 
@@ -463,10 +464,10 @@ export function parseMonitorInput(
   body: Record<string, unknown>,
 ): { ok: true; input: MonitorInput } | { ok: false; error: string } {
   if (typeof body.name !== "string" || typeof body.target !== "string") {
-    return { ok: false, error: "ad ve hedef gerekli" };
+    return { ok: false, error: serverT("monitorStore.nameTargetRequired") };
   }
   if (!MONITOR_TYPES.some((t) => t.value === body.type)) {
-    return { ok: false, error: "geçersiz monitör tipi" };
+    return { ok: false, error: serverT("monitorStore.invalidType") };
   }
 
   const input: MonitorInput = {

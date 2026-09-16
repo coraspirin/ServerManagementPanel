@@ -3,6 +3,8 @@ import "server-only";
 import { loadFixture } from "@/lib/fixtures";
 import { deleteCache, readCache, writeCache } from "@/lib/db/cache";
 import { isMockMode } from "@/lib/env";
+import { currentDictionary, serverT } from "@/lib/i18n/runtime";
+import { translateLoose } from "@/lib/i18n/translate";
 import { getNumber } from "@/lib/settings";
 import { piholeWidget } from "./pihole";
 import type { WidgetData, WidgetDef, WidgetProvider, WidgetState } from "./types";
@@ -22,7 +24,35 @@ export function findWidget(key: string): WidgetProvider | undefined {
 
 /** Arayüze gönderilecek tanımlar — sağlayıcı kodu istemciye taşınmaz. */
 export function widgetDefs(): WidgetDef[] {
-  return providers.map((provider) => provider.def);
+  return providers.map((provider) => localizeDef(provider.def));
+}
+
+/**
+ * Görünen metinler sağlayıcı kodunda değil dil dosyasında:
+ * `widget.<key>.label|help`, `.field.<alan>.label|help`,
+ * `.action.<eylem>.label|confirm`. Anahtar yoksa boş kalır.
+ */
+function localizeDef(def: WidgetDef): WidgetDef {
+  const dict = currentDictionary();
+  const text = (key: string) => {
+    const full = `widget.${def.key}.${key}`;
+    return dict[full] === undefined ? "" : translateLoose(dict, full);
+  };
+  return {
+    ...def,
+    label: text("label"),
+    help: text("help"),
+    fields: def.fields.map((field) => ({
+      ...field,
+      label: text(`field.${field.key}.label`),
+      help: text(`field.${field.key}.help`) || undefined,
+    })),
+    actions: def.actions.map((action) => ({
+      ...action,
+      label: text(`action.${action.key}.label`),
+      confirm: text(`action.${action.key}.confirm`) || undefined,
+    })),
+  };
 }
 
 /**
@@ -34,7 +64,7 @@ export function widgetDefs(): WidgetDef[] {
 async function mockData(key: string): Promise<WidgetData> {
   const fixture = await loadFixture<Record<string, WidgetData>>("widgets");
   const data = fixture[key];
-  if (!data) throw new Error(`'${key}' için sahte veri yok (fixtures/widgets.json).`);
+  if (!data) throw new Error(`'${key}' için sahte veri yok (fixtures/widgets.json).`); // i18n-ignore — MOCK_MODE
   return data;
 }
 
@@ -64,7 +94,7 @@ export async function widgetState(
   }
 
   const provider = findWidget(key);
-  if (!provider) return { status: "error", message: `Bilinmeyen widget: ${key}`, updatedAt: null };
+  if (!provider) return { status: "error", message: serverT("widgetsLib.unknown", { key }), updatedAt: null };
 
   try {
     const data = isMockMode()
@@ -116,13 +146,13 @@ export function validateWidgetConfig(
   config: Record<string, string>,
 ): string | null {
   const provider = findWidget(key);
-  if (!provider) return `Bilinmeyen widget: ${key}`;
+  if (!provider) return serverT("widget.unknown", { key });
 
-  const missing = provider.def.fields
-    .filter((field) => field.required && !(config[field.key] ?? "").trim())
+  const missing = localizeDef(provider.def)
+    .fields.filter((field) => field.required && !(config[field.key] ?? "").trim())
     .map((field) => field.label);
 
-  return missing.length > 0 ? `Eksik widget ayarı: ${missing.join(", ")}` : null;
+  return missing.length > 0 ? serverT("widget.missingConfig", { list: missing.join(", ") }) : null;
 }
 
 /** Aksiyon sonrası önbellek geçersizleşir: kullanıcı etkiyi hemen görmeli. */

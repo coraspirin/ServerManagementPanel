@@ -2,6 +2,7 @@ import "server-only";
 
 import { getDb } from "@/lib/db/client";
 import { callHelper, helperConfigured } from "@/lib/host/helper";
+import { serverT } from "@/lib/i18n/runtime";
 
 /**
  * M3.8 — fail2ban durumu ve başarısız giriş özeti.
@@ -30,8 +31,9 @@ export type Fail2banState = {
   jails: Jail[];
 };
 
-const SETUP_HINT =
-  "host'ta root olarak (helper eskiyse önce onu güncelle):\n" +
+const setupHint = () =>
+  serverT("fail2ban.setupHint") +
+  "\n" +
   "printf 'fail2ban.status\\nfail2ban.jail\\nfail2ban.unban\\n' >> /etc/panel-helper/allow.conf";
 
 /** `fail2ban-client status` → "Jail list:\tsshd, nginx-auth" */
@@ -75,17 +77,16 @@ export function parseJail(name: string, stdout: string): Jail {
 }
 
 function classify(error: string): { message: string; hint: string | null } {
-  if (error.includes("bilinmeyen eylem")) {
+  if (error.includes("bilinmeyen eylem")) { // i18n-ignore
     return {
-      message: "Host'taki helper fail2ban eylemlerini tanımıyor — helper eski sürümde.",
-      hint: SETUP_HINT,
+      message: serverT("fail2ban.helperOutdated"),
+      hint: setupHint(),
     };
   }
-  if (error.includes("izinli değil")) {
+  if (error.includes("izinli değil")) { // i18n-ignore — host-helper protokol metni
     return {
-      message:
-        "host-helper izin listesinde fail2ban eylemleri yok. Bu, ban OLMADIĞI anlamına GELMEZ.",
-      hint: SETUP_HINT,
+      message: serverT("fail2ban.notAllowed"),
+      hint: setupHint(),
     };
   }
   return { message: error, hint: null };
@@ -95,7 +96,7 @@ export async function fail2banState(): Promise<Fail2banState> {
   if (!helperConfigured()) {
     return {
       available: false,
-      message: "host-helper kurulmamış; fail2ban panelden okunamıyor.",
+      message: serverT("fail2ban.noHelper"),
       setupHint: null,
       jails: [],
     };
@@ -126,8 +127,8 @@ export async function fail2banState(): Promise<Fail2banState> {
     available: true,
     message:
       names.length === 0
-        ? "fail2ban çalışıyor ama tanımlı jail yok."
-        : `${names.length} jail · şu an ${banned} IP yasaklı.`,
+        ? serverT("fail2ban.noJails")
+        : serverT("fail2ban.summary", { jails: names.length, banned }),
     setupHint: null,
     jails,
   };
@@ -142,8 +143,8 @@ export async function unban(
   return {
     ok: response.ok && (response.exitCode ?? 1) === 0,
     message: response.ok
-      ? (response.stdout ?? "").trim() || "Ban kaldırıldı."
-      : (response.error ?? "Ban kaldırılamadı."),
+      ? (response.stdout ?? "").trim() || serverT("fail2ban.unbanned")
+      : (response.error ?? serverT("fail2ban.unbanFailed")),
   };
 }
 

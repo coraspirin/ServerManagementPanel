@@ -21,6 +21,7 @@
  * `allow.conf`'ta yeni bir satır demekti.
  */
 
+import type { TFunction } from "../i18n/translate.ts";
 export type PortOwnerKind = "container" | "service" | "process" | "unknown";
 
 export type PortOwner = {
@@ -340,6 +341,7 @@ export type Conflict = {
 export function portConflicts(
   ports: ListeningPort[],
   containers: ContainerFacts[],
+  t: TFunction,
 ): Conflict[] {
   const conflicts: Conflict[] = [];
   const claims = new Map<number, string[]>();
@@ -357,7 +359,7 @@ export function portConflicts(
     if (names.length > 1) {
       conflicts.push({
         port,
-        message: `${names.join(", ")} aynı host portunu yayınlıyor — ikisi birden çalışamaz.`,
+        message: t("portmap.sameHostPort", { names: names.join(", ") }),
       });
     }
   }
@@ -365,7 +367,7 @@ export function portConflicts(
   const listeningBy = new Map<number, string>();
   for (const port of ports) {
     if (!listeningBy.has(port.port)) {
-      listeningBy.set(port.port, port.owner.name || port.process || "bilinmeyen süreç");
+      listeningBy.set(port.port, port.owner.name || port.process || t("portmap.unknownProcess"));
     }
   }
 
@@ -378,7 +380,12 @@ export function portConflicts(
       if (!holder || holder === container.name) continue;
       conflicts.push({
         port: port.hostPort,
-        message: `${container.name} (${container.state}) başlatılırsa ${port.hostPort} portunu ${holder} tuttuğu için çakışır.`,
+        message: t("portmap.startConflict", {
+          name: container.name,
+          state: container.state,
+          port: port.hostPort,
+          holder,
+        }),
       });
     }
   }

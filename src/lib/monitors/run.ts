@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { runCheck, type CheckResult } from "./check";
 import { effectiveSettings, getMonitor, listMonitors, recordCheck } from "./store";
@@ -30,7 +31,7 @@ export type MonitorOutcome = {
 export async function checkMonitor(monitor: Monitor): Promise<MonitorOutcome> {
   const effective = effectiveSettings(monitor);
 
-  let result: CheckResult = { ok: false, latencyMs: 0, error: "kontrol çalışmadı" };
+  let result: CheckResult = { ok: false, latencyMs: 0, error: serverT("monitorRun.notRun") };
   let attempts = 0;
 
   for (let attempt = 0; attempt <= effective.retries; attempt++) {

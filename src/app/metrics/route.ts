@@ -1,8 +1,11 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardV1 } from "@/lib/apiv1/guard";
 import { apiError } from "@/lib/apiv1/respond";
 import { dockerOverview } from "@/lib/docker/view";
 import { latestSnapshot } from "@/lib/metrics/collect";
 import { monitorViews } from "@/lib/monitors/store";
+import { currentDictionary } from "@/lib/i18n/runtime";
+import { translateLoose } from "@/lib/i18n/translate";
 import { getBool } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
@@ -44,10 +47,15 @@ function render(blocks: Line[]): string {
 }
 
 /** null ölçümler ATLANIR — Prometheus'ta "veri yok" 0 değildir. */
-function gauge(name: string, help: string, value: number | null, labels = ""): Line {
+/** HELP satırı dil dosyasından (`metricsHelp.<ad>`). */
+function metricHelp(name: string): string {
+  return translateLoose(currentDictionary(), `metricsHelp.${name}`);
+}
+
+function gauge(name: string, value: number | null, labels = ""): Line {
   return {
     name,
-    help,
+    help: metricHelp(name),
     type: "gauge",
     samples: value === null ? [] : [`${name}${labels} ${value}`],
   };
@@ -61,24 +69,24 @@ export async function GET(request: Request) {
   if (!guard.ok) return guard.response;
 
   if (!getBool("integration.prometheus.enabled")) {
-    return apiError("not_found", "Prometheus ucu kapalı");
+    return apiError("not_found", serverT("api.v1.prometheusOff"));
   }
 
   const snapshot = latestSnapshot();
   const blocks: Line[] = [
-    gauge("panel_cpu_usage_percent", "CPU kullanımı (%)", snapshot.cpuPct),
-    gauge("panel_cpu_iowait_percent", "CPU iowait (%)", snapshot.cpuIowaitPct),
-    gauge("panel_memory_used_percent", "Bellek kullanımı (%)", snapshot.memUsedPct),
-    gauge("panel_memory_used_bytes", "Kullanılan bellek (bayt)", snapshot.memUsed),
-    gauge("panel_memory_total_bytes", "Toplam bellek (bayt)", snapshot.memTotal),
-    gauge("panel_swap_used_percent", "Takas kullanımı (%)", snapshot.swapUsedPct),
-    gauge("panel_load1", "1 dakikalık yük ortalaması", snapshot.load1),
-    gauge("panel_load5", "5 dakikalık yük ortalaması", snapshot.load5),
-    gauge("panel_load15", "15 dakikalık yük ortalaması", snapshot.load15),
-    gauge("panel_uptime_seconds", "Sistem çalışma süresi (sn)", snapshot.uptimeSeconds),
+    gauge("panel_cpu_usage_percent", snapshot.cpuPct),
+    gauge("panel_cpu_iowait_percent", snapshot.cpuIowaitPct),
+    gauge("panel_memory_used_percent", snapshot.memUsedPct),
+    gauge("panel_memory_used_bytes", snapshot.memUsed),
+    gauge("panel_memory_total_bytes", snapshot.memTotal),
+    gauge("panel_swap_used_percent", snapshot.swapUsedPct),
+    gauge("panel_load1", snapshot.load1),
+    gauge("panel_load5", snapshot.load5),
+    gauge("panel_load15", snapshot.load15),
+    gauge("panel_uptime_seconds", snapshot.uptimeSeconds),
     {
       name: "panel_disk_used_percent",
-      help: "Bölüm doluluğu (%)",
+      help: metricHelp("panel_disk_used_percent"),
       type: "gauge",
       samples: snapshot.disks.map(
         (disk) => `panel_disk_used_percent{mount="${escapeLabel(disk.mount)}"} ${disk.usedPct}`,
@@ -86,7 +94,7 @@ export async function GET(request: Request) {
     },
     {
       name: "panel_disk_free_bytes",
-      help: "Bölümdeki boş alan (bayt)",
+      help: metricHelp("panel_disk_free_bytes"),
       type: "gauge",
       samples: snapshot.disks.map(
         (disk) => `panel_disk_free_bytes{mount="${escapeLabel(disk.mount)}"} ${disk.free}`,
@@ -94,7 +102,7 @@ export async function GET(request: Request) {
     },
     {
       name: "panel_network_receive_bytes_per_second",
-      help: "Arayüz alım hızı (bayt/sn)",
+      help: metricHelp("panel_network_receive_bytes_per_second"),
       type: "gauge",
       samples: snapshot.interfaces.map(
         (item) =>
@@ -103,7 +111,7 @@ export async function GET(request: Request) {
     },
     {
       name: "panel_network_transmit_bytes_per_second",
-      help: "Arayüz gönderim hızı (bayt/sn)",
+      help: metricHelp("panel_network_transmit_bytes_per_second"),
       type: "gauge",
       samples: snapshot.interfaces.map(
         (item) =>
@@ -117,7 +125,7 @@ export async function GET(request: Request) {
   blocks.push(
     {
       name: "panel_monitor_up",
-      help: "Monitör durumu (1 = up, 0 = down, bilinmiyorsa satır yok)",
+      help: metricHelp("panel_monitor_up"),
       type: "gauge",
       samples: monitors
         .filter((monitor) => monitor.status !== "bilinmiyor")
@@ -128,7 +136,7 @@ export async function GET(request: Request) {
     },
     {
       name: "panel_monitor_latency_ms",
-      help: "Son kontrolün gecikmesi (ms)",
+      help: metricHelp("panel_monitor_latency_ms"),
       type: "gauge",
       samples: monitors
         .filter((monitor) => monitor.lastLatencyMs !== null)
@@ -145,7 +153,7 @@ export async function GET(request: Request) {
       blocks.push(
         {
           name: "panel_container_running",
-          help: "Container çalışıyor mu (1/0)",
+          help: metricHelp("panel_container_running"),
           type: "gauge",
           samples: overview.containers.map(
             (container) =>
@@ -154,7 +162,7 @@ export async function GET(request: Request) {
         },
         {
           name: "panel_container_cpu_percent",
-          help: "Container CPU kullanımı (%)",
+          help: metricHelp("panel_container_cpu_percent"),
           type: "gauge",
           samples: overview.containers
             .filter((container) => container.cpuPct !== null)
@@ -165,7 +173,7 @@ export async function GET(request: Request) {
         },
         {
           name: "panel_container_memory_used_bytes",
-          help: "Container bellek kullanımı (bayt)",
+          help: metricHelp("panel_container_memory_used_bytes"),
           type: "gauge",
           samples: overview.containers
             .filter((container) => container.memUsed !== null)
@@ -176,7 +184,7 @@ export async function GET(request: Request) {
         },
         {
           name: "panel_container_restart_count",
-          help: "Container yeniden başlatma sayacı",
+          help: metricHelp("panel_container_restart_count"),
           type: "counter",
           samples: overview.containers
             .filter((container) => container.restartCount !== null)

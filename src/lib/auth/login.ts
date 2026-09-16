@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
 import { hashPassword, verifyPassword } from "@/lib/crypto";
@@ -48,7 +49,13 @@ export function attemptLogin(username: string, password: string, ip: string): Lo
   // yanıt süresinden kullanıcı adı varlığı çıkarılamasın.
   if (!user) {
     verifyPassword(password, hashPassword("zaman-esitleme"));
-    audit({ username, action: "auth.login", result: "denied", ip, detail: "kullanıcı yok" });
+    audit({
+      username,
+      action: "auth.login",
+      result: "denied",
+      ip,
+      detail: serverT("loginAudit.noUser"),
+    });
     return { ok: false, reason: "invalid" };
   }
 
@@ -59,13 +66,20 @@ export function attemptLogin(username: string, password: string, ip: string): Lo
       action: "auth.login",
       result: "denied",
       ip,
-      detail: "hesap kilitli",
+      detail: serverT("loginAudit.locked"),
     });
     return { ok: false, reason: "locked", retryAfterSeconds: user.locked_until - now };
   }
 
   if (user.is_active !== 1) {
-    audit({ userId: user.id, username, action: "auth.login", result: "denied", ip, detail: "pasif hesap" });
+    audit({
+      userId: user.id,
+      username,
+      action: "auth.login",
+      result: "denied",
+      ip,
+      detail: serverT("loginAudit.inactive"),
+    });
     return { ok: false, reason: "inactive" };
   }
 
@@ -88,8 +102,8 @@ export function attemptLogin(username: string, password: string, ip: string): Lo
       result: "denied",
       ip,
       detail: lockedUntil
-        ? `hatalı parola (${attempts}) — hesap ${lockFor / 60} dk kilitlendi`
-        : `hatalı parola (${attempts}/${limit})`,
+        ? serverT("loginAudit.wrongPasswordLocked", { attempts, minutes: lockFor / 60 })
+        : serverT("loginAudit.wrongPassword", { attempts, limit }),
     });
 
     return lockedUntil

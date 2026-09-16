@@ -6,6 +6,8 @@ import { ChevronDown, ChevronRight, Layers } from "lucide-react";
 import { formatBytes } from "@/lib/metrics/catalog";
 import { buildLayerView, layerTotals } from "@/lib/docker/layers";
 import type { ImageLayer } from "@/lib/providers/types";
+import { useFormat, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 /**
  * Katman yığını görünümü (M3.43).
@@ -55,6 +57,8 @@ const RENKLER = [
 ];
 
 export function ImageLayers({ layers }: { layers: ImageLayer[] }) {
+  const t = useT();
+  const f = useFormat();
   const [acik, setAcik] = useState<ReadonlySet<number>>(() => new Set());
 
   const view = buildLayerView(layers);
@@ -71,18 +75,18 @@ export function ImageLayers({ layers }: { layers: ImageLayer[] }) {
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg border border-line bg-canvas px-4 py-3 text-sm">
         <span>
-          <span className="text-subtle">Toplam katman: </span>
+          <span className="text-subtle">{t("docker.layers.totalCount")}</span>
           <span className="font-medium text-brand">{totals.count}</span>
         </span>
         <span>
-          <span className="text-subtle">Toplam boyut: </span>
+          <span className="text-subtle">{t("docker.layers.totalSize")}</span>
           <span className="font-medium text-brand">{formatBytes(totals.sizeBytes)}</span>
         </span>
       </div>
 
       <p className="flex items-center gap-1.5 text-xs text-subtle">
         <Layers className="size-3.5" aria-hidden />
-        Katman yığını (üstteki en yeni) — satıra tıkla, tam komut açılsın
+        {t("docker.layers.hint")}
       </p>
 
       <ul className="space-y-1">
@@ -138,11 +142,11 @@ export function ImageLayers({ layers }: { layers: ImageLayer[] }) {
                   }`}
                   title={
                     layer.large
-                      ? `İmajın %${layer.sharePct.toFixed(0)}'i bu katmanda`
-                      : `İmajın %${layer.sharePct.toFixed(1)}'i`
+                      ? t("docker.layers.shareLarge", { pct: f.pct(layer.sharePct, 0) })
+                      : t("docker.layers.share", { pct: f.pct(layer.sharePct, 1) })
                   }
                 >
-                  {layer.large ? "Büyük" : "Normal"}
+                  {layer.large ? t("docker.layers.large") : t("docker.layers.normal")}
                 </span>
               </button>
 
@@ -154,13 +158,13 @@ export function ImageLayers({ layers }: { layers: ImageLayer[] }) {
                         {layer.instruction}
                       </span>
                     )}
-                    {layer.argument || <span className="text-subtle">(argüman yok)</span>}
+                    {layer.argument || <span className="text-subtle">{t("docker.layers.noArgument")}</span>}
                   </code>
 
                   <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-subtle">
-                    <span>İmajın %{layer.sharePct.toFixed(1)}&apos;i</span>
+                    <span>{t("docker.layers.share", { pct: f.pct(layer.sharePct, 1) })}</span>
                     {layer.createdAt > 0 && (
-                      <span>{new Date(layer.createdAt * 1000).toLocaleString("tr-TR")}</span>
+                      <span>{f.dateTime(layer.createdAt * 1000)}</span>
                     )}
                     {/*
                       Ara katmanların çoğunda kimlik `<missing>` gelir: Docker
@@ -179,10 +183,10 @@ export function ImageLayers({ layers }: { layers: ImageLayer[] }) {
       </ul>
 
       <p className="text-[11px] text-subtle">
-        Çubuk uzunlukları en büyük katmana göre. Bir imajın neden bu kadar yer
-        kapladığını burada görürsün — genellikle tek bir <span className="font-mono">RUN</span>{" "}
-        katmanı sorumludur ve onu bölmek ya da aynı katmanda temizlik yapmak imajı
-        küçültür.
+        <Rich
+          text={t("docker.layers.note")}
+          values={{ run: <span className="font-mono">RUN</span> }}
+        />
       </p>
     </div>
   );

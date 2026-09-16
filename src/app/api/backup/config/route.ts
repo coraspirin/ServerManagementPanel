@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { exportConfig, importConfig, type ConfigExport } from "@/lib/backup/config";
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
     userId: guard.session.user.id,
     username: guard.session.user.username,
     action: "config.export",
-    detail: `${data.settings.length} ayar · ${data.apps.length} kart · ${data.monitors.length} monitör`,
+    detail: serverT("api.backup.exportSummary", { settings: data.settings.length, apps: data.apps.length, monitors: data.monitors.length }),
     result: "ok",
   });
 
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
   try {
     data = (await request.json()) as ConfigExport;
   } catch {
-    return Response.json({ error: "Dosya geçerli JSON değil." }, { status: 400 });
+    return Response.json({ error: serverT("api.backup.invalidJson") }, { status: 400 });
   }
 
   const outcome = importConfig(data, guard.session.user.username);

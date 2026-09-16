@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
 import { normalizeUrl } from "@/lib/apps/store";
@@ -70,12 +71,12 @@ export function bookmarkGroups(): BookmarkGroup[] {
 export type BookmarkInput = { group: string; title: string; url: string };
 
 export function validateBookmark(input: BookmarkInput): string | null {
-  if (!input.title.trim()) return "Başlık boş olamaz.";
-  if (!input.url.trim()) return "Adres boş olamaz.";
+  if (!input.title.trim()) return serverT("bookmarksLib.titleEmpty");
+  if (!input.url.trim()) return serverT("appsStore.urlEmpty");
   try {
     new URL(normalizeUrl(input.url));
   } catch {
-    return "Adres geçerli değil (ör. https://example.com).";
+    return serverT("bookmarks.invalidUrl");
   }
   return null;
 }

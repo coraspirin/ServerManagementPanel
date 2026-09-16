@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { createReadStream } from "node:fs";
 import { lstat, readdir, readFile, readlink, stat } from "node:fs/promises";
@@ -170,9 +171,7 @@ export async function readTextFile(rawPath: string): Promise<FileContent> {
   if (!check.ok) throw new Error(check.error);
 
   if (!contentReadable(check.hostPath)) {
-    throw new Error(
-      "Bu dosyanın içeriği panelden okunamaz (sistem sırrı: parola özeti, sudo kuralı ya da özel anahtar).",
-    );
+    throw new Error(serverT("browse.secretContent"));
   }
 
   const maxBytes = getNumber("files.max_edit_kb") * 1024;
@@ -182,7 +181,7 @@ export async function readTextFile(rawPath: string): Promise<FileContent> {
 
   try {
     const info = await stat(check.containerPath);
-    if (!info.isFile()) throw new Error("Bu bir dosya değil.");
+    if (!info.isFile()) throw new Error(serverT("browse.notFile"));
     buffer = await readFile(check.containerPath);
     sizeBytes = info.size;
   } catch (error) {
@@ -217,7 +216,7 @@ export async function openForDownload(
   if (!check.ok) throw new Error(check.error);
 
   if (!contentReadable(check.hostPath)) {
-    throw new Error("Bu dosya panelden indirilemez (sistem sırrı).");
+    throw new Error(serverT("browse.secretDownload"));
   }
 
   let info;
@@ -238,8 +237,10 @@ export async function openForDownload(
 
     if (result.sizeBytes > limit) {
       throw new Error(
-        `Bu dosya ${Math.round(result.sizeBytes / 1024 / 1024)} MB ve yükseltilmiş okuma ` +
-          `sınırı ${getNumber("files.max_download_mb")} MB. Ayarlardan sınırı artırabilirsin.`,
+        serverT("browse.tooLarge", {
+          size: Math.round(result.sizeBytes / 1024 / 1024),
+          limit: getNumber("files.max_download_mb"),
+        }),
       );
     }
 
@@ -256,7 +257,7 @@ export async function openForDownload(
     };
   }
 
-  if (!info.isFile()) throw new Error("Yalnızca dosya indirilebilir.");
+  if (!info.isFile()) throw new Error(serverT("browse.onlyFiles"));
 
   // Node akışını Web akışına çevirir — Response gövdesi olarak verilebilsin
   // ve büyük dosya belleğe alınmadan geçsin.

@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { apiError } from "./respond";
 
 /**
@@ -36,7 +37,7 @@ export async function readJsonBody<T = Record<string, unknown>>(
   if (hasBody && contentType !== "" && !contentType.toLowerCase().includes("application/json")) {
     return {
       ok: false,
-      response: apiError("invalid_request", "gövde application/json olmalı", { status: 415 }),
+      response: apiError("invalid_request", serverT("apiv1.bodyJson"), { status: 415 }),
     };
   }
 
@@ -47,7 +48,7 @@ export async function readJsonBody<T = Record<string, unknown>>(
   if (Number.isFinite(declared) && declared > maxBytes) {
     return {
       ok: false,
-      response: apiError("invalid_request", `gövde ${maxBytes} bayt sınırını aşıyor`, {
+      response: apiError("invalid_request", serverT("apiv1.bodyTooLarge", { max: maxBytes }), {
         status: 413,
       }),
     };
@@ -61,7 +62,7 @@ export async function readJsonBody<T = Record<string, unknown>>(
   try {
     return { ok: true, body: JSON.parse(raw.text) as T };
   } catch {
-    return { ok: false, response: apiError("invalid_request", "gövde geçerli JSON değil") };
+    return { ok: false, response: apiError("invalid_request", serverT("apiv1.bodyInvalidJson")) };
   }
 }
 
@@ -83,7 +84,7 @@ async function readLimited(
       await reader.cancel();
       return {
         ok: false,
-        response: apiError("invalid_request", `gövde ${maxBytes} bayt sınırını aşıyor`, {
+        response: apiError("invalid_request", serverT("apiv1.bodyTooLarge", { max: maxBytes }), {
           status: 413,
         }),
       };

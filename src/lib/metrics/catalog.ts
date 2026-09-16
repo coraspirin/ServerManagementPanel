@@ -8,8 +8,7 @@
 
 import { formatDuration, formatPct } from "@/lib/i18n/format";
 import { translateLoose } from "@/lib/i18n/translate";
-import type { Locale } from "@/lib/i18n/locales";
-import type { Dictionary } from "@/lib/i18n/dict/tr";
+import type { Dictionary } from "@/lib/i18n/locales";
 
 export type SeriesPoint = { ts: number; avg: number; min: number; max: number };
 export type Series = { metric: string; label: string; points: SeriesPoint[] };
@@ -184,41 +183,37 @@ export function metricMeta(metric: string): MetricMeta {
  * gösterilir — grafiğin göstergesini boş bırakmaktansa "cpu.pct" yazsın.
  */
 export function metricLabel(dict: Dictionary, metric: string): string {
-  const labels = dict.metrics.labels as Record<string, string>;
-  return labels[metric] ?? metric;
+  return dict[`metrics.labels.${metric}`] ?? metric;
 }
 
 /** Aralık düğmesinin metni ("24 saat" / "24 hours"). */
 export function rangeLabel(dict: Dictionary, id: RangeId): string {
-  const ranges = dict.metrics.ranges as Record<string, string>;
-  return ranges[id] ?? id;
+  return dict[`metrics.ranges.${id}`] ?? id;
 }
 
 /** Çözünürlük katmanının adı; `SeriesResult.tier` bir ANAHTAR taşıyor. */
 export function tierLabel(dict: Dictionary, tier: string): string {
-  const tiers = dict.metrics.tiers as Record<string, string>;
-  return tiers[tier] ?? tier;
+  return dict[`metrics.tiers.${tier}`] ?? tier;
 }
 
 export function formatValue(
   format: MetricFormat,
   value: number,
-  locale: Locale,
   dict: Dictionary,
 ): string {
   switch (format) {
     case "pct":
-      return formatPct(value, locale);
+      return formatPct(value, dict);
     case "bytes":
       return formatBytes(value);
     case "bps":
       return formatBps(value);
     case "duration":
-      return formatDuration(value, locale, dict);
+      return formatDuration(value, dict);
     case "ms":
       return value >= 1000
-        ? translateLoose(dict, locale, "metrics.value.seconds", { value: (value / 1000).toFixed(2) })
-        : translateLoose(dict, locale, "metrics.value.milliseconds", { value: Math.round(value) });
+        ? translateLoose(dict, "metrics.value.seconds", { value: (value / 1000).toFixed(2) })
+        : translateLoose(dict, "metrics.value.milliseconds", { value: Math.round(value) });
     default:
       return value.toFixed(2);
   }

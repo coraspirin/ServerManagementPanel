@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { createKioskToken, listKioskTokens, revokeKioskToken } from "@/lib/home/kiosk";
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as typeof body;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const days = Number(body.days ?? 0);
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
     userId: guard.session.user.id,
     username: guard.session.user.username,
     action: "kiosk.create",
-    detail: `${String(body.name ?? "(adsız)")} · ${expiresAt ? `${days} gün` : "süresiz"}`,
+    detail: `${String(body.name ?? serverT("api.unnamed"))} · ${expiresAt ? serverT("api.days", { count: days }) : serverT("api.noExpiry")}`,
     result: "ok",
   });
 
@@ -57,7 +58,7 @@ export async function DELETE(request: Request) {
 
   const fingerprint = new URL(request.url).searchParams.get("fingerprint") ?? "";
   if (!revokeKioskToken(fingerprint)) {
-    return Response.json({ error: "bağlantı bulunamadı" }, { status: 404 });
+    return Response.json({ error: serverT("api.notFound.link") }, { status: 404 });
   }
 
   audit({

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useT } from "@/lib/i18n/client";
 import { Bell, GitCommitVertical } from "lucide-react";
 import type { ChannelStatus, EventRow } from "@/lib/alerts/types";
 import type { TimelineResult } from "@/lib/timeline";
@@ -32,11 +33,12 @@ export function EventCenter({
   canTest: boolean;
   refreshSeconds: number;
 }) {
+  const t = useT();
   const [tab, setTab] = useState<"events" | "timeline">("events");
 
   const tabs = [
-    { key: "events" as const, label: "Olaylar", icon: Bell },
-    { key: "timeline" as const, label: "Zaman Çizelgesi", icon: GitCommitVertical },
+    { key: "events" as const, label: t("eventsScreen.tab.events"), icon: Bell },
+    { key: "timeline" as const, label: t("eventsScreen.tab.timeline"), icon: GitCommitVertical },
   ];
 
   return (

@@ -7,6 +7,7 @@ import { publicAppGroups, welcomeAppGroups } from "@/lib/apps/store";
 import { currentSession, hasPermission } from "@/lib/auth/session";
 import { sanitizeRichText } from "@/lib/richtext";
 import { getBool, getString } from "@/lib/settings";
+import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function WelcomePage() {
   const session = await currentSession();
+  const t = getT();
 
   // Kart adreslerindeki {host} yer tutucusu (M2.5) burada da çözülmeli: kart,
   // panelin açıldığı adrese bakmalı. Port düşürülüyor, kart kendi portunu
@@ -61,7 +63,7 @@ export default async function WelcomePage() {
     <div className="flex min-h-dvh flex-col bg-canvas">
       <header className="sticky top-0 z-20 flex h-[var(--header-h)] shrink-0 items-center gap-3 border-b border-line bg-surface pl-4 pr-[max(1rem,env(safe-area-inset-right))] pt-[env(safe-area-inset-top)]">
         <Server className="size-5 shrink-0 text-brand" aria-hidden />
-        <span className="truncate font-semibold tracking-tight">Sunucu Paneli</span>
+        <span className="truncate font-semibold tracking-tight">{t("welcome.brand")}</span>
 
         <div className="ml-auto shrink-0">
           {session ? (
@@ -70,10 +72,10 @@ export default async function WelcomePage() {
               className="flex items-center gap-2 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand hover:text-brand"
             >
               <LayoutDashboard className="size-4" aria-hidden />
-              Panel
+              {t("welcome.panel")}
               {pending > 0 && (
                 <span
-                  title={`${pending} okunmamış uyarı`}
+                  title={t("welcome.unread", { count: pending })}
                   className="rounded-full bg-warn/15 px-1.5 text-xs font-medium text-warn"
                 >
                   {pending}
@@ -86,7 +88,7 @@ export default async function WelcomePage() {
               className="flex items-center gap-2 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
             >
               <LogIn className="size-4" aria-hidden />
-              Giriş
+              {t("welcome.login")}
             </Link>
           )}
         </div>
@@ -117,8 +119,8 @@ export default async function WelcomePage() {
         ) : (
           <p className="rounded-lg border border-dashed border-line px-5 py-12 text-center text-sm text-subtle">
             {session
-              ? "Henüz kart yok. Uygulamalar ekranından ekleyebilirsin."
-              : "Burada gösterilecek bir uygulama yok."}
+              ? t("welcome.noCardsUser")
+              : t("welcome.noCardsGuest")}
           </p>
         )}
       </main>

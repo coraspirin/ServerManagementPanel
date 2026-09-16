@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import {
@@ -20,18 +21,18 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   if (body.action === "wake") {
     const device = getWolDevice(Number(body.id ?? 0));
-    if (!device) return Response.json({ error: "cihaz bulunamadı" }, { status: 404 });
+    if (!device) return Response.json({ error: serverT("api.notFound.device") }, { status: 404 });
 
     try {
       await sendWol(device);
     } catch (error) {
       return Response.json(
-        { error: `Paket gönderilemedi: ${error instanceof Error ? error.message : String(error)}` },
+        { error: serverT("api.network.wolFailed", { error: error instanceof Error ? error.message : String(error) }) },
         { status: 502 },
       );
     }
@@ -52,10 +53,10 @@ export async function POST(request: Request) {
       ok: true,
       message:
         awake === null
-          ? `Sihirli paket gönderildi. Uyanıp uyanmadığı doğrulanamıyor — kayda bir kontrol adresi ekleyebilirsin.`
+          ? serverT("api.network.wolSentUnverified")
           : awake
-            ? `${device.name} ayakta.`
-            : `Paket gönderildi ama ${device.name} henüz yanıt vermiyor. Açılması birkaç saniye sürebilir.`,
+            ? serverT("api.network.wolAwake", { name: device.name })
+            : serverT("api.network.wolNoReply", { name: device.name }),
       ...(await networkPayload()),
     });
   }
@@ -92,7 +93,7 @@ export async function DELETE(request: Request) {
 
   const id = Number(new URL(request.url).searchParams.get("id") ?? "0");
   const device = getWolDevice(id);
-  if (!device) return Response.json({ error: "cihaz bulunamadı" }, { status: 404 });
+  if (!device) return Response.json({ error: serverT("api.notFound.device") }, { status: 404 });
 
   deleteWolDevice(id);
 

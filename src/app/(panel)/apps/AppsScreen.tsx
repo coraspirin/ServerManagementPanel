@@ -31,6 +31,7 @@ import type { KioskTokenView } from "@/lib/home/kiosk";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import type { AppCard, AppCategory, AppGroup } from "@/lib/apps/types";
 import type { WidgetActionDef, WidgetDef, WidgetState } from "@/lib/widgets/types";
+import { useFormat, useT } from "@/lib/i18n/client";
 
 /**
  * Uygulamalar ekranı (M2.1 + M2.2).
@@ -70,6 +71,8 @@ export function AppsScreen({
   canManageKiosk,
   refreshSeconds,
 }: Props) {
+  const t = useT();
+  const f = useFormat();
   const [groups, setGroups] = useState(initialGroups);
   const [categories, setCategories] = useState(initialCategories);
   const [query, setQuery] = useState("");
@@ -100,20 +103,20 @@ export function AppsScreen({
 
   /** Arama kartın adında, açıklamasında ve adresinde birden arar. */
   const visible = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase("tr");
+    const needle = f.lower(query.trim());
     if (!needle) return groups;
 
     return groups
       .map((group) => ({
         ...group,
         cards: group.cards.filter((card) =>
-          `${card.name} ${card.description} ${card.url}`.toLocaleLowerCase("tr").includes(needle),
+          f.lower(`${card.name} ${card.description} ${card.url}`).includes(needle),
         ),
       }))
       // Arama sırasında boş kategoriler gizleniyor; aksi halde sonuç listesi
       // eşleşmeyen başlıklarla dolar.
       .filter((group) => group.cards.length > 0);
-  }, [groups, query]);
+  }, [groups, query, f]);
 
   /**
    * Durum noktalarını tazeler (M2.3).
@@ -211,14 +214,14 @@ export function AppsScreen({
       const data = (await response.json()) as Record<string, unknown>;
 
       if (!response.ok) {
-        setFormError((data.error as string) ?? "İşlem başarısız.");
+        setFormError((data.error as string) ?? t("common.errors.actionFailed"));
         return null;
       }
       if (Array.isArray(data.groups)) setGroups(data.groups as AppGroup[]);
       if (Array.isArray(data.categories)) setCategories(data.categories as AppCategory[]);
       return data;
     } catch {
-      setFormError("Sunucuya ulaşılamadı.");
+      setFormError(t("common.errors.network"));
       return null;
     } finally {
       setBusy(false);
@@ -254,7 +257,7 @@ export function AppsScreen({
 
   async function removeApp() {
     if (appModal.id === null) return;
-    if (!confirm(`"${appModal.values.name}" kartı silinsin mi?`)) return;
+    if (!confirm(t("appsScreen.confirmDeleteCard", { name: appModal.values.name }))) return;
 
     if (await send(`/api/apps/${appModal.id}`, "DELETE")) {
       setAppModal((modal) => ({ ...modal, open: false }));
@@ -275,7 +278,10 @@ export function AppsScreen({
     if (categoryModal.id === null) return;
     if (
       !confirm(
-        `"${categoryModal.name}" kategorisi silinsin mi?\n\nKartlar silinmez, "Diğer" başlığına taşınır.`,
+        t("appsScreen.confirmDeleteCategory", {
+          name: categoryModal.name,
+          other: t("common.uncategorized"),
+        }),
       )
     ) {
       return;
@@ -306,7 +312,10 @@ export function AppsScreen({
       .map(([name, reason]) => `${name}: ${reason}`)
       .join(" · ");
 
-    setNotice(`Tarama: ${data.summary as string}${reasons ? ` — ${reasons}` : ""}`);
+    setNotice(
+      t("appsScreen.discoverResult", { summary: data.summary as string }) +
+        (reasons ? ` — ${reasons}` : ""),
+    );
   }
 
   /** Widget aksiyonu — Pi-hole'u devre dışı bırakmak gibi (M2.6). */
@@ -322,14 +331,18 @@ export function AppsScreen({
         body: JSON.stringify({ action: action.key }),
       });
       const data = (await response.json()) as { message?: string; error?: string };
-      setNotice(response.ok ? (data.message ?? "Tamam.") : (data.error ?? "İşlem başarısız."));
+      setNotice(
+        response.ok
+          ? (data.message ?? t("docker.installer.ok"))
+          : (data.error ?? t("common.errors.actionFailed")),
+      );
 
       // Aksiyon durumu değiştirdi; sunucudaki önbellek zaten temizlendi, tek
       // yapılacak yeniden okumak.
       const controller = new AbortController();
       await loadWidgets([card.id], controller.signal);
     } catch {
-      setNotice("Sunucuya ulaşılamadı.");
+      setNotice(t("common.errors.network"));
     } finally {
       setWidgetBusy(null);
     }
@@ -369,8 +382,8 @@ export function AppsScreen({
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Kart ara"
-            aria-label="Kart ara"
+            placeholder={t("appsScreen.search")}
+            aria-label={t("appsScreen.search")}
             // Süzülmüş listede sıra numaraları kaydığı için arama ve sıralama
             // aynı anda açık olamaz.
             disabled={sorting}
@@ -378,7 +391,7 @@ export function AppsScreen({
           />
         </label>
 
-        <span className="text-sm text-subtle">{cardCount} kart</span>
+        <span className="text-sm text-subtle">{t("appsScreen.cardCount", { count: cardCount })}</span>
 
         {canManage && (
           <div className="ml-auto flex gap-2">
@@ -386,10 +399,10 @@ export function AppsScreen({
               type="button"
               onClick={() => void discover()}
               disabled={busy}
-              title="Docker etiketlerini tarayıp kartları günceller"
+              title={t("appsScreen.discoverTitle")}
               className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
             >
-              <RadioTower className="size-4" /> Şimdi tara
+              <RadioTower className="size-4" /> {t("networkScreen.scanNow")}
             </button>
             {cardCount > 0 && (
               <button
@@ -405,7 +418,7 @@ export function AppsScreen({
                   sorting ? "border-brand text-brand" : "border-line hover:border-brand"
                 }`}
               >
-                <ArrowDownUp className="size-4" /> {sorting ? "Bitir" : "Sırala"}
+                <ArrowDownUp className="size-4" /> {sorting ? t("appsScreen.finish") : t("appsScreen.sort")}
               </button>
             )}
             <button
@@ -416,14 +429,14 @@ export function AppsScreen({
               }}
               className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand"
             >
-              <FolderPlus className="size-4" /> Kategori
+              <FolderPlus className="size-4" /> {t("appsScreen.category")}
             </button>
             <button
               type="button"
               onClick={() => openNewApp(null)}
               className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white"
             >
-              <Plus className="size-4" /> Kart ekle
+              <Plus className="size-4" /> {t("appsScreen.addCard")}
             </button>
           </div>
         )}
@@ -437,7 +450,7 @@ export function AppsScreen({
             onClick={() => setNotice(null)}
             className="shrink-0 text-xs text-subtle transition-colors hover:text-ink"
           >
-            kapat
+            {t("proxy.dismiss")}
           </button>
         </p>
       )}
@@ -451,15 +464,14 @@ export function AppsScreen({
       {cardCount === 0 && categories.length === 0 ? (
         <div className="rounded-lg border border-dashed border-line bg-surface px-6 py-12 text-center">
           <LayoutGrid className="mx-auto size-7 text-subtle" aria-hidden />
-          <h2 className="mt-3 font-semibold">Henüz kart yok</h2>
+          <h2 className="mt-3 font-semibold">{t("appsScreen.emptyTitle")}</h2>
           <p className="mx-auto mt-1.5 max-w-sm text-sm text-subtle">
-            Sunucudaki servislerin kısayolları burada toplanır. Home Assistant,
-            Pi-hole ya da router arayüzüyle başlayabilirsin.
+            {t("appsScreen.emptyHelp")}
           </p>
         </div>
       ) : visible.length === 0 ? (
         <p className="rounded-lg border border-dashed border-line bg-surface px-5 py-8 text-center text-sm text-subtle">
-          &quot;{query}&quot; ile eşleşen kart yok.
+          {t("appsScreen.noMatch", { query })}
         </p>
       ) : (
         <div className="space-y-6">
@@ -470,7 +482,7 @@ export function AppsScreen({
                 <div className="mb-2 flex items-center gap-2">
                   <Icon className="size-4 text-subtle" aria-hidden />
                   <h2 className="text-sm font-semibold">
-                    {group.category?.name ?? "Diğer"}
+                    {group.category?.name ?? t("common.uncategorized")}
                   </h2>
                   <span className="text-xs text-subtle">{group.cards.length}</span>
 
@@ -486,7 +498,7 @@ export function AppsScreen({
                           icon: group.category!.icon,
                         });
                       }}
-                      aria-label={`${group.category.name} kategorisini düzenle`}
+                      aria-label={t("appsScreen.editCategory", { name: group.category.name })}
                       className="rounded p-1 text-subtle transition-colors hover:text-ink"
                     >
                       <Pencil className="size-3.5" />
@@ -512,9 +524,10 @@ export function AppsScreen({
                             onClick={() =>
                               void move("apps/categories", group.category!.id, direction)
                             }
-                            aria-label={`${group.category!.name} kategorisini ${
-                              direction === -1 ? "yukarı" : "aşağı"
-                            } taşı`}
+                            aria-label={t(
+                              direction === -1 ? "appsScreen.moveUp" : "appsScreen.moveDown",
+                              { name: group.category!.name },
+                            )}
                             className="rounded p-1 text-subtle transition-colors hover:text-ink disabled:opacity-25"
                           >
                             <Icon className="size-3.5" />
@@ -556,7 +569,7 @@ export function AppsScreen({
                       onClick={() => openNewApp(group.category?.id ?? null)}
                       className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-line p-3 text-sm text-subtle transition-colors hover:border-brand hover:text-ink"
                     >
-                      <Plus className="size-4" /> Kart ekle
+                      <Plus className="size-4" /> {t("appsScreen.addCard")}
                     </button>
                   )}
                 </div>
@@ -571,7 +584,7 @@ export function AppsScreen({
 
       <Modal
         open={appModal.open}
-        title={appModal.id === null ? "Kart ekle" : "Kartı düzenle"}
+        title={appModal.id === null ? t("appsScreen.addCard") : t("appsScreen.editCard")}
         onClose={() => setAppModal((modal) => ({ ...modal, open: false }))}
       >
         <div className="px-5 py-4">
@@ -597,7 +610,7 @@ export function AppsScreen({
 
       <Modal
         open={categoryModal.open}
-        title={categoryModal.id === null ? "Kategori ekle" : "Kategoriyi düzenle"}
+        title={categoryModal.id === null ? t("appsScreen.addCategory") : t("appsScreen.editCategoryTitle")}
         onClose={() => setCategoryModal((modal) => ({ ...modal, open: false }))}
       >
         <form
@@ -608,19 +621,19 @@ export function AppsScreen({
           }}
         >
           <label className="block">
-            <span className="text-xs font-medium">Ad</span>
+            <span className="text-xs font-medium">{t("users.roles.name")}</span>
             <input
               type="text"
               value={categoryModal.name}
               onChange={(e) => setCategoryModal((modal) => ({ ...modal, name: e.target.value }))}
-              placeholder="Medya"
+              placeholder={t("appsScreen.categoryPlaceholder")}
               autoFocus
               className="mt-1 w-full rounded-md border border-line bg-canvas px-2.5 py-1.5 text-sm outline-none focus:border-brand"
             />
           </label>
 
           <div>
-            <span className="text-xs font-medium">İkon</span>
+            <span className="text-xs font-medium">{t("appsScreen.icon")}</span>
             <div className="mt-1 flex flex-wrap gap-1.5">
               {Object.entries(CATEGORY_ICONS).map(([name, Icon]) => (
                 <button
@@ -657,7 +670,7 @@ export function AppsScreen({
                 disabled={busy}
                 className="mr-auto flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:border-danger hover:text-danger disabled:opacity-50"
               >
-                <Trash2 className="size-4" /> Sil
+                <Trash2 className="size-4" /> {t("common.actions.delete")}
               </button>
             )}
             <button
@@ -665,14 +678,14 @@ export function AppsScreen({
               onClick={() => setCategoryModal((modal) => ({ ...modal, open: false }))}
               className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
             >
-              Vazgeç
+              {t("common.actions.cancel")}
             </button>
             <button
               type="submit"
               disabled={busy}
               className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity disabled:opacity-50"
             >
-              {busy ? "Kaydediliyor…" : "Kaydet"}
+              {busy ? t("common.states.saving") : t("common.actions.save")}
             </button>
           </div>
         </form>

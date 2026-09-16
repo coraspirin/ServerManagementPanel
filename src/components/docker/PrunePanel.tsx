@@ -5,6 +5,7 @@ import { Trash2 } from "lucide-react";
 import { formatBytes } from "@/lib/metrics/catalog";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import type { PruneResult, PruneScope } from "@/lib/providers/types";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * Disk temizliği (M1.7).
@@ -14,44 +15,14 @@ import type { PruneResult, PruneScope } from "@/lib/providers/types";
  * küçük puntoyla geçiştirmek yerine kırmızıyla söylemek gerekiyor.
  */
 
-const SCOPES: {
-  value: PruneScope;
-  label: string;
-  detail: string;
-  danger?: boolean;
-}[] = [
-  {
-    value: "images-dangling",
-    label: "Sarkan image'lar",
-    detail: "Etiketi kalmamış ara katmanlar. Hiçbir container kullanmıyor, en güvenli seçenek.",
-  },
-  {
-    value: "build-cache",
-    label: "Derleme önbelleği",
-    detail: "Yeniden derlemede tekrar oluşur; yalnızca ilk derleme yavaşlar.",
-  },
-  {
-    value: "containers",
-    label: "Durmuş container'lar",
-    detail: "Çalışmayan container kayıtları. Volume'lardaki veri etkilenmez.",
-  },
-  {
-    value: "networks",
-    label: "Kullanılmayan ağlar",
-    detail: "Hiçbir container'ın bağlı olmadığı Docker ağları.",
-  },
-  {
-    value: "images-unused",
-    label: "Kullanılmayan tüm image'lar",
-    detail: "Çok yer açar ama geri getirmek yeniden indirmek demektir. İnternet gerekir.",
-    danger: true,
-  },
-  {
-    value: "volumes",
-    label: "Bağlı olmayan volume'lar",
-    detail: "VERİ SİLER. Bir container geçici olarak durdurulduysa volume'u burada 'kullanılmıyor' görünür.",
-    danger: true,
-  },
+/** Kapsamların sırası ve tehlike işareti; adı ve açıklaması `docker.prune.scope.<kapsam>`. */
+const SCOPES: { value: PruneScope; danger?: boolean }[] = [
+  { value: "images-dangling" },
+  { value: "build-cache" },
+  { value: "containers" },
+  { value: "networks" },
+  { value: "images-unused", danger: true },
+  { value: "volumes", danger: true },
 ];
 
 function readCsrfToken(): string {
@@ -60,14 +31,15 @@ function readCsrfToken(): string {
 }
 
 export function PrunePanel() {
+  const t = useT();
   const [busy, setBusy] = useState<PruneScope | null>(null);
   const [result, setResult] = useState<PruneResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function run(scope: PruneScope, danger: boolean, label: string) {
     const message = danger
-      ? `"${label}" temizliği GERİ ALINAMAZ.\n\nDevam edilsin mi?`
-      : `"${label}" temizlensin mi?`;
+      ? t("docker.prune.confirmDanger", { label })
+      : t("docker.prune.confirm", { label });
     if (!confirm(message)) return;
 
     setBusy(scope);
@@ -81,10 +53,10 @@ export function PrunePanel() {
         body: JSON.stringify({ scope }),
       });
       const data = (await response.json()) as PruneResult & { error?: string };
-      if (!response.ok) setError(data.error ?? "Temizlik başarısız.");
+      if (!response.ok) setError(data.error ?? t("docker.prune.failed"));
       else setResult(data);
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     } finally {
       setBusy(null);
     }
@@ -94,11 +66,9 @@ export function PrunePanel() {
     <section className="rounded-lg border border-line bg-surface">
       <div className="border-b border-line px-5 py-3">
         <h2 className="flex items-center gap-1.5 font-semibold">
-          <Trash2 className="size-4" /> Disk temizliği
+          <Trash2 className="size-4" /> {t("docker.prune.title")}
         </h2>
-        <p className="mt-0.5 text-xs text-subtle">
-          Kullanılmayan Docker kaynaklarını siler. Her işlem audit&apos;e düşer.
-        </p>
+        <p className="mt-0.5 text-xs text-subtle">{t("docker.prune.intro")}</p>
       </div>
 
       <div className="divide-y divide-line">
@@ -109,21 +79,27 @@ export function PrunePanel() {
           >
             <div className="min-w-0">
               <div className="text-sm font-medium">
-                {scope.label}
+                {t(`docker.prune.scope.${scope.value}.label`)}
                 {scope.danger && (
                   <span className="ml-2 rounded bg-danger/15 px-1.5 py-0.5 text-[10px] font-medium text-danger">
-                    dikkat
+                    {t("docker.prune.caution")}
                   </span>
                 )}
               </div>
               <p className={`mt-0.5 text-xs ${scope.danger ? "text-danger" : "text-subtle"}`}>
-                {scope.detail}
+                {t(`docker.prune.scope.${scope.value}.detail`)}
               </p>
             </div>
 
             <button
               type="button"
-              onClick={() => void run(scope.value, scope.danger === true, scope.label)}
+              onClick={() =>
+                void run(
+                  scope.value,
+                  scope.danger === true,
+                  t(`docker.prune.scope.${scope.value}.label`),
+                )
+              }
               disabled={busy !== null}
               className={`shrink-0 rounded-md border px-2.5 py-1.5 text-xs transition-colors disabled:opacity-50 ${
                 scope.danger
@@ -131,7 +107,7 @@ export function PrunePanel() {
                   : "border-line hover:border-brand hover:text-brand"
               }`}
             >
-              {busy === scope.value ? "temizleniyor…" : "Temizle"}
+              {busy === scope.value ? t("docker.prune.cleaning") : t("docker.prune.clean")}
             </button>
           </div>
         ))}
@@ -144,7 +120,10 @@ export function PrunePanel() {
           ) : result ? (
             <>
               <p className="text-ok">
-                {result.removed} kaynak silindi · {formatBytes(result.reclaimedBytes)} kazanıldı
+                {t("docker.prune.result", {
+                  count: result.removed,
+                  size: formatBytes(result.reclaimedBytes),
+                })}
               </p>
               {result.items.length > 0 && (
                 <p className="mt-1 break-all font-mono text-[11px] text-subtle">

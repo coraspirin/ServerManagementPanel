@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { LinkPending } from "@/components/shell/LinkPending";
 import { settingGroups } from "@/settings.schema";
-import { settingsGroupText } from "@/lib/i18n/runtime";
+import { settingsGroupText } from "@/lib/i18n/lookup";
 import { getActiveDictionary, getT } from "@/lib/i18n/server";
 
 /**

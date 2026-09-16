@@ -39,6 +39,7 @@
 import { Document } from "yaml";
 
 import { inheritEnv } from "../docker/inherit.ts";
+import { serverT } from "../i18n/runtime.ts";
 
 export type EnvMode = "user" | "all";
 
@@ -197,9 +198,7 @@ function mountList(mounts: unknown[]): MountInfo {
       // ama bu adın okunur bir tarafı yok ve kullanıcı bunu bilmeli.
       if (/^[0-9a-f]{64}$/.test(name)) {
         warnings.push(
-          `${destination} anonim bir volume'de (${name.slice(0, 12)}…). ` +
-            "Veri korunsun diye adıyla yazıldı; okunur bir ada taşımak istersen " +
-            "önce içeriği kopyalaman gerekir.",
+          serverT("composeGen.anonVolume", { destination, name: name.slice(0, 12) }),
         );
       }
       continue;
@@ -211,7 +210,7 @@ function mountList(mounts: unknown[]): MountInfo {
       continue;
     }
 
-    warnings.push(`${destination} bağlantısı "${type}" türünde — taşınmadı.`);
+    warnings.push(serverT("composeGen.mountType", { destination, type }));
   }
 
   return { entries, named, warnings };
@@ -242,8 +241,7 @@ export function generateCompose(
   const warnings: string[] = [];
   if (!rawImage) {
     warnings.push(
-      "İmajın yapılandırması okunamadı; imajdan gelen ortam değişkenleri ve " +
-        "komutlar ayıklanamadı. Üretilen dosyada gereksiz satırlar olabilir.",
+      serverT("composeGen.noImageConfig"),
     );
   }
 
@@ -260,7 +258,7 @@ export function generateCompose(
   const imageRef = text(config.Image) || text(container.Image);
   service.image = imageRef;
   if (!text(config.Image)) {
-    warnings.push("İmaj etiketi bulunamadı, digest yazıldı — güncelleme takibi çalışmaz.");
+    warnings.push(serverT("composeGen.noTag"));
   }
 
   /*
@@ -321,10 +319,7 @@ export function generateCompose(
   } else if (networkMode.startsWith("container:")) {
     service.network_mode = networkMode;
     warnings.push(
-      "Ağ kipi başka bir container'a bağlı (`" +
-        networkMode +
-        "`). Compose'da bu ancak hedef container aynı dosyada tanımlıysa " +
-        "çalışır — kontrol etmen gerekiyor.",
+      serverT("composeGen.containerNetwork", { mode: networkMode }),
     );
   } else {
     // `bridge` Docker'ın varsayılanı; yazmak bilgi taşımıyor. Adlandırılmış
@@ -455,8 +450,7 @@ export function generateCompose(
   const links = strings(hostConfig.Links);
   if (links.length > 0) {
     warnings.push(
-      "Container eski usul `--link` kullanıyor. Compose'da bunun karşılığı yok; " +
-        "servisler aynı ağdayken adlarıyla birbirini bulur.",
+      serverT("composeGen.links"),
     );
   }
 
@@ -479,10 +473,7 @@ export function generateCompose(
   }
 
   const doc = new Document(root);
-  doc.commentBefore =
-    ` ${containerName || serviceName} container'ından üretildi (panel).\n` +
-    " Kaydetmeden önce gözden geçir: gizli değerler ortam değişkenlerinde açık\n" +
-    " yazılmış olabilir ve dosya diske bu hâliyle yazılır.";
+  doc.commentBefore = serverT("composeGen.header", { name: containerName || serviceName });
 
   return { yaml: doc.toString({ lineWidth: 0 }), serviceName, warnings };
 }

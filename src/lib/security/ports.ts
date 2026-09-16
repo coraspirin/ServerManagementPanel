@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { readCache, writeCache } from "@/lib/db/cache";
 import { panelImage } from "@/lib/host/self";
@@ -162,7 +163,7 @@ export async function scanListeningPorts(): Promise<PortScan> {
 
   const image = await panelImage();
   if (!image) {
-    return { ...EMPTY, containers, error: "Panel imajı belirlenemedi." };
+    return { ...EMPTY, containers, error: serverT("stacks.noPanelImage") };
   }
 
   let output: string;
@@ -200,7 +201,7 @@ export async function scanListeningPorts(): Promise<PortScan> {
       return {
         ...EMPTY,
         containers,
-        error: result.output.slice(0, 300) || "tarama başarısız",
+        error: result.output.slice(0, 300) || serverT("portsLib.scanFailed"),
       };
     }
     output = result.stdout ?? result.output;
@@ -208,7 +209,7 @@ export async function scanListeningPorts(): Promise<PortScan> {
     return {
       ...EMPTY,
       containers,
-      error: error instanceof Error ? error.message : "tarama çalıştırılamadı",
+      error: error instanceof Error ? error.message : serverT("portsLib.scanExec"),
     };
   }
 
@@ -218,14 +219,14 @@ export async function scanListeningPorts(): Promise<PortScan> {
     .reverse()
     .find((entry) => entry.startsWith("{"));
   if (!line) {
-    return { ...EMPTY, containers, error: "tarama çıktısı ayrıştırılamadı" };
+    return { ...EMPTY, containers, error: serverT("portsLib.parseFailed") };
   }
 
   let parsed: { rows: RawSocket[] };
   try {
     parsed = JSON.parse(line) as typeof parsed;
   } catch {
-    return { ...EMPTY, containers, error: "tarama çıktısı geçerli JSON değil" };
+    return { ...EMPTY, containers, error: serverT("portsLib.notJson") };
   }
 
   const scan: PortScan = {

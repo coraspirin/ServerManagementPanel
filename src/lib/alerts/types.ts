@@ -2,6 +2,8 @@
  * M1.3 — alarm ve olay paylaşılan tipleri (istemci de kullanır).
  */
 
+import type { MessageKey } from "../i18n/translate.ts";
+
 export type Severity = "ok" | "info" | "warning" | "critical";
 
 export const SEVERITY_ORDER: Record<Severity, number> = {
@@ -11,25 +13,25 @@ export const SEVERITY_ORDER: Record<Severity, number> = {
   critical: 3,
 };
 
-export const SEVERITY_LABEL: Record<Severity, string> = {
-  ok: "çözüldü",
-  info: "bilgi",
-  warning: "uyarı",
-  critical: "kritik",
+export const SEVERITY_LABEL: Record<Severity, MessageKey> = {
+  ok: "alerts.severity.ok",
+  info: "alerts.severity.info",
+  warning: "alerts.severity.warning",
+  critical: "alerts.severity.critical",
 };
 
 /** Bildirimin neden gönderilmediği — "neden haber gelmedi?" sorusunun cevabı. */
-export const SUPPRESS_LABEL: Record<string, string> = {
-  bakim: "bakım penceresi",
-  "sessiz-saat": "sessiz saatler",
-  dedup: "yakın zamanda bildirildi",
-  flap: "henüz doğrulanmadı",
-  "kanal-yok": "uygun kanal yok",
-  seviye: "kanal seviye filtresi",
-  hata: "gönderim hatası",
+export const SUPPRESS_LABEL: Record<string, MessageKey> = {
+  bakim: "alerts.suppress.bakim",
+  "sessiz-saat": "alerts.suppress.sessiz-saat",
+  dedup: "alerts.suppress.dedup",
+  flap: "alerts.suppress.flap",
+  "kanal-yok": "alerts.suppress.kanal-yok",
+  seviye: "alerts.suppress.seviye",
+  hata: "alerts.suppress.hata",
   // M3.32 — Docker'ın rutin yaşam döngüsü olayları. Baskılanmadılar; zaten
   // bildirilecek türden değiller ve kullanıcı bunu ayırt edebilmeli.
-  rutin: "rutin olay, bildirim gerekmiyor",
+  rutin: "alerts.suppress.rutin",
 };
 
 export type EventRow = {

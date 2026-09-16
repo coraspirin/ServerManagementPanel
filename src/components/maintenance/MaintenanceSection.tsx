@@ -2,6 +2,9 @@ import { formatBytes } from "@/lib/metrics/catalog";
 import { backupStatus } from "@/lib/backup/watch";
 import { cachedImageUpdates } from "@/lib/updates";
 import { osUpdateReport } from "@/lib/updates/os";
+import { formatRelative } from "@/lib/i18n/format";
+import { Rich } from "@/lib/i18n/rich";
+import { getActiveDictionary, getT } from "@/lib/i18n/server";
 import { ImageUpdatePanel } from "./ImageUpdatePanel";
 
 /**
@@ -15,30 +18,27 @@ import { ImageUpdatePanel } from "./ImageUpdatePanel";
  * Panel güncelleme KURMAZ. Bir çekirdek güncellemesi yeniden başlatma ister;
  * bunu kendiliğinden yapan bir panel, çözdüğünden çok sorun çıkarır.
  */
-function ago(ts: number): string {
-  const minutes = Math.floor((Date.now() / 1000 - ts) / 60);
-  if (minutes < 60) return `${minutes} dk önce`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 48) return `${hours} saat önce`;
-  return `${Math.floor(hours / 24)} gün önce`;
-}
 
 export async function MaintenanceSection({ canAct }: { canAct: boolean }) {
   const [os, backup] = await Promise.all([osUpdateReport(), backupStatus()]);
   const images = cachedImageUpdates();
+  const t = getT();
+  const dict = getActiveDictionary();
+  const ago = (ts: number) => formatRelative(ts * 1000, dict);
 
   return (
     <div className="space-y-4">
-      <h2 className="font-semibold">Bakım durumu</h2>
+      <h2 className="font-semibold">{t("maintenance.title")}</h2>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-lg border border-line bg-surface">
           <div className="border-b border-line px-5 py-3">
-            <h3 className="font-semibold">İşletim sistemi güncellemeleri</h3>
+            <h3 className="font-semibold">{t("maintenance.os.title")}</h3>
             <p className="mt-0.5 text-xs text-subtle">
               {os.available && os.reportedAt
-                ? `rapor: ${ago(os.reportedAt)}${os.stale ? " — eskimiş" : ""}`
-                : "rapor yok"}
+                ? t("maintenance.os.report", { when: ago(os.reportedAt) }) +
+                  (os.stale ? t("maintenance.os.stale") : "")
+                : t("maintenance.os.noReport")}
             </p>
           </div>
 
@@ -46,9 +46,7 @@ export async function MaintenanceSection({ canAct }: { canAct: boolean }) {
             {!os.available ? (
               <>
                 <p className="text-subtle">
-                  Host&apos;ta güncelleme raporu üretilmiyor. `apt` host&apos;un paket
-                  veritabanını okur ve root ister; bu yüzden panel değil, host&apos;ta
-                  çalışan küçük bir script raporluyor.
+                  {t("maintenance.os.setup")}
                 </p>
                 <pre className="mt-2 overflow-x-auto rounded border border-line bg-canvas p-2 font-mono text-[11px]">
 {`sudo install -m 700 scripts/os-updates.sh /usr/local/bin/panel-os-updates.sh
@@ -58,22 +56,27 @@ EOF`}
                 </pre>
               </>
             ) : os.total === 0 ? (
-              <p className="text-ok">Bekleyen güncelleme yok.</p>
+              <p className="text-ok">{t("maintenance.os.none")}</p>
             ) : (
               <>
                 <p>
-                  <span className="font-medium">{os.total}</span> paket güncellenebilir
+                  <Rich
+                    text={t("maintenance.os.packages")}
+                    values={{ count: <span className="font-medium">{os.total}</span> }}
+                  />
                   {os.security > 0 && (
                     <span className="ml-2 rounded bg-warn/15 px-1.5 py-0.5 text-[11px] font-medium text-warn">
-                      {os.security} güvenlik
+                      {t("maintenance.os.security", { count: os.security })}
                     </span>
                   )}
                 </p>
                 {os.rebootRequired && (
-                  <p className="mt-1 text-danger">Sunucu yeniden başlatma bekliyor.</p>
+                  <p className="mt-1 text-danger">{t("maintenance.os.reboot")}</p>
                 )}
                 <details className="mt-2">
-                  <summary className="cursor-pointer text-xs text-subtle">Paketler</summary>
+                  <summary className="cursor-pointer text-xs text-subtle">
+                    {t("maintenance.os.packageList")}
+                  </summary>
                   <ul className="mt-1 space-y-0.5 font-mono text-[11px]">
                     {os.packages.slice(0, 40).map((pkg) => (
                       <li key={pkg.name} className={pkg.security ? "text-warn" : "text-subtle"}>
@@ -83,7 +86,7 @@ EOF`}
                   </ul>
                   {os.packages.length > 40 && (
                     <p className="mt-1 text-[11px] text-subtle">
-                      …ve {os.packages.length - 40} paket daha
+                      {t("maintenance.os.more", { count: os.packages.length - 40 })}
                     </p>
                   )}
                 </details>
@@ -98,32 +101,31 @@ EOF`}
 
         <section className="rounded-lg border border-line bg-surface">
           <div className="border-b border-line px-5 py-3">
-            <h3 className="font-semibold">Yedek takibi</h3>
+            <h3 className="font-semibold">{t("maintenance.backup.title")}</h3>
             <p className="mt-0.5 text-xs text-subtle">
-              {backup.watching ? backup.dir : "takip kapalı"}
+              {backup.watching ? backup.dir : t("maintenance.backup.off")}
             </p>
           </div>
 
           <div className="px-5 py-3 text-sm">
             {!backup.watching ? (
               <p className="text-subtle">
-                Ayarlar → Güncelleme &amp; Yedek → &quot;İzlenecek yedek klasörü&quot;ne bir
-                yol yazınca burada en son yedeğin yaşı görünür ve eskirse alarm üretilir.
-                Yedekleme motoru M3.4&apos;te gelecek; bu yalnızca sessizce durmuş bir
-                yedeklemeyi yakalar.
+                {t("maintenance.backup.setup")}
               </p>
             ) : backup.error ? (
               <p className="text-danger">{backup.error}</p>
             ) : backup.newestAt === null ? (
-              <p className="text-danger">Klasör boş — hiç yedek yok.</p>
+              <p className="text-danger">{t("maintenance.backup.empty")}</p>
             ) : (
               <>
                 <p className={backup.stale ? "text-danger" : "text-ok"}>
-                  En son yedek {ago(backup.newestAt)}
-                  {backup.stale && ` — eşik ${backup.staleAfterHours} saat`}
+                  {t("maintenance.backup.latest", { when: ago(backup.newestAt) })}
+                  {backup.stale &&
+                    t("maintenance.backup.threshold", { hours: backup.staleAfterHours })}
                 </p>
                 <p className="mt-1 text-xs text-subtle">
-                  {backup.newestName} · {backup.fileCount} dosya ·{" "}
+                  {backup.newestName} ·{" "}
+                  {t("maintenance.backup.files", { count: backup.fileCount })} ·{" "}
                   {formatBytes(backup.totalBytes)}
                 </p>
               </>

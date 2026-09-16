@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
 import { getDockerProvider } from "@/lib/providers";
@@ -118,9 +119,7 @@ export async function runDiscovery(): Promise<DiscoveryResult> {
     const read = labelReader(container, prefix);
     const url = urlFor(read, container);
     if (!url) {
-      result.skipped[name] =
-        "adres belirlenemedi — container port yayınlamıyor, " +
-        `'${prefix}.url' ya da '${prefix}.port' etiketi eklenmeli`;
+      result.skipped[name] = serverT("discovery.noAddress", { prefix });
       continue;
     }
 
@@ -186,14 +185,14 @@ export async function runDiscovery(): Promise<DiscoveryResult> {
 /** İnsan okunur özet — job günlüğü ve ekran bildirimi aynı metni kullanır. */
 export function describeDiscovery(result: DiscoveryResult): string {
   const parts: string[] = [];
-  if (result.created.length) parts.push(`${result.created.length} yeni`);
-  if (result.updated.length) parts.push(`${result.updated.length} güncellendi`);
-  if (result.removed.length) parts.push(`${result.removed.length} silindi`);
+  if (result.created.length) parts.push(serverT("discovery.created", { count: result.created.length }));
+  if (result.updated.length) parts.push(serverT("discovery.updated", { count: result.updated.length }));
+  if (result.removed.length) parts.push(serverT("discovery.removed", { count: result.removed.length }));
 
   const skipped = Object.keys(result.skipped).length;
-  if (skipped) parts.push(`${skipped} atlandı`);
+  if (skipped) parts.push(serverT("discovery.skipped", { count: skipped }));
 
-  return parts.length > 0 ? parts.join(" · ") : "değişiklik yok";
+  return parts.length > 0 ? parts.join(" · ") : serverT("discovery.noChanges");
 }
 
 /** Keşif kapalıysa job hiçbir şey yapmamalı ama sebebini söylemeli. */

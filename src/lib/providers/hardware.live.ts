@@ -7,6 +7,7 @@ import type {
   StoragePool,
   TemperatureReading,
 } from "./types";
+import { serverT } from "../i18n/runtime.ts";
 
 /**
  * M1.4 — donanım sağlığı.
@@ -56,7 +57,7 @@ async function readTemperatures(notes: string[]): Promise<TemperatureReading[]> 
   try {
     entries = await readdir(base);
   } catch {
-    notes.push(`Sensör dizini okunamadı (${base}). /sys mount edilmiş mi?`);
+    notes.push(serverT("hardwareLib.sensorDir", { path: base }));
     return [];
   }
 
@@ -82,7 +83,8 @@ async function readTemperatures(notes: string[]): Promise<TemperatureReading[]> 
       if (celsius === 0) continue;
 
       const label =
-        (await readText(path.join(dir, `${prefix}_label`))) ?? prefix.replace("temp", "sensör ");
+        (await readText(path.join(dir, `${prefix}_label`))) ??
+        prefix.replace("temp", serverT("hardwareLib.sensor"));
 
       readings.push({
         id: `${source}/${prefix}`,
@@ -117,7 +119,12 @@ function parseMdstat(content: string): StoragePool[] {
     const [, name, activity, level, memberText] = header;
     const devices = [...memberText.matchAll(/(\w+)\[\d+\](\(([FS])\))?/g)].map((m) => ({
       name: m[1],
-      state: m[3] === "F" ? "arızalı" : m[3] === "S" ? "yedek" : "etkin",
+      state:
+        m[3] === "F"
+          ? serverT("hardwareLib.device.failed")
+          : m[3] === "S"
+            ? serverT("hardwareLib.device.spare")
+            : serverT("hardwareLib.device.active"),
     }));
 
     const body = lines.slice(i + 1, i + 4).join(" ");
@@ -159,9 +166,7 @@ type ReportFile = {
 async function readHostReport(notes: string[]): Promise<ReportFile | null> {
   const file = path.join(REPORTS_DIR, "hardware.json");
   if (!(await exists(file))) {
-    notes.push(
-      "S.M.A.R.T ve ZFS raporu yok. Host'ta scripts/hardware.sh kurulmamış olabilir (bkz. DEPLOY.md).",
-    );
+    notes.push(serverT("hardwareLib.noReport"));
     return null;
   }
 
@@ -173,7 +178,7 @@ async function readHostReport(notes: string[]): Promise<ReportFile | null> {
     for (const error of parsed.errors ?? []) notes.push(`Host raporu: ${error}`);
     return parsed;
   } catch {
-    notes.push(`Host raporu okunamadı (${file} geçerli JSON değil).`);
+    notes.push(serverT("hardwareLib.reportInvalid", { file }));
     return null;
   }
 }
@@ -209,11 +214,11 @@ export const liveHardwareProvider: HardwareProvider = {
     if (virtualization && temperatures.length === 0 && disks.length === 0) {
       // En üste alınıyor: asıl açıklama bu, diğer notlar sonucu.
       notes.unshift(
-        `Sunucu ${virtualization} olarak çalışıyor — sanal donanımda sıcaklık sensörü ve S.M.A.R.T verisi bulunmaz. Bu bir arıza değil.`,
+        serverT("hardwareLib.virtual", { kind: virtualization }),
       );
     } else if (temperatures.length === 0) {
       notes.push(
-        "Sıcaklık sensörü bulunamadı. Fiziksel makinede `sensors-detect` ile sürücü (coretemp, k10temp…) yüklenmesi gerekebilir.",
+        serverT("hardwareLib.noSensors"),
       );
     }
 

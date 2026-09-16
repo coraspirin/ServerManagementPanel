@@ -12,6 +12,8 @@ import {
 } from "@/lib/apps/types";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import type { WidgetDef } from "@/lib/widgets/types";
+import { useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 /**
  * Kart ekleme/düzenleme formu (M2.2).
@@ -201,6 +203,7 @@ export function AppForm({
   onCancel: () => void;
   onDelete?: () => void;
 }) {
+  const t = useT();
   const [showAdvanced, setShowAdvanced] = useState(
     values.internalUrl !== "" ||
       values.containerName !== "" ||
@@ -233,12 +236,12 @@ export function AppForm({
       });
       const data = (await response.json()) as { icon?: string; error?: string };
       if (!response.ok) {
-        setUploadError(data.error ?? "Logo yüklenemedi.");
+        setUploadError(data.error ?? t("appForm.logoFailed"));
         return;
       }
       onChange({ icon: data.icon ?? "" });
     } catch {
-      setUploadError("Sunucuya ulaşılamadı.");
+      setUploadError(t("common.errors.network"));
     }
   }
 
@@ -252,18 +255,20 @@ export function AppForm({
     >
       {discovered && (
         <p className="rounded-md border border-brand/40 bg-brand/5 px-3 py-2 text-xs">
-          Bu kart <span className="font-medium">{values.containerName}</span> container&apos;ının
-          etiketlerinden oluşturuldu ve her taramada yeniden yazılıyor. Kaydedersen kart{" "}
-          <span className="font-medium">senin olur</span>: etiketler onu bir daha değiştirmez.
-          Kartı tamamen kaldırmak için container&apos;daki etiketi silmelisin — yoksa bir sonraki
-          tarama geri getirir.
+          <Rich
+            text={t("appForm.discovered")}
+            values={{
+              container: <span className="font-medium">{values.containerName}</span>,
+              yours: <span className="font-medium">{t("appForm.yours")}</span>,
+            }}
+          />
         </p>
       )}
 
       <div className="flex items-start gap-3">
         <LogoPreview values={values} />
         <div className="min-w-0 flex-1 space-y-3">
-          <Field label="Ad">
+          <Field label={t("users.roles.name")}>
             <input
               type="text"
               value={values.name}
@@ -274,8 +279,8 @@ export function AppForm({
             />
           </Field>
           <Field
-            label="Adres"
-            help="Şema yazılmazsa http:// eklenir. Örnek: 192.168.61.114:8123"
+            label={t("appForm.address")}
+            help={t("appForm.addressHelp")}
           >
             <input
               type="text"
@@ -289,13 +294,13 @@ export function AppForm({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Kategori">
+        <Field label={t("appForm.category")}>
           <select
             value={values.categoryId}
             onChange={(e) => onChange({ categoryId: e.target.value })}
             className={inputClass}
           >
-            <option value="">Kategorisiz</option>
+            <option value="">{t("appForm.uncategorized")}</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
@@ -304,22 +309,21 @@ export function AppForm({
           </select>
         </Field>
 
-        <Field label="Açıklama (isteğe bağlı)" help="Boşsa kartta adres gösterilir.">
+        <Field label={t("appForm.description")} help={t("appForm.descriptionHelp")}>
           <input
             type="text"
             value={values.description}
             onChange={(e) => onChange({ description: e.target.value })}
-            placeholder="Ev otomasyonu"
+            placeholder={t("appForm.descriptionPlaceholder")}
             className={inputClass}
           />
         </Field>
       </div>
 
       <div className="rounded-md border border-line px-3 py-2.5">
-        <span className="text-xs font-medium">Logo</span>
+        <span className="text-xs font-medium">{t("appForm.logo")}</span>
         <p className="mt-0.5 text-[11px] leading-snug text-subtle">
-          Yüklenmezse servisin kendi favicon&apos;u denenir; o da yoksa ad&apos;ın
-          baş harfleri gösterilir.
+          {t("appForm.logoHelp")}
         </p>
 
         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -340,7 +344,7 @@ export function AppForm({
             onClick={() => fileInput.current?.click()}
             className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand"
           >
-            <ImageUp className="size-3.5" /> Dosya yükle
+            <ImageUp className="size-3.5" /> {t("appForm.uploadFile")}
           </button>
 
           {values.icon && (
@@ -349,12 +353,12 @@ export function AppForm({
               onClick={() => onChange({ icon: "" })}
               className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs text-subtle transition-colors hover:text-danger"
             >
-              <Trash2 className="size-3.5" /> Kaldır
+              <Trash2 className="size-3.5" /> {t("appForm.remove")}
             </button>
           )}
 
           <label className="ml-auto flex items-center gap-1.5 text-xs text-subtle">
-            Renk
+            {t("appForm.color")}
             <input
               type="color"
               // Renk seçicinin boş değeri yok; kullanıcı hiç dokunmadıysa
@@ -371,7 +375,7 @@ export function AppForm({
 
       <div className="rounded-md border border-line px-3 py-2.5">
         <label className="block">
-          <span className="text-xs font-medium">Servis widget&apos;ı</span>
+          <span className="text-xs font-medium">{t("appForm.widget")}</span>
           <select
             value={values.widgetType}
             onChange={(e) =>
@@ -381,7 +385,7 @@ export function AppForm({
             }
             className={`mt-1 ${inputClass}`}
           >
-            <option value="">Yok — sade kısayol</option>
+            <option value="">{t("appForm.noWidget")}</option>
             {widgets.map((widget) => (
               <option key={widget.key} value={widget.key}>
                 {widget.label}
@@ -406,7 +410,7 @@ export function AppForm({
                   }
                   placeholder={
                     field.type === "secret" && widgetConfigured && sameWidget
-                      ? "kayıtlı — değiştirmek için yaz"
+                      ? t("appForm.secretSaved")
                       : field.placeholder
                   }
                   className={inputClass}
@@ -423,32 +427,32 @@ export function AppForm({
           onClick={() => setShowAdvanced((v) => !v)}
           className="flex w-full items-center justify-between px-3 py-2 text-xs text-subtle transition-colors hover:text-ink"
         >
-          <span>Gelişmiş</span>
-          <span>{showAdvanced ? "gizle" : "göster"}</span>
+          <span>{t("appForm.advanced")}</span>
+          <span>{showAdvanced ? t("appForm.hide") : t("appForm.show")}</span>
         </button>
 
         {showAdvanced && (
           <div className="space-y-3 border-t border-line px-3 py-3">
             <Field
-              label="Panel içi adres (isteğe bağlı)"
-              help="Panelin durum kontrolü ve widget'lar için kullandığı adres. Kart dışarıdan bir alan adına bakıyorsa buraya yerel adresi yaz."
+              label={t("appForm.internalUrl")}
+              help={t("appForm.internalUrlHelp")}
             >
               <input
                 type="text"
                 value={values.internalUrl}
                 onChange={(e) => onChange({ internalUrl: e.target.value })}
-                placeholder="boşsa yukarıdaki adres kullanılır"
+                placeholder={t("appForm.internalUrlPlaceholder")}
                 className={`font-mono ${inputClass}`}
               />
             </Field>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Field
-                label="Container adı (isteğe bağlı)"
+                label={t("appForm.container")}
                 help={
                   containers.length > 0
-                    ? "Kartı bir Docker container'ına bağlar. Seçtiğinde boş olan ad ve adres alanları container'ın yayınlanmış portundan doldurulur."
-                    : "Kartı bir Docker container'ına bağlar. (Container listesi alınamadı; adı elle yaz.)"
+                    ? t("appForm.containerHelp")
+                    : t("appForm.containerHelpManual")
                 }
               >
                 {containers.length > 0 ? (
@@ -466,7 +470,7 @@ export function AppForm({
                     onChange={(e) => onChange(containerPatch(e.target.value, containers, values))}
                     className={`font-mono ${inputClass}`}
                   >
-                    <option value="">Bağlı değil</option>
+                    <option value="">{t("appForm.notLinked")}</option>
                     {containers.map((entry) => (
                       <option key={entry.name} value={entry.name}>
                         {entry.name}
@@ -475,7 +479,9 @@ export function AppForm({
                     ))}
                     {values.containerName &&
                       !containers.some((entry) => entry.name === values.containerName) && (
-                        <option value="__elle">{values.containerName} (listede yok)</option>
+                        <option value="__elle">
+                          {t("appForm.notInList", { name: values.containerName })}
+                        </option>
                       )}
                   </select>
                 ) : (
@@ -490,15 +496,15 @@ export function AppForm({
               </Field>
 
               <Field
-                label="Durum izleyicisi"
-                help="Servis Durumu ekranındaki bir monitöre bağlanır; kartta canlı durum noktası görünür."
+                label={t("appForm.monitor")}
+                help={t("appForm.monitorHelp")}
               >
                 <select
                   value={values.monitorId}
                   onChange={(e) => onChange({ monitorId: e.target.value })}
                   className={inputClass}
                 >
-                  <option value="">Bağlı değil</option>
+                  <option value="">{t("appForm.notLinked")}</option>
                   {monitors.map((monitor) => (
                     <option key={monitor.id} value={monitor.id}>
                       {monitor.name}
@@ -515,7 +521,7 @@ export function AppForm({
                 onChange={(e) => onChange({ openNewTab: e.target.checked })}
                 className="size-4 accent-[var(--brand)]"
               />
-              Yeni sekmede aç
+              {t("appForm.newTab")}
             </label>
 
             <label className="flex items-center gap-2 text-sm">
@@ -525,7 +531,7 @@ export function AppForm({
                 onChange={(e) => onChange({ enabled: e.target.checked })}
                 className="size-4 accent-[var(--brand)]"
               />
-              Etkin
+              {t("proxy.form.enabled")}
             </label>
 
             <div>
@@ -536,12 +542,10 @@ export function AppForm({
                   onChange={(e) => onChange({ showOnLogin: e.target.checked })}
                   className="size-4 accent-[var(--brand)]"
                 />
-                Karşılama sayfasında göster
+                {t("appForm.showOnLogin")}
               </label>
               <p className="mt-1 text-[11px] leading-snug text-subtle">
-                Oturum açmamış herkes bu kartın adını, logosunu ve adresini görür — panel
-                dışarıya açıksa internetteki herkes dahil. Kartın kendisi tıklanabilir olur;
-                hedef servisin kendi girişi devreye girer.
+                {t("appForm.showOnLoginHelp")}
               </p>
             </div>
           </div>
@@ -558,7 +562,7 @@ export function AppForm({
             disabled={busy}
             className="mr-auto flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:border-danger hover:text-danger disabled:opacity-50"
           >
-            <Trash2 className="size-4" /> Sil
+            <Trash2 className="size-4" /> {t("common.actions.delete")}
           </button>
         )}
         <button
@@ -566,14 +570,14 @@ export function AppForm({
           onClick={onCancel}
           className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
         >
-          Vazgeç
+          {t("common.actions.cancel")}
         </button>
         <button
           type="submit"
           disabled={busy}
           className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity disabled:opacity-50"
         >
-          {busy ? "Kaydediliyor…" : "Kaydet"}
+          {busy ? t("common.states.saving") : t("common.actions.save")}
         </button>
       </div>
     </form>

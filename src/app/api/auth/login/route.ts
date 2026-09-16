@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { attemptLogin } from "@/lib/auth/login";
 import { createSession, setSessionCookies } from "@/lib/auth/session";
 import { createChallenge, totpEnabled } from "@/lib/auth/twofactor";
@@ -10,7 +11,7 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const username = typeof body.username === "string" ? body.username.trim() : "";
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
   const remember = body.remember === true;
 
   if (!username || !password) {
-    return Response.json({ error: "Kullanıcı adı ve parola gerekli." }, { status: 400 });
+    return Response.json({ error: serverT("api.auth.credentialsRequired") }, { status: 400 });
   }
 
   const ip = clientIp(request);
@@ -28,15 +29,15 @@ export async function POST(request: Request) {
     if (result.reason === "locked") {
       const minutes = Math.ceil((result.retryAfterSeconds ?? 0) / 60);
       return Response.json(
-        { error: `Çok fazla hatalı deneme. ${minutes} dakika sonra tekrar deneyin.` },
+        { error: serverT("api.auth.locked", { minutes }) },
         { status: 429 },
       );
     }
     if (result.reason === "inactive") {
-      return Response.json({ error: "Bu hesap devre dışı." }, { status: 403 });
+      return Response.json({ error: serverT("api.auth.disabled") }, { status: 403 });
     }
     // Kullanıcı yok / parola yanlış ayrımı sızdırılmaz.
-    return Response.json({ error: "Kullanıcı adı veya parola hatalı." }, { status: 401 });
+    return Response.json({ error: serverT("api.auth.badCredentials") }, { status: 401 });
   }
 
   const userAgent = request.headers.get("user-agent") ?? "";

@@ -24,6 +24,7 @@ import {
 } from "yaml";
 
 import { formatPortSpec, parsePortSpec, type PortSpec } from "./ports.ts";
+import { serverT } from "../i18n/runtime.ts";
 
 export type ServiceConfig = {
   name: string;
@@ -47,12 +48,15 @@ export function parseCompose(text: string): ParsedCompose {
   try {
     doc = parseDocument(text, { keepSourceTokens: false });
   } catch (error) {
-    return { doc: null, error: error instanceof Error ? error.message : "YAML okunamadı" };
+    return {
+      doc: null,
+      error: error instanceof Error ? error.message : serverT("composeService.yamlUnreadable"),
+    };
   }
 
   // `parseDocument` fırlatmak yerine hataları toplar; ilki yeter.
   if (doc.errors.length > 0) return { doc: null, error: doc.errors[0].message };
-  if (!isMap(doc.contents)) return { doc: null, error: "Compose dosyası bir eşleme değil." };
+  if (!isMap(doc.contents)) return { doc: null, error: serverT("composeService.notMap") };
 
   return { doc, error: null };
 }
@@ -189,7 +193,7 @@ export function readAllServices(doc: Document): ServiceConfig[] {
  */
 export function setServicePorts(doc: Document, name: string, specs: PortSpec[]): void {
   const service = serviceMap(doc, name);
-  if (!service) throw new Error(`servis bulunamadı: ${name}`);
+  if (!service) throw new Error(serverT("composeService.serviceMissing", { name }));
 
   if (specs.length === 0) {
     service.delete("ports");
@@ -228,7 +232,7 @@ export function setServicePorts(doc: Document, name: string, specs: PortSpec[]):
 
 export function setServiceRestart(doc: Document, name: string, policy: string): void {
   const service = serviceMap(doc, name);
-  if (!service) throw new Error(`servis bulunamadı: ${name}`);
+  if (!service) throw new Error(serverT("composeService.serviceMissing", { name }));
 
   if (!policy) service.delete("restart");
   else service.set("restart", policy);
@@ -245,14 +249,11 @@ export function setServiceRestart(doc: Document, name: string, policy: string): 
  */
 export function setServiceNetworks(doc: Document, name: string, networks: string[]): void {
   const service = serviceMap(doc, name);
-  if (!service) throw new Error(`servis bulunamadı: ${name}`);
+  if (!service) throw new Error(serverT("composeService.serviceMissing", { name }));
 
   const mode = networkMode(doc, name);
   if (mode) {
-    throw new Error(
-      `${name} servisi network_mode: ${mode} kullanıyor; compose'da network_mode ile ` +
-        "networks bir arada kullanılamaz. Önce network_mode satırını kaldır.",
-    );
+    throw new Error(serverT("composeService.networkModeConflict", { name, mode: String(mode) }));
   }
 
   const existing = service.get("networks", true);
@@ -322,7 +323,7 @@ export function setServiceEnvironment(
   entries: { key: string; value: string }[],
 ): void {
   const service = serviceMap(doc, name);
-  if (!service) throw new Error(`servis bulunamadı: ${name}`);
+  if (!service) throw new Error(serverT("composeService.serviceMissing", { name }));
 
   const temiz = entries.filter((entry) => entry.key.trim().length > 0);
 

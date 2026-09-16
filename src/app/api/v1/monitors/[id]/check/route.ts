@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { auditAction } from "@/lib/apiv1/action";
 import { guardV1 } from "@/lib/apiv1/guard";
 import { apiError, apiOk } from "@/lib/apiv1/respond";
@@ -18,10 +19,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!guard.ok) return guard.response;
 
   const id = Number((await params).id);
-  if (!Number.isInteger(id)) return apiError("invalid_request", "geçersiz monitör kimliği");
+  if (!Number.isInteger(id)) return apiError("invalid_request", serverT("api.v1.invalidMonitorId"));
 
   const outcome = await runMonitorNow(id);
-  if (!outcome) return apiError("not_found", "monitör bulunamadı");
+  if (!outcome) return apiError("not_found", serverT("api.notFound.monitor"));
 
   const view = monitorViews(0).find((monitor) => monitor.id === id);
 
@@ -30,8 +31,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     targetType: "monitor",
     targetId: String(id),
     detail: outcome.result.ok
-      ? `başarılı · ${outcome.result.latencyMs ?? "?"} ms`
-      : `başarısız · ${outcome.result.error ?? "sebep yok"}`,
+      ? serverT("api.v1.checkOk", { ms: outcome.result.latencyMs ?? "?" })
+      : serverT("api.v1.checkFailed", { error: outcome.result.error ?? serverT("api.v1.noReason") }),
   });
 
   return apiOk({

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getDb } from "@/lib/db/client";
+import { serverT } from "@/lib/i18n/runtime";
 import {
   decryptSecret,
   encryptSecret,
@@ -28,7 +29,7 @@ const CHALLENGE_TTL_SECONDS = 300;
 const MAX_CHALLENGE_ATTEMPTS = 5;
 
 function issuer(): string {
-  return "Sunucu Paneli";
+  return "Sunucu Paneli"; // i18n-ignore — doğrulayıcı uygulamadaki sabit kayıt adı
 }
 
 type SecretRow = { totp_secret: string; totp_enabled: number; username: string };
@@ -83,9 +84,9 @@ export type ConfirmResult =
 
 export function confirmEnrollment(userId: number, code: string): ConfirmResult {
   const { secret } = readSecret(userId);
-  if (!secret) return { ok: false, error: "Önce QR kodu üretilmeli." };
+  if (!secret) return { ok: false, error: serverT("twoFactorLib.qrFirst") };
   if (!verifyTotp(secret, code)) {
-    return { ok: false, error: "Kod doğrulanamadı. Telefonundaki güncel kodu gir." };
+    return { ok: false, error: serverT("twoFactorLib.codeInvalid") };
   }
 
   const codes = generateRecoveryCodes();
@@ -195,22 +196,22 @@ export function consumeChallenge(token: string, code: string): ChallengeOutcome 
     .prepare("SELECT user_id, attempts, expires_at FROM login_challenges WHERE token_hash = ?")
     .get(hash) as { user_id: number; attempts: number; expires_at: number } | undefined;
 
-  if (!row) return { ok: false, error: "Doğrulama süresi doldu. Baştan giriş yap.", expired: true };
+  if (!row) return { ok: false, error: serverT("twoFactorLib.expired"), expired: true };
 
   if (Number(row.expires_at) < Math.floor(Date.now() / 1000)) {
     db.prepare("DELETE FROM login_challenges WHERE token_hash = ?").run(hash);
-    return { ok: false, error: "Doğrulama süresi doldu. Baştan giriş yap.", expired: true };
+    return { ok: false, error: serverT("twoFactorLib.expired"), expired: true };
   }
 
   if (Number(row.attempts) >= MAX_CHALLENGE_ATTEMPTS) {
     db.prepare("DELETE FROM login_challenges WHERE token_hash = ?").run(hash);
-    return { ok: false, error: "Çok fazla hatalı kod. Baştan giriş yap.", expired: true };
+    return { ok: false, error: serverT("twoFactorLib.tooMany"), expired: true };
   }
 
   const verified = verifySecondFactor(Number(row.user_id), code);
   if (!verified.ok) {
     db.prepare("UPDATE login_challenges SET attempts = attempts + 1 WHERE token_hash = ?").run(hash);
-    return { ok: false, error: "Kod doğrulanamadı." };
+    return { ok: false, error: serverT("auth.twoFactor.failed") };
   }
 
   db.prepare("DELETE FROM login_challenges WHERE token_hash = ?").run(hash);

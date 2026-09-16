@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/auth/guard";
 import { hasPermission } from "@/lib/auth/session";
 import { resolveAll, seededKeys } from "@/lib/settings";
 import { defsOfGroup, findSettingGroup, sectionsOfGroup } from "@/settings.schema";
+import { availableLocales } from "@/locales";
 import { SettingsScreen } from "../SettingsScreen";
 import { SettingsTabs } from "../SettingsTabs";
 
@@ -49,6 +50,7 @@ export default async function SettingsGroupPage({
         initialValues={resolveAll()}
         canEdit={hasPermission(session.user, "settings.edit")}
         initialQuery={(await searchParams).q ?? ""}
+        locales={availableLocales()}
       />
     </div>
   );

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { AlertTriangle, Copy, KeyRound, Plus, Trash2 } from "lucide-react";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
+import { useFormat, useT } from "@/lib/i18n/client";
+import type { MessageKey } from "@/lib/i18n/translate";
 
 /**
  * T12 — kendi API anahtarların.
@@ -13,14 +15,14 @@ import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
  */
 
 /** Seçildiğinde görünür uyarı çıkaran izinler — sunucuyu etkileyebilenler. */
-const RISKY: Record<string, string> = {
-  "docker.action": "Container başlatma/durdurma yetkisi verir.",
-  "host.power": "Sunucuyu yeniden başlatabilir veya kapatabilir.",
-  "host.service": "Sistem servislerini durdurabilir.",
-  "users.manage": "Kullanıcı ve rolleri değiştirebilir.",
-  "settings.edit": "Panel ayarlarını değiştirebilir.",
-  "db.write": "Veritabanlarında değişiklik yapabilir.",
-  "files.write": "Dosya sisteminde değişiklik yapabilir.",
+const RISKY: Record<string, MessageKey> = {
+  "docker.action": "account.tokens.risky.docker.action",
+  "host.power": "account.tokens.risky.host.power",
+  "host.service": "account.tokens.risky.host.service",
+  "users.manage": "account.tokens.risky.users.manage",
+  "settings.edit": "account.tokens.risky.settings.edit",
+  "db.write": "account.tokens.risky.db.write",
+  "files.write": "account.tokens.risky.files.write",
 };
 
 type TokenRow = {
@@ -50,10 +52,7 @@ function readCsrfToken(): string {
   return match ? decodeURIComponent(match[1]) : "";
 }
 
-function formatDate(seconds: number | null): string {
-  if (seconds === null) return "—";
-  return new Date(seconds * 1000).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" });
-}
+const SHORT: Intl.DateTimeFormatOptions = { dateStyle: "short", timeStyle: "short" };
 
 /**
  * İlk veri SUNUCUDAN prop olarak geliyor, effect ile çekilmiyor.
@@ -64,6 +63,10 @@ function formatDate(seconds: number | null): string {
  * SONRA gerekiyor ve o da olay işleyicisinde, effect'te değil.
  */
 export function ApiTokenSection({ apiEnabled, initial }: { apiEnabled: boolean; initial: ApiTokenPayload }) {
+  const t = useT();
+  const f = useFormat();
+  const formatDate = (seconds: number | null) =>
+    seconds === null ? "—" : f.dateTime(seconds * 1000, SHORT);
   const [data, setData] = useState<ApiTokenPayload>(initial);
   const [showAll, setShowAll] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -77,7 +80,7 @@ export function ApiTokenSection({ apiEnabled, initial }: { apiEnabled: boolean; 
   async function load(all = showAll) {
     const response = await fetch(`/api/tokens${all ? "?all=1" : ""}`);
     if (!response.ok) {
-      setError("Anahtarlar yüklenemedi.");
+      setError(t("account.tokens.loadFailed"));
       return;
     }
     setData((await response.json()) as ApiTokenPayload);
@@ -95,7 +98,7 @@ export function ApiTokenSection({ apiEnabled, initial }: { apiEnabled: boolean; 
     setBusy(false);
 
     if (!response.ok) {
-      setError(String(payload.error ?? "Anahtar üretilemedi."));
+      setError(String(payload.error ?? t("account.tokens.createFailed")));
       return;
     }
 
@@ -107,7 +110,7 @@ export function ApiTokenSection({ apiEnabled, initial }: { apiEnabled: boolean; 
   }
 
   async function revoke(id: number, label: string) {
-    if (!window.confirm(`"${label}" anahtarı iptal edilsin mi? Bu anahtarla yapılan çağrılar hemen durur.`)) {
+    if (!window.confirm(t("account.tokens.confirmRevoke", { name: label }))) {
       return;
     }
     setBusy(true);
@@ -119,7 +122,7 @@ export function ApiTokenSection({ apiEnabled, initial }: { apiEnabled: boolean; 
     setBusy(false);
     if (!response.ok) {
       const payload = (await response.json()) as Record<string, unknown>;
-      setError(String(payload.error ?? "İptal edilemedi."));
+      setError(String(payload.error ?? t("account.tokens.revokeFailed")));
       return;
     }
     await load();
@@ -138,34 +141,30 @@ export function ApiTokenSection({ apiEnabled, initial }: { apiEnabled: boolean; 
     <section className="rounded-lg border border-line bg-surface p-5">
       <h2 className="flex items-center gap-2 text-sm font-semibold">
         <KeyRound className="size-4 text-subtle" aria-hidden />
-        API anahtarları
+        {t("account.tokens.title")}
         <span className="text-xs font-normal text-subtle">
-          {data.activeCount} / {data.maxTokens} aktif
+          {t("account.tokens.active", { count: data.activeCount, max: data.maxTokens })}
         </span>
       </h2>
 
       <p className="mt-1 text-xs leading-snug text-subtle">
-        Script, Grafana, n8n gibi tarayıcı dışı istemcilerin paneli çağırması için.
-        Anahtar senin adına konuşur ve yalnızca burada seçtiğin izinleri taşır — rolün
-        daraltılırsa anahtarın da anında daralır.
+        {t("account.tokens.intro")}
       </p>
 
       {!apiEnabled && (
         <p className="mt-3 flex items-start gap-2 rounded-md bg-warn/10 px-3 py-2 text-xs text-warn">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
           <span>
-            Dış API kapalı — üretilen anahtarlar çalışmaz. Ayarlar → Dış API bölümünden
-            açılabilir.
+            {t("account.tokens.apiDisabled")}
           </span>
         </p>
       )}
 
       {fresh && (
         <div className="mt-4 rounded-md border border-brand/40 bg-brand/5 p-4">
-          <p className="text-sm font-medium">Yeni anahtarın</p>
+          <p className="text-sm font-medium">{t("account.tokens.newKey")}</p>
           <p className="mt-1 text-xs text-subtle">
-            Bu değer bir daha gösterilmeyecek — panelde yalnızca özeti saklanıyor.
-            Kaybedersen yenisini üretmen gerekir.
+            {t("account.tokens.shownOnce")}
           </p>
           <code className="mt-3 block select-all break-all rounded bg-canvas px-2 py-1.5 font-mono text-xs">
             {fresh}
@@ -176,14 +175,14 @@ export function ApiTokenSection({ apiEnabled, initial }: { apiEnabled: boolean; 
               onClick={() => void navigator.clipboard?.writeText(fresh)}
               className="flex items-center gap-1.5 rounded-md border border-line bg-surface px-3 py-1.5 text-sm transition-colors hover:border-brand"
             >
-              <Copy className="size-4" /> Kopyala
+              <Copy className="size-4" /> {t("common.actions.copy")}
             </button>
             <button
               type="button"
               onClick={() => setFresh(null)}
               className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
             >
-              Kaydettim
+              {t("account.saved")}
             </button>
           </div>
         </div>
@@ -195,11 +194,11 @@ export function ApiTokenSection({ apiEnabled, initial }: { apiEnabled: boolean; 
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="Anahtar adı (ör. grafana)"
+              placeholder={t("account.tokens.namePlaceholder")}
               className="w-full max-w-64 rounded-md border border-line bg-canvas px-3 py-1.5 text-sm outline-none focus:border-brand"
             />
             <label className="flex items-center gap-1.5 text-sm text-subtle">
-              Ömür
+              {t("account.tokens.lifetime")}
               <input
                 type="number"
                 min={0}
@@ -207,13 +206,13 @@ export function ApiTokenSection({ apiEnabled, initial }: { apiEnabled: boolean; 
                 onChange={(event) => setTtl(Number(event.target.value))}
                 className="w-20 rounded-md border border-line bg-canvas px-2 py-1.5 text-sm outline-none focus:border-brand"
               />
-              gün
+              {t("account.tokens.days")}
             </label>
-            <span className="text-xs text-subtle">(0 = süresiz)</span>
+            <span className="text-xs text-subtle">{t("account.tokens.noExpiry")}</span>
           </div>
 
           <div>
-            <p className="text-xs font-medium">İzinler</p>
+            <p className="text-xs font-medium">{t("account.tokens.permissions")}</p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {data.grantablePermissions.map((key) => (
                 <button
@@ -235,12 +234,12 @@ export function ApiTokenSection({ apiEnabled, initial }: { apiEnabled: boolean; 
           {riskySelected.length > 0 && (
             <div className="rounded-md bg-warn/10 px-3 py-2 text-xs text-warn">
               <p className="flex items-center gap-1.5 font-medium">
-                <AlertTriangle className="size-3.5" aria-hidden /> Bu anahtar sunucuyu etkileyebilir
+                <AlertTriangle className="size-3.5" aria-hidden /> {t("account.tokens.riskyTitle")}
               </p>
               <ul className="mt-1 space-y-0.5">
                 {riskySelected.map((key) => (
                   <li key={key}>
-                    <code className="font-mono">{key}</code> — {RISKY[key]}
+                    <code className="font-mono">{key}</code> — {t(RISKY[key])}
                   </li>
                 ))}
               </ul>
@@ -254,14 +253,14 @@ export function ApiTokenSection({ apiEnabled, initial }: { apiEnabled: boolean; 
               disabled={busy || !name || selected.length === 0}
               className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              Üret
+              {t("account.tokens.generate")}
             </button>
             <button
               type="button"
               onClick={() => setCreating(false)}
               className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
             >
-              Vazgeç
+              {t("common.actions.cancel")}
             </button>
           </div>
         </div>
@@ -273,10 +272,10 @@ export function ApiTokenSection({ apiEnabled, initial }: { apiEnabled: boolean; 
             type="button"
             onClick={() => setCreating(true)}
             disabled={atLimit}
-            title={atLimit ? "Aktif anahtar sınırına ulaştın" : undefined}
+            title={atLimit ? t("account.tokens.atLimit") : undefined}
             className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            <Plus className="size-4" /> Yeni anahtar
+            <Plus className="size-4" /> {t("account.tokens.new")}
           </button>
           {data.canSeeAll && (
             <label className="flex items-center gap-1.5 text-xs text-subtle">
@@ -288,7 +287,7 @@ export function ApiTokenSection({ apiEnabled, initial }: { apiEnabled: boolean; 
                   void load(event.target.checked);
                 }}
               />
-              Tüm kullanıcıların anahtarları
+              {t("account.tokens.showAll")}
             </label>
           )}
         </div>
@@ -299,12 +298,12 @@ export function ApiTokenSection({ apiEnabled, initial }: { apiEnabled: boolean; 
           <table className="w-full text-left text-xs">
             <thead className="text-subtle">
               <tr>
-                <th className="pb-1.5 pr-3 font-medium">Ad</th>
-                <th className="pb-1.5 pr-3 font-medium">Önek</th>
-                {showAll && <th className="pb-1.5 pr-3 font-medium">Sahip</th>}
-                <th className="pb-1.5 pr-3 font-medium">İzinler</th>
-                <th className="pb-1.5 pr-3 font-medium">Son kullanım</th>
-                <th className="pb-1.5 pr-3 font-medium">Bitiş</th>
+                <th className="pb-1.5 pr-3 font-medium">{t("users.roles.name")}</th>
+                <th className="pb-1.5 pr-3 font-medium">{t("account.tokens.col.prefix")}</th>
+                {showAll && <th className="pb-1.5 pr-3 font-medium">{t("account.tokens.col.owner")}</th>}
+                <th className="pb-1.5 pr-3 font-medium">{t("account.tokens.permissions")}</th>
+                <th className="pb-1.5 pr-3 font-medium">{t("account.tokens.col.lastUsed")}</th>
+                <th className="pb-1.5 pr-3 font-medium">{t("account.tokens.col.expires")}</th>
                 <th className="pb-1.5" />
               </tr>
             </thead>
@@ -327,7 +326,7 @@ export function ApiTokenSection({ apiEnabled, initial }: { apiEnabled: boolean; 
                     )}
                   </td>
                   <td className="py-1.5 pr-3">
-                    {token.revokedAt !== null ? "iptal edildi" : formatDate(token.expiresAt)}
+                    {token.revokedAt !== null ? t("account.tokens.revoked") : formatDate(token.expiresAt)}
                   </td>
                   <td className="py-1.5 text-right">
                     {token.revokedAt === null && (
@@ -335,7 +334,7 @@ export function ApiTokenSection({ apiEnabled, initial }: { apiEnabled: boolean; 
                         type="button"
                         onClick={() => void revoke(token.id, token.name)}
                         disabled={busy}
-                        aria-label={`${token.name} anahtarını iptal et`}
+                        aria-label={t("account.tokens.revokeAria", { name: token.name })}
                         className="text-subtle transition-colors hover:text-danger disabled:opacity-50"
                       >
                         <Trash2 className="size-4" />
@@ -350,7 +349,7 @@ export function ApiTokenSection({ apiEnabled, initial }: { apiEnabled: boolean; 
       )}
 
       {data.tokens.length === 0 && !creating && (
-        <p className="mt-4 text-xs text-subtle">Henüz anahtar üretmedin.</p>
+        <p className="mt-4 text-xs text-subtle">{t("account.tokens.empty")}</p>
       )}
 
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}

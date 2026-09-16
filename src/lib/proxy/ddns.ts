@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { decryptSecret, encryptSecret, type EncryptedValue } from "@/lib/crypto";
 import { getDb } from "@/lib/db/client";
@@ -146,11 +147,11 @@ export function deleteDdnsRecord(id: number): void {
 export async function publicIp(): Promise<string> {
   const url = getString("proxy.public_ip_url").trim();
   const response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
-  if (!response.ok) throw new Error(`IP servisi HTTP ${response.status}`);
+  if (!response.ok) throw new Error(serverT("ddnsLib.ipHttp", { status: response.status }));
 
   const text = (await response.text()).trim();
   if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(text)) {
-    throw new Error(`IP servisi beklenmedik yanıt verdi: ${text.slice(0, 60)}`);
+    throw new Error(serverT("ddnsLib.ipUnexpected", { text: text.slice(0, 60) }));
   }
   return text;
 }
@@ -215,7 +216,9 @@ async function updateDuckDns(record: DdnsRecord, token: string, ip: string): Pro
 
   const text = (await response.text()).trim();
   // DuckDNS HTTP 200 ile "KO" döndürebiliyor; durum koduna bakmak yetmez.
-  if (text !== "OK") throw new Error(`DuckDNS yanıtı: ${text || "(boş)"}`);
+  if (text !== "OK") {
+    throw new Error(serverT("ddnsLib.duckResponse", { text: text || serverT("ddnsLib.empty") }));
+  }
 }
 
 export type SyncResult = { updated: string[]; unchanged: string[]; failed: string[] };
@@ -230,7 +233,7 @@ export async function syncDdns(): Promise<SyncResult> {
     ip = await publicIp();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { updated: [], unchanged: [], failed: [`genel IP okunamadı: ${message}`] };
+    return { updated: [], unchanged: [], failed: [serverT("ddnsLib.publicIp", { message })] };
   }
 
   const db = getDb();
@@ -249,8 +252,8 @@ export async function syncDdns(): Promise<SyncResult> {
     if (token === null || token === "") {
       const message =
         token === null
-          ? "token çözülemiyor (MASTER_KEY değişmiş olabilir)"
-          : "token girilmemiş";
+          ? serverT("ddnsLib.tokenUnreadable")
+          : serverT("ddnsLib.tokenMissing");
       db.prepare("UPDATE ddns_records SET last_error = ? WHERE id = ?").run(message, record.id);
       result.failed.push(`${record.hostname}: ${message}`);
       continue;

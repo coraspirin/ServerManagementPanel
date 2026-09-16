@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { publishEvent } from "@/lib/integration/publish";
 import { dispatch } from "@/lib/notify";
@@ -33,7 +34,9 @@ export async function announce(input: {
   const failures = Object.entries(result.failed);
   const failureNote =
     failures.length > 0
-      ? `\nGönderilemedi: ${failures.map(([key, value]) => `${key} (${value})`).join(", ")}`
+      ? serverT("alertsLib.sendFailed", {
+          list: failures.map(([key, value]) => `${key} (${value})`).join(", "),
+        })
       : "";
 
   const ts = Math.floor(Date.now() / 1000);
@@ -48,7 +51,7 @@ export async function announce(input: {
     notifiedChannels: result.sent,
     // Hiçbir kanala gitmediyse sebebi kaydediliyor; olay listesinde "neden
     // telefonuma düşmedi" sorusunun cevabı görünür olsun.
-    suppressedReason: result.sent.length === 0 ? (result.skipped.join(",") || "kanal yok") : null,
+    suppressedReason: result.sent.length === 0 ? (result.skipped.join(",") || serverT("alerts.noChannel")) : null,
   });
 
   // Olay kaydedildikten SONRA yayılıyor.

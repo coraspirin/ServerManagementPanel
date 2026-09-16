@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { DatabaseSync } from "node:sqlite";
 import { accessSync, constants } from "node:fs";
@@ -79,7 +80,7 @@ async function runElevated(
   writable: boolean,
 ): Promise<RawResult> {
   const image = await panelImage();
-  if (!image) throw new Error("Panel imajı belirlenemedi; bu veritabanı okunamıyor.");
+  if (!image) throw new Error(serverT("dbDriver.noImage"));
 
   const result = await getDockerProvider().runThrowaway({
     image,
@@ -99,7 +100,7 @@ async function runElevated(
   });
 
   if (result.exitCode !== 0) {
-    throw new Error(result.output.slice(0, 400) || "sorgu çalıştırılamadı");
+    throw new Error(result.output.slice(0, 400) || serverT("dbDriver.queryFailed"));
   }
 
   // stdout: Node uyarilari stderr'e gidiyor, JSON burada.
@@ -108,7 +109,7 @@ async function runElevated(
     .map((entry) => entry.trim())
     .reverse()
     .find((entry) => entry.startsWith("{"));
-  if (!line) throw new Error("sorgu çıktısı ayrıştırılamadı");
+  if (!line) throw new Error(serverT("dbDriver.parseFailed"));
 
   const parsed = JSON.parse(line) as
     | { ok: true; rows: Record<string, unknown>[]; changes: number | null }

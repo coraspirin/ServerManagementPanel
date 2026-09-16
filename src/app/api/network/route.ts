@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { ouiStatus, refreshOui } from "@/lib/network/oui";
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const action = String(body.action ?? "");
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
       userId: guard.session.user.id,
       username: guard.session.user.username,
       action: "network.scan",
-      detail: `${result.subnet || "alt ağ yok"} · ${result.alive} cihaz · ${result.newDevices.length} yeni`,
+      detail: serverT("api.network.scanSummary", { subnet: result.subnet || serverT("api.network.noSubnet"), alive: result.alive, fresh: result.newDevices.length }),
       result: "ok",
     });
 
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, ...(await networkPayload()) });
   }
 
-  return Response.json({ error: "bilinmeyen işlem" }, { status: 400 });
+  return Response.json({ error: serverT("api.unknownAction") }, { status: 400 });
 }
 
 export async function DELETE(request: Request) {

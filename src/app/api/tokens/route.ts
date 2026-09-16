@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { activeTokenCount, createApiToken, listApiTokens } from "@/lib/auth/apitoken";
@@ -58,19 +59,19 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as typeof body;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const name = String(body.name ?? "").trim();
-  if (!name) return Response.json({ error: "anahtara bir ad verin" }, { status: 400 });
+  if (!name) return Response.json({ error: serverT("api.tokens.nameRequired") }, { status: 400 });
   if (name.length > 80) {
-    return Response.json({ error: "ad en fazla 80 karakter olabilir" }, { status: 400 });
+    return Response.json({ error: serverT("api.tokens.nameTooLong") }, { status: 400 });
   }
 
   const max = getNumber("api.max_tokens_per_user");
   if (activeTokenCount(user.id) >= max) {
     return Response.json(
-      { error: `En fazla ${max} aktif API anahtarı tutabilirsiniz; kullanmadıklarınızı iptal edin.` },
+      { error: serverT("api.tokens.limit", { max }) },
       { status: 400 },
     );
   }
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
   );
 
   if (permissions.length === 0) {
-    return Response.json({ error: "en az bir izin seçin" }, { status: 400 });
+    return Response.json({ error: serverT("api.tokens.permissionRequired") }, { status: 400 });
   }
 
   const rawTtl = Number(body.expiresInDays ?? getNumber("api.token_default_ttl_days"));
@@ -113,7 +114,7 @@ export async function POST(request: Request) {
     action: "api.token_create",
     targetType: "api_token",
     targetId: String(created.id),
-    detail: `${tokenAuditTag(name, prefix)} ${permissions.join(", ")} · ${expiresInDays === 0 ? "süresiz" : expiresInDays + " gün"}`,
+    detail: `${tokenAuditTag(name, prefix)} ${permissions.join(", ")} · ${expiresInDays === 0 ? serverT("api.noExpiry") : serverT("api.days", { count: expiresInDays })}`,
     ip: clientIp(request),
     result: "ok",
   });

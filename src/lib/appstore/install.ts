@@ -6,6 +6,7 @@ import { audit } from "@/lib/auth/audit";
 import { getDb } from "@/lib/db/client";
 import { callHelper } from "@/lib/host/helper";
 import { panelImage } from "@/lib/host/self";
+import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 import { getString } from "@/lib/settings";
 
@@ -121,7 +122,7 @@ export function listStacks(): InstalledStack[] {
  * söylemesi olurdu.
  */
 function describeTemplate(templateId: string): string {
-  if (templateId === CUSTOM_TEMPLATE_ID) return "Yüklenen compose";
+  if (templateId === CUSTOM_TEMPLATE_ID) return serverT("stacks.uploadedCompose");
   return templateId;
 }
 
@@ -158,26 +159,19 @@ export type InstallOutcome = {
  * kullanıcıya hiçbir şey anlatmıyor.
  */
 function explainHelper(error: string, directory: string): string {
-  if (error.includes("desene uymuyor")) {
-    return (
-      `Host, "${directory}" dizininde compose çalıştırmaya izin vermiyor. ` +
-      "İzin listesi host tarafında ve panel onu değiştiremez (bilinçli bir sınır). " +
-      "Ya yığın kök dizinini izinli bir yola çevir (Ayarlar → Dosyalar → Yığın kök dizini), " +
-      "ya da host'ta root olarak /etc/panel-helper/allow.conf dosyasına şu satırları ekleyip " +
-      "`systemctl restart panel-helper` çalıştır:\n\n" +
-      allowLinesFor(stacksRoot())
-    );
+  // Eşleşen parçalar host-helper'ın (Python) sabit hata metinleri — çeviri değil protokol.
+  if (error.includes("desene uymuyor")) { // i18n-ignore
+    return serverT("stacks.helper.patternDenied", {
+      directory,
+      lines: allowLinesFor(stacksRoot()),
+    });
   }
-  if (error.includes("izinli değil")) {
-    const action = error.split(":").pop()?.trim() ?? "bu eylem";
-    return (
-      `Host bu eylemi kapalı tutuyor: ${action}. ` +
-      "Faz 1'de bilerek dışarıda bırakılmış olabilir; açmak için host'ta root olarak " +
-      "/etc/panel-helper/allow.conf dosyasına satır eklenmeli."
-    );
+  if (error.includes("izinli değil")) { // i18n-ignore
+    const action = error.split(":").pop()?.trim() ?? serverT("stacks.helper.thisAction");
+    return serverT("stacks.helper.actionDisabled", { action });
   }
-  if (error.includes("bilinmeyen eylem")) {
-    return "Host'taki helper bu eylemi tanımıyor — helper eski sürümde kalmış olabilir.";
+  if (error.includes("bilinmeyen eylem")) { // i18n-ignore
+    return serverT("stacks.helper.unknownAction");
   }
   return error;
 }
@@ -194,7 +188,7 @@ async function writeCompose(
   compose: string,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   const image = await panelImage();
-  if (!image) return { ok: false, message: "Panel imajı belirlenemedi." };
+  if (!image) return { ok: false, message: serverT("stacks.noPanelImage") };
 
   const result = await getDockerProvider().runThrowaway({
     image,
@@ -223,21 +217,16 @@ async function writeCompose(
   if (result.output.includes("EEXIST")) {
     return {
       ok: false,
-      message:
-        `${directory}/docker-compose.yml zaten var. Panel mevcut bir dosyanın üzerine ` +
-        "yazmaz — başka bir ad seç ya da dizini elle temizle.",
+      message: serverT("stacks.exists", { directory }),
     };
   }
   if (result.output.includes("EACCES") || result.output.includes("EPERM")) {
     return {
       ok: false,
-      message:
-        `${directory} altına yazılamadı (izin reddedildi). Ayarlar → Dosyalar → ` +
-        `"Kurulan dosyaların sahibi" şu an ${fileOwner()}; bu kullanıcının yığın kök ` +
-        "dizinine yazma yetkisi yok.",
+      message: serverT("stacks.writeDenied", { directory, owner: fileOwner() }),
     };
   }
-  return { ok: false, message: result.output.slice(0, 400) || "compose dosyası yazılamadı" };
+  return { ok: false, message: result.output.slice(0, 400) || serverT("stacks.writeFailed") };
 }
 
 /**
@@ -270,13 +259,13 @@ export async function installComposeStack(
   const compose = input.compose.replace(/\r\n/g, "\n");
 
   if (!NAME_RE.test(name)) {
-    return { ok: false, message: "Yığın adı küçük harf, rakam ve tire içerebilir (2-31 karakter)." };
+    return { ok: false, message: serverT("stacks.invalidName") };
   }
   if (compose.trim().length === 0) {
-    return { ok: false, message: "Compose içeriği boş." };
+    return { ok: false, message: serverT("stacks.emptyCompose") };
   }
   if (Buffer.byteLength(compose, "utf8") > MAX_COMPOSE_BYTES) {
-    return { ok: false, message: "Compose dosyası çok büyük (üst sınır 256 KB)." };
+    return { ok: false, message: serverT("stacks.tooLarge") };
   }
 
   /*
@@ -292,10 +281,8 @@ export async function installComposeStack(
     return {
       ok: false,
       message: clash.lastError
-        ? `"${name}" başarısız bir kurulumdan kalmış (${clash.lastError.slice(0, 120)}). ` +
-          'Kurulu yığınlar listesinden "Tekrar dene" ile aynı dizini yeniden başlatabilir ' +
-          "ya da kaydı kaldırıp baştan kurabilirsin."
-        : `"${name}" adında bir yığın zaten kurulu.`,
+        ? serverT("stacks.failedLeftover", { name, error: clash.lastError.slice(0, 120) })
+        : serverT("stacks.alreadyInstalled", { name }),
     };
   }
 
@@ -320,7 +307,7 @@ export async function installComposeStack(
     // Kayıt YİNE DE açılıyor. Dosya diskte duruyor ve kullanıcıya "listeden
     // Tekrar dene" deniyor — listede olmayan bir şey için bunu söylemek,
     // panelin yapmadığı bir şeyi vaat etmesi olurdu.
-    record("geçersiz compose", detail);
+    record(serverT("stacks.action.invalid"), detail);
 
     audit({
       userId: actor.userId,
@@ -328,16 +315,13 @@ export async function installComposeStack(
       action: "appstore.install",
       targetType: "stack",
       targetId: name,
-      detail: "compose doğrulaması başarısız, başlatılmadı",
+      detail: serverT("stacks.audit.validationFailed"),
       result: "error",
     });
 
     return {
       ok: false,
-      message:
-        `Compose dosyası geçersiz, başlatılmadı. Dosya ${directory} altında duruyor — ` +
-        'düzeltip listeden "Tekrar dene" diyebilirsin.\n\n' +
-        detail,
+      message: serverT("stacks.invalidCompose", { directory, detail }),
     };
   }
   // `exitCode` yoksa helper reddetmiştir; doğrulamayı ATLAYIP `up`'a devam
@@ -350,7 +334,10 @@ export async function installComposeStack(
   const up = await callHelper("compose.up", { dir: directory }, actor);
   const ok = up.ok && (up.exitCode ?? 1) === 0;
 
-  record(ok ? "kuruldu" : "kurulum hatası", ok ? "" : (up.stderr ?? up.error ?? ""));
+  record(
+    ok ? serverT("stacks.action.installed") : serverT("stacks.action.installError"),
+    ok ? "" : (up.stderr ?? up.error ?? ""),
+  );
 
   audit({
     userId: actor.userId,
@@ -358,16 +345,20 @@ export async function installComposeStack(
     action: "appstore.install",
     targetType: "stack",
     targetId: name,
-    detail: ok ? `kendi compose'u → ${directory}` : (up.error ?? "compose up başarısız"),
+    detail: ok
+      ? serverT("stacks.audit.ownCompose", { directory })
+      : (up.error ?? serverT("stacks.audit.upFailed")),
     result: ok ? "ok" : "error",
   });
 
   return {
     ok,
     message: ok
-      ? `${name} kuruldu (${directory}).`
-      : `compose dosyası ${directory} altına YAZILDI ama başlatılamadı. ` +
-        explainHelper(up.error ?? up.stderr ?? "", directory),
+      ? serverT("stacks.installed", { name, directory })
+      : serverT("stacks.writtenNotStarted", {
+          directory,
+          reason: explainHelper(up.error ?? up.stderr ?? "", directory),
+        }),
     output: (up.stdout ?? "") + (up.stderr ?? ""),
     warnings,
   };
@@ -381,7 +372,7 @@ export async function stackAction(
   actor: { username: string; userId: number },
 ): Promise<InstallOutcome> {
   const stack = listStacks().find((entry) => entry.name === name);
-  if (!stack) return { ok: false, message: "Yığın bulunamadı." };
+  if (!stack) return { ok: false, message: serverT("stacks.notFound") };
 
   const helperAction = (
     { up: "compose.up", down: "compose.down", restart: "compose.restart", pull: "compose.pull" } as const
@@ -400,15 +391,18 @@ export async function stackAction(
     action: `appstore.${action}`,
     targetType: "stack",
     targetId: name,
-    detail: ok ? "ok" : (response.error ?? "başarısız"),
+    detail: ok ? "ok" : (response.error ?? serverT("stacks.audit.failed")),
     result: ok ? "ok" : "error",
   });
 
   return {
     ok,
     message: ok
-      ? `${name}: ${action} tamamlandı.`
-      : explainHelper(response.error ?? response.stderr ?? "İşlem başarısız.", stack.directory),
+      ? serverT("stacks.actionDone", { name, action })
+      : explainHelper(
+          response.error ?? response.stderr ?? serverT("common.errors.actionFailed"),
+          stack.directory,
+        ),
     output: (response.stdout ?? "") + (response.stderr ?? ""),
   };
 }
@@ -425,7 +419,7 @@ export async function removeStack(
   actor: { username: string; userId: number },
 ): Promise<InstallOutcome> {
   const stack = listStacks().find((entry) => entry.name === name);
-  if (!stack) return { ok: false, message: "Yığın bulunamadı." };
+  if (!stack) return { ok: false, message: serverT("stacks.notFound") };
 
   const response = await callHelper("compose.down", { dir: stack.directory }, actor);
   const stopped = response.ok && (response.exitCode ?? 1) === 0;
@@ -442,19 +436,20 @@ export async function removeStack(
     targetType: "stack",
     targetId: name,
     detail: stopped
-      ? `container'lar durduruldu, ${stack.directory} diskte kaldı`
-      : `KAYIT SİLİNDİ ama container'lar durdurulamadı: ${response.error ?? "?"}`,
+      ? serverT("stacks.audit.removed", { directory: stack.directory })
+      : serverT("stacks.audit.removedNotStopped", { error: response.error ?? "?" }),
     result: stopped ? "ok" : "error",
   });
 
   return {
     ok: true,
     message: stopped
-      ? `${name} kaldırıldı. Container'lar durduruldu ama ${stack.directory} ve içindeki veri ` +
-        "SİLİNMEDİ — silmek istersen dosya yöneticisinden kaldır."
-      : `${name} panel listesinden çıkarıldı ama CONTAINER'LAR HÂLÂ ÇALIŞIYOR OLABİLİR: ` +
-        explainHelper(response.error ?? "", stack.directory) +
-        ` Durdurmak için host'ta: docker compose --project-directory ${stack.directory} down`,
+      ? serverT("stacks.removed", { name, directory: stack.directory })
+      : serverT("stacks.removedStillRunning", {
+          name,
+          directory: stack.directory,
+          reason: explainHelper(response.error ?? "", stack.directory),
+        }),
     output: (response.stdout ?? "") + (response.stderr ?? ""),
   };
 }

@@ -21,6 +21,7 @@ Designed at home-server (homelab) scale: a single container, embedded SQLite, no
 - [Updating and rolling back](#updating-and-rolling-back)
 - [Docker labels](#docker-labels)
 - [External API, Prometheus, and MQTT](#external-api-prometheus-and-mqtt)
+- [Languages](#languages)
 - [Development](#development)
 - [Project structure](#project-structure)
 - [Known limitations](#known-limitations)
@@ -442,6 +443,45 @@ Available fields: `panel.name`, `.url`, `.port`, `.scheme`, `.path`, `.descripti
 - **`/api/v1`:** a versioned HTTP API, authenticated with `Authorization: Bearer`, for calling from your own scripts, Home Assistant, or n8n. **Disabled by default;** every endpoint returns `404` while disabled. Enable it under **Settings → External API**, and generate a key under **My Account → API Keys**. A key is tied to a user and carries a subset of that user's permissions. Details are in [`docs/API.md`](docs/API.md), with the machine-readable schema in [`docs/openapi.yaml`](docs/openapi.yaml).
 - **Prometheus:** the `/metrics` endpoint exposes system metrics and, optionally, container metrics (**Settings → External Integration**).
 - **MQTT:** metrics and events can be published to an MQTT broker. Home Assistant MQTT Discovery is supported; sensors appear automatically in Home Assistant.
+
+---
+
+## Languages
+
+The interface language is chosen under **Settings → General → Language**. The setting applies to the whole installation, and the page reloads when it changes. Turkish and English are included.
+
+Each language is a single JSON file under `src/locales/`. Keys are flat and contextual, so they say where the text is used:
+
+```json
+{
+  "_meta.name": "English",
+  "_meta.intl": "en-US",
+  "nav.items.host": "Host",
+  "nav.items.uptime": "Service Status",
+  "common.duration.day.one": "{count} day",
+  "common.duration.day.other": "{count} days"
+}
+```
+
+- **Turkish (`tr.json`) is the source language.** Text with no translation in a language is shown in Turkish, never as a raw key.
+- Placeholders such as `{count}` and `{name}` must be kept in translations. Text written as `${VARIABLE}` is not a placeholder and is shown as is.
+- Plural forms use suffixes (`.one`, `.other`). A language can add the other categories it needs (`.few`, `.many`, etc.).
+
+### Adding a language
+
+1. Generate a draft. It is derived from the Turkish file and registered for you:
+   ```bash
+   npm run i18n:new -- fr "Français" fr-FR
+   ```
+   The language can be selected right away in Settings, marked as a draft ("Français (draft)").
+2. Translate the **values** in `src/locales/fr.json`. Leave the keys and placeholders alone. You can hand the file directly to a translator, an LLM, or a tool such as Crowdin or Weblate.
+3. Check progress. This lists missing, extra, and broken-placeholder entries:
+   ```bash
+   npm run i18n:check
+   ```
+4. When the translation is done, delete the `"_meta.status": "draft"` line. The language then counts as complete, and any missing text fails the tests and `i18n:check`.
+
+> Parts of the panel have not been moved to the translation files yet. Those screens appear in Turkish whatever language is selected.
 
 ---
 

@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
 import { decryptSecret, encryptSecret, type EncryptedValue } from "@/lib/crypto";
@@ -99,25 +100,25 @@ export type RepoInput = {
 };
 
 export function validateRepo(input: RepoInput, isNew: boolean): string | null {
-  if (input.name.trim().length < 2) return "Depo adı en az 2 karakter olmalı.";
-  if (!REPO_KINDS.has(input.kind as RepoKind)) return "Bilinmeyen depo türü.";
-  if (input.location.trim().length === 0) return "Depo konumu boş olamaz.";
+  if (input.name.trim().length < 2) return serverT("backupStore.repoName");
+  if (!REPO_KINDS.has(input.kind as RepoKind)) return serverT("backupStore.repoKind");
+  if (input.location.trim().length === 0) return serverT("backupStore.repoLocation");
 
   if (input.kind === "local") {
     const path = input.location.trim();
     if (!path.startsWith("/") || path.includes("..")) {
-      return "Yerel depo yolu mutlak olmalı ve '..' içermemeli.";
+      return serverT("backupStore.localPath");
     }
     // Yedeği yedeklenen verinin yanına koymak, tek bir disk arızasında ikisini
     // birden kaybetmek demektir. Engellenmiyor ama en tehlikeli iki yer
     // doğrudan reddediliyor.
     if (path === "/" || path.startsWith("/proc") || path.startsWith("/sys")) {
-      return "Bu yol yedek deposu olamaz.";
+      return serverT("backupStore.forbiddenRepo");
     }
   }
 
   if (isNew && input.password.length < 8) {
-    return "Depo parolası en az 8 karakter olmalı. Bu parola kaybolursa yedekler AÇILAMAZ.";
+    return serverT("backupStore.repoPassword");
   }
   return null;
 }
@@ -169,7 +170,7 @@ export function deleteRepo(id: number): { ok: boolean; error?: string } {
   if (Number(jobs.n) > 0) {
     return {
       ok: false,
-      error: `Bu depoyu ${jobs.n} yedekleme işi kullanıyor. Önce onları sil.`,
+      error: serverT("backupStore.repoInUse", { count: jobs.n }),
     };
   }
   // Depo KAYDI siliniyor, deponun kendisi değil: diskteki restic verisine
@@ -246,17 +247,17 @@ export type JobInput = {
 };
 
 export function validateJob(input: JobInput): string | null {
-  if (input.name.trim().length < 2) return "İş adı en az 2 karakter olmalı.";
-  if (!SOURCE_KINDS.has(input.sourceKind as SourceKind)) return "Bilinmeyen kaynak türü.";
+  if (input.name.trim().length < 2) return serverT("backupStore.jobName");
+  if (!SOURCE_KINDS.has(input.sourceKind as SourceKind)) return serverT("backupStore.sourceKind");
 
   if (input.sourceKind === "host_dir") {
     const path = input.source.trim();
     if (!path.startsWith("/") || path.includes("..")) {
-      return "Host yolu mutlak olmalı ve '..' içermemeli.";
+      return serverT("backupStore.hostPath");
     }
   }
   if (input.sourceKind === "volume" && input.source.trim().length === 0) {
-    return "Volume adı gerekli.";
+    return serverT("backupStore.volumeRequired");
   }
   if (
     input.keepDaily < 0 ||
@@ -264,10 +265,10 @@ export function validateJob(input: JobInput): string | null {
     input.keepMonthly < 0 ||
     input.keepDaily + input.keepWeekly + input.keepMonthly === 0
   ) {
-    return "En az bir saklama kuralı sıfırdan büyük olmalı; aksi halde forget her şeyi siler.";
+    return serverT("backupStore.retention");
   }
   if (!getDb().prepare("SELECT id FROM backup_repos WHERE id = ?").get(input.repoId)) {
-    return "Depo bulunamadı.";
+    return serverT("backupStore.repoMissing");
   }
   return null;
 }

@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { auditAction, beginIdempotent, completeIdempotent } from "@/lib/apiv1/action";
 import { guardV1 } from "@/lib/apiv1/guard";
 import { apiError, apiOk } from "@/lib/apiv1/respond";
@@ -39,7 +40,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (isMockMode()) {
     return apiError(
       "upstream_error",
-      "MOCK_MODE açıkken image güncellenemez — gerçek bir Docker gerekiyor.",
+      serverT("api.mock.update"),
     );
   }
 
@@ -50,7 +51,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const target = overview.containers.find(
     (item) => item.id === id || item.name === id || item.id.startsWith(id),
   );
-  if (!target) return apiError("not_found", "container bulunamadı");
+  if (!target) return apiError("not_found", serverT("api.notFound.container"));
 
   const task = createTask({
     kind: "container.update",
@@ -87,7 +88,7 @@ async function runUpdate(
 ): Promise<void> {
   const timeout = new Promise<never>((_, reject) =>
     setTimeout(
-      () => reject(new Error("güncelleme 900 saniyede tamamlanmadı")),
+      () => reject(new Error(serverT("api.v1.updateTimeout"))),
       TASK_TIMEOUT_MS,
     ),
   );
@@ -99,8 +100,8 @@ async function runUpdate(
     ]);
 
     const detail = result.changed
-      ? `güncellendi · eski image ${result.oldImageId.slice(7, 19)} → yeni ${result.newImageId.slice(7, 19)}`
-      : "zaten güncel";
+      ? serverT("api.docker.updated", { old: result.oldImageId.slice(7, 19), new: result.newImageId.slice(7, 19) })
+      : serverT("api.docker.upToDate");
 
     finishTask(taskId, { status: "succeeded", detail });
     auditAction(actor, {
@@ -110,7 +111,7 @@ async function runUpdate(
       detail,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "güncelleme başarısız";
+    const message = error instanceof Error ? error.message : serverT("api.docker.updateFailed");
     finishTask(taskId, { status: "failed", error: message });
     auditAction(actor, {
       action: "docker.image_update",

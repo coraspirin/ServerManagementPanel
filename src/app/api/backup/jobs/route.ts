@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { runBackupJob } from "@/lib/backup/engine";
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   // "Şimdi çalıştır": zamanlanmış turu beklemeden. Yedeklemenin çalıştığını
@@ -104,7 +105,7 @@ export async function PATCH(request: Request) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const id = Number(body.id ?? 0);
@@ -113,7 +114,7 @@ export async function PATCH(request: Request) {
   if (problem) return Response.json({ error: problem }, { status: 400 });
 
   if (!updateJob(id, input)) {
-    return Response.json({ error: "İş bulunamadı." }, { status: 404 });
+    return Response.json({ error: serverT("api.notFound.job") }, { status: 404 });
   }
 
   audit({
@@ -122,7 +123,7 @@ export async function PATCH(request: Request) {
     action: "backup.job.update",
     targetType: "backup_job",
     targetId: String(id),
-    detail: `${input.name} · ${input.enabled ? "açık" : "kapalı"}`,
+    detail: `${input.name} · ${serverT(input.enabled ? "api.on" : "api.off")}`,
     result: "ok",
   });
 
@@ -134,7 +135,7 @@ export async function DELETE(request: Request) {
   if (!guard.ok) return guard.response;
 
   const id = Number(new URL(request.url).searchParams.get("id") ?? 0);
-  if (!deleteJob(id)) return Response.json({ error: "İş bulunamadı." }, { status: 404 });
+  if (!deleteJob(id)) return Response.json({ error: serverT("api.notFound.job") }, { status: 404 });
 
   audit({
     userId: guard.session.user.id,
@@ -143,7 +144,7 @@ export async function DELETE(request: Request) {
     targetType: "backup_job",
     targetId: String(id),
     // Snapshot'lar depoda kalıyor: iş tanımını silmek veriyi silmek değil.
-    detail: "iş silindi (depodaki snapshot'lar duruyor)",
+    detail: serverT("api.backup.jobDeleted"),
     result: "ok",
   });
 

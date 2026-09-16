@@ -18,7 +18,7 @@ import {
   type Snapshot,
 } from "@/lib/metrics/catalog";
 import { useDict, useFormat, useT } from "@/lib/i18n/client";
-import type { Dictionary } from "@/lib/i18n/dict/tr";
+import type { Dictionary } from "@/lib/i18n/locales";
 
 /** Grafikler kartlardan daha yavaş tazelenir; her biri yüzlerce nokta taşıyor. */
 const CHART_REFRESH_MS = 30_000;

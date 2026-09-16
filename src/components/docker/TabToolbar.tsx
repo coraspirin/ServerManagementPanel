@@ -6,6 +6,7 @@ import { RotateCw, Search, Trash2 } from "lucide-react";
 import { readCsrfToken } from "./detail/shared";
 import { CSRF_HEADER } from "@/lib/auth/types";
 import type { PruneScope } from "@/lib/providers/types";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * Docker sekmelerinin ortak araç çubuğu (M3.38).
@@ -45,6 +46,7 @@ export function TabToolbar({
   /** Sekmeye özel ek denetimler (sütun seçici, "durmuşları göster"…). */
   children?: React.ReactNode;
 }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [sonuc, setSonuc] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -52,8 +54,8 @@ export function TabToolbar({
     if (!prune) return;
 
     const onay = prune.danger
-      ? `${prune.label}\n\nBU İŞLEM VERİ SİLER ve geri alınamaz.\n\nDevam edilsin mi?`
-      : `${prune.label}\n\nDevam edilsin mi?`;
+      ? t("docker.toolbar.confirmDanger", { label: prune.label })
+      : t("docker.toolbar.confirm", { label: prune.label });
     if (!confirm(onay)) return;
 
     setBusy(true);
@@ -71,14 +73,14 @@ export function TabToolbar({
       };
 
       if (!response.ok) {
-        setSonuc({ ok: false, text: payload.error ?? "Temizlik başarısız." });
+        setSonuc({ ok: false, text: payload.error ?? t("docker.prune.failed") });
       } else {
         const mb = Math.round((payload.reclaimedBytes ?? 0) / 1024 / 1024);
-        setSonuc({ ok: true, text: `${payload.removed ?? 0} kayıt silindi · ${mb} MB kazanıldı.` });
+        setSonuc({ ok: true, text: t("docker.toolbar.result", { count: payload.removed ?? 0, mb }) });
         onRefresh();
       }
     } catch {
-      setSonuc({ ok: false, text: "Sunucuya ulaşılamadı." });
+      setSonuc({ ok: false, text: t("common.errors.network") });
     } finally {
       setBusy(false);
     }
@@ -104,12 +106,12 @@ export function TabToolbar({
         <button
           type="button"
           onClick={onRefresh}
-          title="Listeyi yeniden çek"
-          aria-label="Yenile"
+          title={t("docker.toolbar.refetch")}
+          aria-label={t("common.actions.refresh")}
           className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1.5 text-xs text-subtle transition-colors hover:border-brand hover:text-brand"
         >
           <RotateCw className="size-3.5" aria-hidden />
-          <span className="max-sm:sr-only">Yenile</span>
+          <span className="max-sm:sr-only">{t("common.actions.refresh")}</span>
         </button>
 
         {prune && canAct && (
@@ -121,7 +123,7 @@ export function TabToolbar({
             className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1.5 text-xs text-subtle transition-colors hover:border-danger hover:text-danger disabled:opacity-40"
           >
             <Trash2 className="size-3.5" aria-hidden />
-            <span className="max-sm:sr-only">{busy ? "temizleniyor…" : "Temizle"}</span>
+            <span className="max-sm:sr-only">{busy ? t("docker.prune.cleaning") : t("docker.prune.clean")}</span>
           </button>
         )}
 

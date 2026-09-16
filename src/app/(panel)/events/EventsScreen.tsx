@@ -10,6 +10,8 @@ import {
   type EventRow,
   type Severity,
 } from "@/lib/alerts/types";
+import { useFormat, useT } from "@/lib/i18n/client";
+import type { MessageKey } from "@/lib/i18n/translate";
 
 function readCsrfToken(): string {
   const match = document.cookie.match(new RegExp(`(?:^|; )${CSRF_COOKIE}=([^;]*)`));
@@ -23,28 +25,26 @@ const SEVERITY_STYLE: Record<Severity, string> = {
   critical: "bg-danger/15 text-danger",
 };
 
-const SOURCE_LABEL: Record<string, string> = {
-  monitor: "servis",
-  metric: "metrik",
-  system: "sistem",
-  docker: "docker",
+const SOURCE_LABEL: Record<string, MessageKey> = {
+  monitor: "eventsScreen.source.monitor",
+  metric: "eventsScreen.source.metric",
+  system: "eventsScreen.source.system",
+  docker: "eventsScreen.source.docker",
 };
 
-const FILTERS: { value: string; label: string }[] = [
-  { value: "", label: "Hepsi" },
-  { value: "critical", label: "Kritik" },
-  { value: "warning", label: "Uyarı" },
-  { value: "ok", label: "Çözülen" },
+const FILTERS: { value: string; label: MessageKey }[] = [
+  { value: "", label: "eventsScreen.filter.all" },
+  { value: "critical", label: "eventsScreen.filter.critical" },
+  { value: "warning", label: "eventsScreen.filter.warning" },
+  { value: "ok", label: "eventsScreen.filter.ok" },
 ];
 
-function formatTime(ts: number): string {
-  return new Date(ts * 1000).toLocaleString("tr-TR", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+const TIME_FORMAT: Intl.DateTimeFormatOptions = {
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+};
 
 type Props = {
   initialEvents: EventRow[];
@@ -61,6 +61,8 @@ export function EventsScreen({
   canTest,
   refreshSeconds,
 }: Props) {
+  const t = useT();
+  const f = useFormat();
   const [events, setEvents] = useState(initialEvents);
   const [channels, setChannels] = useState(initialChannels);
   const [filter, setFilter] = useState("");
@@ -109,9 +111,9 @@ export function EventsScreen({
       });
       const data = (await response.json()) as { events?: EventRow[]; error?: string };
       if (response.ok && data.events) setEvents(data.events);
-      else setNotice({ text: data.error ?? "İşlem başarısız.", ok: false });
+      else setNotice({ text: data.error ?? t("common.errors.actionFailed"), ok: false });
     } catch {
-      setNotice({ text: "Sunucuya ulaşılamadı.", ok: false });
+      setNotice({ text: t("common.errors.network"), ok: false });
     } finally {
       setBusy(null);
     }
@@ -134,11 +136,11 @@ export function EventsScreen({
       if (data.channels) setChannels(data.channels);
       setNotice(
         data.ok
-          ? { text: `${key}: deneme bildirimi gönderildi.`, ok: true }
-          : { text: `${key}: ${data.error ?? "gönderilemedi"}`, ok: false },
+          ? { text: t("eventsScreen.testSent", { key }), ok: true }
+          : { text: `${key}: ${data.error ?? t("eventsScreen.testFailed")}`, ok: false },
       );
     } catch {
-      setNotice({ text: "Sunucuya ulaşılamadı.", ok: false });
+      setNotice({ text: t("common.errors.network"), ok: false });
     } finally {
       setBusy(null);
     }
@@ -154,10 +156,9 @@ export function EventsScreen({
     <div className="space-y-6">
       <section className="rounded-lg border border-line bg-surface">
         <div className="border-b border-line px-5 py-3">
-          <h2 className="font-semibold">Bildirim kanalları</h2>
+          <h2 className="font-semibold">{t("eventsScreen.channels")}</h2>
           <p className="mt-0.5 text-xs text-subtle">
-            Kanal ayarları Ayarlar → Bildirim Kanalları altında. Buradan deneme
-            gönderip doğru yapılandırdığını görebilirsin.
+            {t("eventsScreen.channelsIntro")}
           </p>
         </div>
 
@@ -181,8 +182,8 @@ export function EventsScreen({
                   <span className="text-sm font-medium">{channel.label}</span>
                   <span className="text-xs text-subtle">
                     {channel.enabled
-                      ? `${SEVERITY_LABEL[channel.minLevel]} ve üstü`
-                      : "kapalı"}
+                      ? t("eventsScreen.minLevel", { level: t(SEVERITY_LABEL[channel.minLevel]) })
+                      : t("eventsScreen.channelOff")}
                   </span>
                 </div>
                 {channel.enabled && channel.problem && (
@@ -198,7 +199,7 @@ export function EventsScreen({
                   className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
                 >
                   <Send className="size-3.5" />
-                  {busy === channel.key ? "gönderiliyor…" : "Deneme gönder"}
+                  {busy === channel.key ? t("eventsScreen.sending") : t("eventsScreen.sendTest")}
                 </button>
               )}
             </div>
@@ -229,7 +230,7 @@ export function EventsScreen({
                   : "border-line text-subtle hover:text-ink"
               }`}
             >
-              {option.label}
+              {t(option.label)}
             </button>
           ))}
         </div>
@@ -241,14 +242,15 @@ export function EventsScreen({
             disabled={busy !== null}
             className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand hover:text-brand disabled:opacity-50"
           >
-            <Check className="size-3.5" /> {unacknowledged.length} olayı okundu işaretle
+            <Check className="size-3.5" />{" "}
+            {t("eventsScreen.ackAll", { count: unacknowledged.length })}
           </button>
         )}
       </div>
 
       {events.length === 0 ? (
         <p className="rounded-lg border border-dashed border-line bg-surface px-5 py-8 text-center text-sm text-subtle">
-          Kayıtlı olay yok. Bu iyi haber.
+          {t("eventsScreen.empty")}
         </p>
       ) : (
         <div className="overflow-hidden rounded-lg border border-line bg-surface">
@@ -258,18 +260,18 @@ export function EventsScreen({
                 <span
                   className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${SEVERITY_STYLE[event.severity]}`}
                 >
-                  {SEVERITY_LABEL[event.severity]}
+                  {t(SEVERITY_LABEL[event.severity])}
                 </span>
 
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium">{event.title}</span>
                     <span className="rounded border border-line px-1 text-[10px] text-subtle">
-                      {SOURCE_LABEL[event.source] ?? event.source}
+                      {SOURCE_LABEL[event.source] ? t(SOURCE_LABEL[event.source]) : event.source}
                     </span>
                     {event.acknowledgedAt !== null && (
                       <span className="text-[10px] text-subtle">
-                        okundu · {event.acknowledgedBy}
+                        {t("eventsScreen.acked", { user: event.acknowledgedBy ?? "" })}
                       </span>
                     )}
                   </div>
@@ -280,25 +282,29 @@ export function EventsScreen({
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
                     {event.notifiedChannels.length > 0 && (
                       <span className="text-ok">
-                        gönderildi: {event.notifiedChannels.join(", ")}
+                        {t("eventsScreen.notified", { list: event.notifiedChannels.join(", ") })}
                       </span>
                     )}
                     {event.suppressedReason && (
                       <span className="flex items-center gap-1 text-warn">
                         <BellOff className="size-3" />
-                        bildirilmedi — {SUPPRESS_LABEL[event.suppressedReason] ?? event.suppressedReason}
+                        {t("eventsScreen.suppressed", {
+                          reason: SUPPRESS_LABEL[event.suppressedReason]
+                            ? t(SUPPRESS_LABEL[event.suppressedReason])
+                            : event.suppressedReason,
+                        })}
                       </span>
                     )}
                   </div>
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2">
-                  <span className="text-xs text-subtle">{formatTime(event.ts)}</span>
+                  <span className="text-xs text-subtle">{f.dateTime(event.ts * 1000, TIME_FORMAT)}</span>
                   {canManage && event.acknowledgedAt === null && event.severity !== "ok" && (
                     <button
                       type="button"
-                      title="Okundu işaretle"
-                      aria-label="Okundu işaretle"
+                      title={t("eventsScreen.ack")}
+                      aria-label={t("eventsScreen.ack")}
                       onClick={() => void acknowledge([event.id])}
                       disabled={busy !== null}
                       className="rounded border border-line p-1 text-subtle transition-colors hover:text-ink disabled:opacity-50"

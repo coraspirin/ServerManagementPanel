@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import type { Severity } from "@/lib/alerts/types";
 import type { TimelineEntry, TimelineKind, TimelineResult } from "@/lib/timeline";
+import { useFormat, useT } from "@/lib/i18n/client";
+import type { MessageKey } from "@/lib/i18n/translate";
 
 /**
  * M3.2 — değişiklik zaman çizelgesi.
@@ -21,10 +23,10 @@ import type { TimelineEntry, TimelineKind, TimelineResult } from "@/lib/timeline
  * üç ayrı ekranda tarih eşleştirerek değil.
  */
 
-const KIND_META: Record<TimelineKind, { label: string; icon: typeof Bell; tone: string }> = {
-  audit: { label: "Değişiklik", icon: UserCog, tone: "text-brand" },
-  event: { label: "Olay", icon: Bell, tone: "text-warn" },
-  spike: { label: "Sıçrama", icon: TrendingUp, tone: "text-subtle" },
+const KIND_META: Record<TimelineKind, { label: MessageKey; icon: typeof Bell; tone: string }> = {
+  audit: { label: "timeline.kind.audit", icon: UserCog, tone: "text-brand" },
+  event: { label: "timeline.kind.event", icon: Bell, tone: "text-warn" },
+  spike: { label: "timeline.kind.spike", icon: TrendingUp, tone: "text-subtle" },
 };
 
 const SEVERITY_DOT: Record<Severity, string> = {
@@ -34,34 +36,24 @@ const SEVERITY_DOT: Record<Severity, string> = {
   critical: "bg-danger",
 };
 
-const RANGES: { label: string; seconds: number }[] = [
-  { label: "1 sa", seconds: 3600 },
-  { label: "6 sa", seconds: 6 * 3600 },
-  { label: "24 sa", seconds: 24 * 3600 },
-  { label: "7 gün", seconds: 7 * 86400 },
-  { label: "30 gün", seconds: 30 * 86400 },
+const RANGES: { label: MessageKey; seconds: number }[] = [
+  { label: "timeline.range.1h", seconds: 3600 },
+  { label: "timeline.range.6h", seconds: 6 * 3600 },
+  { label: "timeline.range.24h", seconds: 24 * 3600 },
+  { label: "timeline.range.7d", seconds: 7 * 86400 },
+  { label: "timeline.range.30d", seconds: 30 * 86400 },
 ];
 
 const ZOOM_SECONDS = 30 * 60;
 
-function clock(ts: number): string {
-  return new Date(ts * 1000).toLocaleTimeString("tr-TR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-function dayLabel(ts: number): string {
-  return new Date(ts * 1000).toLocaleDateString("tr-TR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
-}
+const CLOCK: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", second: "2-digit" };
+const DAY: Intl.DateTimeFormatOptions = { weekday: "long", day: "numeric", month: "long" };
 
 /** Ardışık kayıtları güne göre grupla — 500 satırlık düz liste okunmuyor. */
-function groupByDay(entries: TimelineEntry[]): [string, TimelineEntry[]][] {
+function groupByDay(
+  entries: TimelineEntry[],
+  dayLabel: (ts: number) => string,
+): [string, TimelineEntry[]][] {
   const groups: [string, TimelineEntry[]][] = [];
   for (const entry of entries) {
     const key = dayLabel(entry.ts);
@@ -79,6 +71,9 @@ export function TimelineView({
   initial: TimelineResult;
   canSeeAudit: boolean;
 }) {
+  const t = useT();
+  const f = useFormat();
+  const clock = (ts: number) => f.time(ts * 1000, CLOCK);
   const [data, setData] = useState(initial);
   const [range, setRange] = useState<{ since: number; until: number } | null>(null);
   const [rangeSeconds, setRangeSeconds] = useState(24 * 3600);
@@ -140,7 +135,7 @@ export function TimelineView({
     apply({ kinds: kinds.includes(kind) ? kinds.filter((k) => k !== kind) : [...kinds, kind] });
   }
 
-  const groups = groupByDay(data.entries);
+  const groups = groupByDay(data.entries, (ts) => f.date(ts * 1000, DAY));
   const zoomed = range !== null;
 
   return (
@@ -160,7 +155,7 @@ export function TimelineView({
                       : "text-subtle hover:text-ink"
                   }`}
                 >
-                  {entry.label}
+                  {t(entry.label)}
                 </button>
               ))}
             </div>
@@ -171,7 +166,7 @@ export function TimelineView({
               className="flex items-center gap-1.5 rounded-md border border-brand bg-brand/10 px-3 py-1 text-sm text-brand"
             >
               <ZoomIn className="size-3.5" />
-              {clock(data.since)} – {clock(data.until)} · uzaklaş
+              {clock(data.since)} – {clock(data.until)} · {t("timeline.zoomOut")}
             </button>
           )}
 
@@ -194,7 +189,7 @@ export function TimelineView({
                     }`}
                   >
                     <Icon className={`size-3.5 ${on ? meta.tone : ""}`} aria-hidden />
-                    {meta.label}
+                    {t(meta.label)}
                     <span className="text-xs text-subtle">{data.counts[kind]}</span>
                   </button>
                 );
@@ -213,7 +208,7 @@ export function TimelineView({
               onKeyDown={(e) => {
                 if (e.key === "Enter") apply({});
               }}
-              placeholder="Çizelgede ara…"
+              placeholder={t("timeline.search")}
               className="w-full rounded-md border border-line bg-canvas py-1 pl-9 pr-3 text-sm outline-none focus:border-brand"
             />
           </div>
@@ -222,7 +217,7 @@ export function TimelineView({
             type="button"
             onClick={() => apply({})}
             disabled={busy}
-            title="Yenile"
+            title={t("common.actions.refresh")}
             className="rounded-md border border-line p-1.5 text-subtle transition-colors hover:text-ink disabled:opacity-50"
           >
             <RotateCw className={`size-4 ${busy ? "animate-spin" : ""}`} />
@@ -231,15 +226,14 @@ export function TimelineView({
 
         {!canSeeAudit && (
           <p className="mt-2 text-xs text-subtle">
-            Ayar ve yapılandırma değişiklikleri çizelgede görünmüyor — bunun için denetim
-            kaydı görüntüleme yetkisi gerekiyor.
+            {t("timeline.noAudit")}
           </p>
         )}
       </section>
 
       {data.entries.length === 0 ? (
         <p className="rounded-lg border border-dashed border-line bg-surface px-5 py-12 text-center text-sm text-subtle">
-          Bu aralıkta kayıt yok.
+          {t("timeline.empty")}
         </p>
       ) : (
         <div className="space-y-5">
@@ -249,7 +243,7 @@ export function TimelineView({
                 <Activity className="size-3.5" aria-hidden />
                 {day}
                 <span className="font-normal normal-case tracking-normal">
-                  {items.length} kayıt
+                  {t("timeline.dayCount", { count: items.length })}
                 </span>
               </h3>
 
@@ -276,7 +270,7 @@ export function TimelineView({
 
       {data.truncated && (
         <p className="text-center text-xs text-subtle">
-          Sonuç kesildi — en yeni 500 kayıt gösteriliyor. Aralığı daraltarak devamını görebilirsin.
+          {t("timeline.truncated")}
         </p>
       )}
     </div>
@@ -284,6 +278,8 @@ export function TimelineView({
 }
 
 function Entry({ entry, onZoom }: { entry: TimelineEntry; onZoom: () => void }) {
+  const t = useT();
+  const f = useFormat();
   const meta = KIND_META[entry.kind];
   const Icon = meta.icon;
 
@@ -298,11 +294,11 @@ function Entry({ entry, onZoom }: { entry: TimelineEntry; onZoom: () => void }) 
       <button
         type="button"
         onClick={onZoom}
-        title="Bu anın çevresine yakınlaş (±30 dk)"
+        title={t("timeline.zoomIn")}
         className="flex w-full items-start gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-line/40"
       >
         <span className="w-16 shrink-0 pt-px font-mono text-xs tabular-nums text-subtle">
-          {clock(entry.ts)}
+          {f.time(entry.ts * 1000, CLOCK)}
         </span>
         <Icon className={`mt-0.5 size-3.5 shrink-0 ${meta.tone}`} aria-hidden />
         <span className="min-w-0 flex-1">

@@ -7,6 +7,7 @@ import { formatBytes } from "@/lib/metrics/catalog";
 import type { DockerImage } from "@/lib/providers/types";
 // Referans ayrıştırması ortak modülde (M3.39); burada bir kopyası vardı.
 import { splitReference } from "@/lib/docker/reference";
+import { useFormat, useT } from "@/lib/i18n/client";
 
 /**
  * Image listesi — DEPOYA GÖRE GRUPLANMIŞ (M3.24).
@@ -72,6 +73,8 @@ export function ImagePanel({
   onRemove: (id: string, label: string) => void;
   onDetail: (image: DockerImage) => void;
 }) {
+  const t = useT();
+  const f = useFormat();
   const groups = useMemo(() => groupImages(images), [images]);
   const [acik, setAcik] = useState<Set<string>>(new Set());
 
@@ -86,7 +89,7 @@ export function ImagePanel({
   if (groups.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-line bg-surface px-5 py-8 text-center text-sm text-subtle">
-        Kayıt yok.
+        {t("docker.resources.empty")}
       </p>
     );
   }
@@ -111,18 +114,20 @@ export function ImagePanel({
                   <ChevronRight className="size-3.5 shrink-0 text-subtle" aria-hidden />
                 )}
 
-                <span className="min-w-0 flex-1 truncate font-mono text-sm">{group.repo}</span>
+                <span className="min-w-0 flex-1 truncate font-mono text-sm">
+                  {group.repo === "<etiketsiz>" ? t("docker.images.untagged") : group.repo}
+                </span>
 
                 {group.unused > 0 && (
                   <span className="rounded bg-warn/15 px-1.5 py-0.5 text-[10px] font-medium text-warn">
                     {group.unused === group.images.length
-                      ? "kullanılmıyor"
-                      : `${group.unused} sürüm kullanılmıyor`}
+                      ? t("docker.images.unused")
+                      : t("docker.images.versionsUnused", { count: group.unused })}
                   </span>
                 )}
 
                 <span className="shrink-0 text-xs text-subtle">
-                  {group.images.length} sürüm · {formatBytes(group.totalBytes)}
+                  {t("docker.images.versions", { count: group.images.length })} · {formatBytes(group.totalBytes)}
                 </span>
               </button>
 
@@ -131,12 +136,12 @@ export function ImagePanel({
                   <table className="w-full min-w-[40rem] text-xs">
                     <thead>
                       <tr className="text-left text-[11px] text-subtle">
-                        <th className="px-3 py-1.5 font-medium">Etiket</th>
+                        <th className="px-3 py-1.5 font-medium">{t("docker.images.tag")}</th>
                         <th className="px-3 py-1.5 font-medium">ID</th>
-                        <th className="px-3 py-1.5 font-medium">Boyut</th>
-                        <th className="px-3 py-1.5 font-medium">Oluşturma</th>
-                        <th className="px-3 py-1.5 font-medium">Kullanan</th>
-                        <th className="px-3 py-1.5 text-right font-medium">İşlem</th>
+                        <th className="px-3 py-1.5 font-medium">{t("docker.resources.size")}</th>
+                        <th className="px-3 py-1.5 font-medium">{t("docker.resources.created")}</th>
+                        <th className="px-3 py-1.5 font-medium">{t("docker.resources.usedBy")}</th>
+                        <th className="px-3 py-1.5 text-right font-medium">{t("docker.resources.actions")}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-line">
@@ -154,13 +159,13 @@ export function ImagePanel({
                             <td className="px-3 py-1.5">{formatBytes(image.sizeBytes)}</td>
                             <td className="px-3 py-1.5 text-subtle">
                               {image.createdAt > 0
-                                ? new Date(image.createdAt * 1000).toLocaleDateString("tr-TR")
+                                ? f.date(image.createdAt * 1000)
                                 : "—"}
                             </td>
                             <td className="px-3 py-1.5">
                               {image.usedBy.length === 0 ? (
                                 <span className="rounded bg-warn/15 px-1.5 py-0.5 text-[10px] font-medium text-warn">
-                                  kullanılmıyor
+                                  {t("docker.images.unused")}
                                 </span>
                               ) : (
                                 <span className="text-subtle">{image.usedBy.join(", ")}</span>
@@ -170,7 +175,7 @@ export function ImagePanel({
                               <div className="flex items-center justify-end gap-1">
                                 <button
                                   type="button"
-                                  title="Katmanlar ve yapılandırma"
+                                  title={t("docker.images.layersAndConfig")}
                                   onClick={() => onDetail(image)}
                                   className="rounded border border-line p-1 text-subtle transition-colors hover:text-brand"
                                 >
@@ -180,12 +185,12 @@ export function ImagePanel({
                                 {canAct && image.usedBy.length === 0 && (
                                   <button
                                     type="button"
-                                    title="Sil"
+                                    title={t("common.actions.delete")}
                                     disabled={busyId === image.id}
                                     onClick={() =>
                                       onRemove(
                                         image.id,
-                                        image.tags[0] ?? `<etiketsiz> ${shortId(image.id)}`,
+                                        image.tags[0] ?? `${t("docker.images.untagged")} ${shortId(image.id)}`,
                                       )
                                     }
                                     className="rounded border border-line p-1 text-subtle transition-colors hover:border-danger hover:text-danger disabled:opacity-40"

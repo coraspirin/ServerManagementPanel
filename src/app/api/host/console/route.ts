@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { callHelper, helperConfigured, CONSOLE_TIMEOUT_MS } from "@/lib/host/helper";
@@ -35,7 +36,7 @@ function forbiddenConsoleCommand(command: string): string | null {
   const lower = command.toLowerCase();
   for (const pattern of patterns) {
     if (lower.includes(pattern)) {
-      return `Komut "${pattern}" içeriyor ve ayarlarda yasaklı (Ayarlar → Dosyalar → Sunucu konsolu).`;
+      return serverT("api.host.commandBlocked", { pattern });
     }
   }
   return null;
@@ -46,12 +47,12 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as typeof body;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const mode = String(body.mode ?? "");
   if (mode !== "preset" && mode !== "exec") {
-    return Response.json({ error: "bilinmeyen mod" }, { status: 400 });
+    return Response.json({ error: serverT("api.host.unknownMode") }, { status: 400 });
   }
 
   const guard = await guardApi(request, "host.shell");
@@ -61,7 +62,7 @@ export async function POST(request: Request) {
     return Response.json(
       {
         error:
-          "host-helper kurulu değil. Sunucuda `sudo host-helper/install.sh` çalıştırıp HELPER_SECRET'i .env'e ekle.",
+          serverT("apiv1.helperMissing"),
       },
       { status: 503 },
     );
@@ -74,17 +75,17 @@ export async function POST(request: Request) {
 
   if (mode === "preset") {
     const preset = findPreset(String(body.preset ?? ""));
-    if (!preset) return Response.json({ error: "bilinmeyen kalıp" }, { status: 400 });
+    if (!preset) return Response.json({ error: serverT("api.host.unknownPreset") }, { status: 400 });
     args = { preset: preset.key };
     shown = preset.command;
   } else {
     const command = String(body.command ?? "").trim();
-    if (command === "") return Response.json({ error: "komut boş" }, { status: 400 });
+    if (command === "") return Response.json({ error: serverT("api.host.commandEmpty") }, { status: 400 });
     if (command.length > 2000) {
-      return Response.json({ error: "komut çok uzun (en fazla 2000 karakter)" }, { status: 400 });
+      return Response.json({ error: serverT("api.host.commandTooLong") }, { status: 400 });
     }
     if (/[\r\n\0]/.test(command)) {
-      return Response.json({ error: "komut tek satır olmalı" }, { status: 400 });
+      return Response.json({ error: serverT("api.host.commandSingleLine") }, { status: 400 });
     }
 
     const forbidden = forbiddenConsoleCommand(command);
@@ -123,7 +124,7 @@ export async function POST(request: Request) {
     targetType: "host",
     targetId: shown.slice(0, 120),
     detail: response.ok
-      ? `çıkış ${response.exitCode ?? 0} · ${response.durationMs ?? 0} ms`
+      ? serverT("api.host.exit", { code: response.exitCode ?? 0, ms: response.durationMs ?? 0 })
       : (response.error ?? response.stderr ?? "").slice(0, 200),
     result: response.ok ? "ok" : "error",
   });

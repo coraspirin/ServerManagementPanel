@@ -10,6 +10,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
+import { createT } from "../i18n/translate.ts";
+import { localeDictionary } from "../../locales/index.ts";
+
 import {
   buildPortMap,
   dockerPublishedPorts,
@@ -226,6 +229,9 @@ describe("freePorts", () => {
   });
 });
 
+/** Mesajlar Türkçe kaynak dilden: testler metnin kendisini doğruluyor. */
+const t = createT(localeDictionary("tr"));
+
 describe("portConflicts", () => {
   it("aynı host portunu isteyen iki container'ı yakalar", () => {
     const conflicts = portConflicts(
@@ -234,6 +240,7 @@ describe("portConflicts", () => {
         container({ id: "a".repeat(64), name: "birinci", ports: [{ hostPort: 8080, containerPort: 80, protocol: "tcp" }] }),
         container({ id: "b".repeat(64), name: "ikinci", ports: [{ hostPort: 8080, containerPort: 80, protocol: "tcp" }] }),
       ],
+      t,
     );
     assert.equal(conflicts.length, 1);
     assert.equal(conflicts[0].port, 8080);
@@ -243,6 +250,7 @@ describe("portConflicts", () => {
     const conflicts = portConflicts(
       buildPortMap([socket({ port: 8080, process: "nginx" })], []),
       [container({ name: "eski", state: "exited", ports: [{ hostPort: 8080, containerPort: 80, protocol: "tcp" }] })],
+      t,
     );
     assert.equal(conflicts.length, 1);
     assert.match(conflicts[0].message, /nginx/);
@@ -254,7 +262,7 @@ describe("portConflicts", () => {
       state: "running",
       ports: [{ hostPort: 8443, containerPort: 443, protocol: "tcp" }],
     });
-    const conflicts = portConflicts(buildPortMap([socket({ port: 8443 })], [own]), [own]);
+    const conflicts = portConflicts(buildPortMap([socket({ port: 8443 })], [own]), [own], t);
     assert.deepEqual(conflicts, []);
   });
 });

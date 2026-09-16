@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import {
@@ -23,7 +24,7 @@ export async function PATCH(request: Request, { params }: Context) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const outcome = updateUser(id, {
@@ -61,7 +62,7 @@ export async function POST(request: Request, { params }: Context) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const action = String(body.action ?? "");
@@ -71,19 +72,19 @@ export async function POST(request: Request, { params }: Context) {
   switch (action) {
     case "reset-password":
       outcome = resetPassword(id, String(body.password ?? ""), body.mustChange !== false);
-      detail = "parola sıfırlandı, açık oturumlar kapatıldı";
+      detail = serverT("api.users.passwordReset");
       break;
     case "unlock":
       outcome = unlockUser(id);
-      detail = "hesap kilidi açıldı";
+      detail = serverT("api.users.unlocked");
       break;
     case "reset-2fa":
       // Telefonunu kaybeden ve kurtarma kodu da kalmayan kullanıcının tek yolu.
       outcome = disableTotpFor(id);
-      detail = "2FA sıfırlandı — kullanıcı yeniden kurmalı";
+      detail = serverT("api.users.totpReset");
       break;
     default:
-      return Response.json({ error: "Bilinmeyen işlem." }, { status: 400 });
+      return Response.json({ error: serverT("api.unknownAction") }, { status: 400 });
   }
 
   audit({
@@ -107,7 +108,7 @@ export async function DELETE(request: Request, { params }: Context) {
 
   const id = Number((await params).id);
   if (id === guard.session.user.id) {
-    return Response.json({ error: "Kendi hesabını silemezsin." }, { status: 400 });
+    return Response.json({ error: serverT("api.users.cannotDeleteSelf") }, { status: 400 });
   }
 
   const outcome = deleteUser(id);

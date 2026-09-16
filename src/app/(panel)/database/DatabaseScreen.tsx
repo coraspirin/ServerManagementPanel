@@ -27,6 +27,8 @@ import {
   type DbTable,
   type QueryResult,
 } from "@/lib/dbadmin/types";
+import { useFormat, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 /**
  * M3.6 — veritabanı yöneticisi.
@@ -58,6 +60,8 @@ export function DatabaseScreen({
   initial: Payload;
   canWrite: boolean;
 }) {
+  const t = useT();
+  const f = useFormat();
   const [data, setData] = useState(initial);
   const [active, setActive] = useState<DbConnection | null>(initial.connections[0] ?? null);
   const [tables, setTables] = useState<DbTable[]>([]);
@@ -100,14 +104,14 @@ export function DatabaseScreen({
         "GET",
       );
       if (!response.ok) {
-        setError(String(payload.error ?? "Tablolar okunamadı."));
+        setError(String(payload.error ?? t("database.tablesFailed")));
         return;
       }
       setTables((payload.tables as DbTable[]) ?? []);
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [t]);
 
   async function selectConnection(connection: DbConnection) {
     setActive(connection);
@@ -131,7 +135,7 @@ export function DatabaseScreen({
         offset: nextOffset,
       });
       if (!response.ok) {
-        setError(String(payload.error ?? "Tablo okunamadı."));
+        setError(String(payload.error ?? t("database.tableFailed")));
         return;
       }
       setResult(payload.result as QueryResult);
@@ -154,7 +158,7 @@ export function DatabaseScreen({
         "GET",
       );
       if (!response.ok) {
-        setError(String(payload.error ?? "Yapı okunamadı."));
+        setError(String(payload.error ?? t("database.structureFailed")));
         return;
       }
       setStructure(payload.structure as DbStructure);
@@ -181,7 +185,7 @@ export function DatabaseScreen({
         return;
       }
       if (!response.ok) {
-        setError(String(payload.error ?? "Sorgu başarısız."));
+        setError(String(payload.error ?? t("database.queryFailed")));
         return;
       }
 
@@ -190,10 +194,9 @@ export function DatabaseScreen({
       setTable(null);
       setNotice(
         outcome.affected !== null
-          ? `${outcome.affected} satır etkilendi · ${outcome.durationMs} ms`
-          : `${outcome.rowCount} satır · ${outcome.durationMs} ms${
-              outcome.truncated ? " (kesildi)" : ""
-            }`,
+          ? t("database.affected", { count: outcome.affected, ms: outcome.durationMs })
+          : t("database.rows", { count: outcome.rowCount, ms: outcome.durationMs }) +
+              (outcome.truncated ? t("database.truncated") : ""),
       );
       if (payload.history) setData({ ...data, history: payload.history as HistoryEntry[] });
     } finally {
@@ -214,7 +217,7 @@ export function DatabaseScreen({
         setData((prev) => ({ ...prev, saved: payload.saved as SavedQuery[] }));
       }
       if (!response.ok) {
-        setError(String(payload.error ?? "İşlem başarısız."));
+        setError(String(payload.error ?? t("common.errors.actionFailed")));
         return false;
       }
       if (payload.message) setNotice(String(payload.message));
@@ -248,7 +251,7 @@ export function DatabaseScreen({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `sorgu-sonucu.${format}`;
+    link.download = `${t("database.exportName")}.${format}`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -265,7 +268,7 @@ export function DatabaseScreen({
           }}
           className="rounded-md border border-line bg-canvas px-2 py-1.5 text-sm outline-none focus:border-brand"
         >
-          {data.connections.length === 0 && <option value={0}>Bağlantı yok</option>}
+          {data.connections.length === 0 && <option value={0}>{t("database.noConnection")}</option>}
           {data.connections.map((connection) => (
             <option key={connection.id} value={connection.id}>
               {connection.name} — {ENGINE_LABEL[connection.engine]}
@@ -280,18 +283,18 @@ export function DatabaseScreen({
             }`}
             title={
               active.writable
-                ? "Bu bağlantı yazma işlemlerine açık"
-                : "Bu bağlantıdan yalnızca okunabilir"
+                ? t("database.writableTitle")
+                : t("database.readonlyTitle")
             }
           >
             {active.writable ? <Unlock className="size-3" /> : <Lock className="size-3" />}
-            {active.writable ? "yazılabilir" : "salt-okunur"}
+            {active.writable ? t("database.writable") : t("database.readonly")}
           </span>
         )}
 
         {active && !active.passwordReadable && (
           <span className="flex items-center gap-1 rounded bg-danger/10 px-2 py-1 text-xs text-danger">
-            <AlertTriangle className="size-3" /> parola çözülemiyor
+            <AlertTriangle className="size-3" /> {t("database.passwordUnreadable")}
           </span>
         )}
 
@@ -304,13 +307,13 @@ export function DatabaseScreen({
                 onClick={() => void manage({ action: "test", id: active.id })}
                 className="rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand disabled:opacity-50"
               >
-                Bağlantıyı sına
+                {t("database.testConnection")}
               </button>
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => void loadTables(active)}
-                title="Tabloları yenile"
+                title={t("database.refreshTables")}
                 className="rounded-md border border-line p-1.5 text-subtle transition-colors hover:text-ink disabled:opacity-50"
               >
                 <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />
@@ -322,17 +325,15 @@ export function DatabaseScreen({
                     onClick={() => setDraft({ ...active, password: "" })}
                     className="rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand"
                   >
-                    Düzenle
+                    {t("common.actions.edit")}
                   </button>
                   <button
                     type="button"
                     disabled={busy}
-                    title="Bağlantıyı sil"
+                    title={t("database.deleteConnection")}
                     onClick={async () => {
                       if (
-                        confirm(
-                          `"${active.name}" bağlantısı silinsin mi? Veritabanının kendisine dokunulmaz.`,
-                        )
+                        confirm(t("database.confirmDelete", { name: active.name }))
                       ) {
                         const { response, payload } = await call(
                           `/api/database?id=${active.id}`,
@@ -346,7 +347,7 @@ export function DatabaseScreen({
                           setTable(null);
                           setResult(null);
                         } else {
-                          setError(String(payload.error ?? "Silinemedi."));
+                          setError(String(payload.error ?? t("docker.resources.removeFailed")));
                         }
                       }
                     }}
@@ -363,7 +364,7 @@ export function DatabaseScreen({
             onClick={() => setShowHistory(true)}
             className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand"
           >
-            <History className="size-3.5" /> Geçmiş
+            <History className="size-3.5" /> {t("database.history")}
           </button>
           {canWrite && (
             <>
@@ -379,7 +380,7 @@ export function DatabaseScreen({
                 }}
                 className="rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand disabled:opacity-50"
               >
-                Container&apos;lardan keşfet
+                {t("database.discover")}
               </button>
               <button
                 type="button"
@@ -388,7 +389,7 @@ export function DatabaseScreen({
                 }
                 className="flex items-center gap-1.5 rounded-md bg-brand px-2.5 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90"
               >
-                <Plus className="size-3.5" /> Bağlantı
+                <Plus className="size-3.5" /> {t("database.connection")}
               </button>
             </>
           )}
@@ -405,7 +406,7 @@ export function DatabaseScreen({
       {pendingConfirm && (
         <div className="rounded-lg border border-danger/50 bg-danger/5 p-4">
           <p className="flex items-center gap-2 text-sm font-medium text-danger">
-            <AlertTriangle className="size-4" aria-hidden /> Bu sorgu ek onay istiyor
+            <AlertTriangle className="size-4" aria-hidden /> {t("database.confirmTitle")}
           </p>
           <ul className="mt-2 list-inside list-disc text-sm text-danger">
             {pendingConfirm.dangers.map((danger) => (
@@ -418,7 +419,7 @@ export function DatabaseScreen({
               onClick={() => setPendingConfirm(null)}
               className="rounded-md border border-line px-3 py-1.5 text-sm"
             >
-              Vazgeç
+              {t("common.actions.cancel")}
             </button>
             <button
               type="button"
@@ -426,7 +427,7 @@ export function DatabaseScreen({
               onClick={() => void execute(true)}
               className="rounded-md bg-danger px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              Anladım, çalıştır
+              {t("database.confirmRun")}
             </button>
           </div>
         </div>
@@ -435,22 +436,21 @@ export function DatabaseScreen({
       {data.connections.length === 0 ? (
         <div className="rounded-lg border border-dashed border-line bg-surface px-5 py-12 text-center">
           <Database className="mx-auto size-8 text-subtle" aria-hidden />
-          <p className="mt-3 text-sm">Henüz bağlantı yok.</p>
+          <p className="mt-3 text-sm">{t("database.emptyTitle")}</p>
           <p className="mt-1 text-xs text-subtle">
-            Container&apos;lardan keşfet ya da elle bir bağlantı ekle. SQLite için host
-            üzerindeki dosya yolunu vermen yeterli.
+            {t("database.emptyHelp")}
           </p>
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
           <aside className="rounded-lg border border-line bg-surface">
             <div className="border-b border-line px-3 py-2 text-xs font-semibold text-subtle">
-              Tablolar {tables.length > 0 && `(${tables.length})`}
+              {t("database.tables")} {tables.length > 0 && `(${tables.length})`}
             </div>
             <ul className="max-h-[32rem] divide-y divide-line overflow-y-auto">
               {tables.length === 0 && (
                 <li className="px-3 py-6 text-center text-xs text-subtle">
-                  {busy ? "Okunuyor…" : "Tablo yok."}
+                  {busy ? t("database.reading") : t("database.noTables")}
                 </li>
               )}
               {tables.map((entry) => (
@@ -472,7 +472,7 @@ export function DatabaseScreen({
                       {entry.name}
                     </span>
                     <span className="shrink-0 tabular-nums text-subtle">
-                      {entry.rowCount === null ? "?" : entry.rowCount.toLocaleString("tr-TR")}
+                      {entry.rowCount === null ? "?" : f.number(entry.rowCount)}
                     </span>
                   </button>
                 </li>
@@ -484,9 +484,9 @@ export function DatabaseScreen({
             <div className="flex flex-wrap gap-1 border-b border-line">
               {(
                 [
-                  ["data", "Veri"],
-                  ["structure", "Yapı"],
-                  ["query", "SQL"],
+                  ["data", t("database.tab.data")],
+                  ["structure", t("database.tab.structure")],
+                  ["query", t("database.tab.query")],
                 ] as const
               ).map(([key, label]) => (
                 <button
@@ -546,14 +546,14 @@ export function DatabaseScreen({
                     onClick={() => void execute()}
                     className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                   >
-                    <Play className="size-4" /> Çalıştır
+                    <Play className="size-4" /> {t("database.run")}
                   </button>
                   <span className="text-xs text-subtle">Ctrl+Enter</span>
                   <button
                     type="button"
                     disabled={!sql.trim()}
                     onClick={() => {
-                      const name = prompt("Sorgu adı:");
+                      const name = prompt(t("database.queryName"));
                       if (name?.trim()) {
                         void manage({
                           action: "save-query",
@@ -565,7 +565,7 @@ export function DatabaseScreen({
                     }}
                     className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
                   >
-                    <Star className="size-4" /> Kaydet
+                    <Star className="size-4" /> {t("common.actions.save")}
                   </button>
 
                   {data.saved.length > 0 && (
@@ -579,7 +579,7 @@ export function DatabaseScreen({
                       }}
                       className="rounded-md border border-line bg-canvas px-2 py-1.5 text-sm outline-none focus:border-brand"
                     >
-                      <option value="">Kayıtlı sorgular…</option>
+                      <option value="">{t("database.savedQueries")}</option>
                       {data.saved.map((entry) => (
                         <option key={entry.id} value={entry.id}>
                           {entry.name}
@@ -594,33 +594,39 @@ export function DatabaseScreen({
             {tab === "structure" && structure && (
               <div className="space-y-3">
                 <ResultTable
-                  columns={["Sütun", "Tip", "Boş olabilir", "Varsayılan", "Birincil anahtar"]}
+                  columns={[
+                    t("database.col.column"),
+                    t("database.col.type"),
+                    t("database.col.nullable"),
+                    t("database.col.default"),
+                    t("database.col.primaryKey"),
+                  ]}
                   rows={structure.columns.map((column) => [
                     column.name,
                     column.type,
-                    column.nullable ? "evet" : "hayır",
+                    column.nullable ? t("database.yes") : t("database.no"),
                     column.defaultValue,
                     column.primaryKey ? "✓" : "",
                   ])}
                 />
                 {structure.indexes.length > 0 && (
                   <>
-                    <h3 className="px-1 text-xs font-semibold text-subtle">İndeksler</h3>
+                    <h3 className="px-1 text-xs font-semibold text-subtle">{t("database.indexes")}</h3>
                     <ResultTable
-                      columns={["Ad", "Sütunlar", "Benzersiz"]}
+                      columns={[t("users.roles.name"), t("database.col.columns"), t("database.col.unique")]}
                       rows={structure.indexes.map((index) => [
                         index.name,
                         index.columns.join(", "),
-                        index.unique ? "evet" : "hayır",
+                        index.unique ? t("database.yes") : t("database.no"),
                       ])}
                     />
                   </>
                 )}
                 {structure.foreignKeys.length > 0 && (
                   <>
-                    <h3 className="px-1 text-xs font-semibold text-subtle">Yabancı anahtarlar</h3>
+                    <h3 className="px-1 text-xs font-semibold text-subtle">{t("database.foreignKeys")}</h3>
                     <ResultTable
-                      columns={["Sütun", "Hedef tablo", "Hedef sütun"]}
+                      columns={[t("database.col.column"), t("database.col.targetTable"), t("database.col.targetColumn")]}
                       rows={structure.foreignKeys.map((fk) => [
                         fk.column,
                         fk.referencesTable,
@@ -642,11 +648,11 @@ export function DatabaseScreen({
                 <ResultTable columns={result.columns} rows={result.rows} />
                 <div className="flex items-center justify-between text-xs text-subtle">
                   <span>
-                    {result.rowCount} satır · {result.durationMs} ms
-                    {result.truncated && " · sonuç kesildi"}
+                    {t("database.rows", { count: result.rowCount, ms: result.durationMs })}
+                    {result.truncated && t("database.resultTruncated")}
                     {table?.rowCount !== null &&
                       table !== null &&
-                      ` · tabloda ${table.rowCount?.toLocaleString("tr-TR")} satır`}
+                      t("database.tableRows", { count: f.number(table.rowCount ?? 0) })}
                   </span>
                   {table && (
                     <div className="flex gap-2">
@@ -656,7 +662,7 @@ export function DatabaseScreen({
                         onClick={() => void openTable(table, Math.max(0, offset - PAGE))}
                         className="rounded-md border border-line px-3 py-1.5 disabled:opacity-40"
                       >
-                        Önceki
+                        {t("database.previous")}
                       </button>
                       <button
                         type="button"
@@ -664,7 +670,7 @@ export function DatabaseScreen({
                         onClick={() => void openTable(table, offset + PAGE)}
                         className="rounded-md border border-line px-3 py-1.5 disabled:opacity-40"
                       >
-                        Sonraki
+                        {t("database.next")}
                       </button>
                     </div>
                   )}
@@ -674,7 +680,7 @@ export function DatabaseScreen({
 
             {tab === "data" && !result && (
               <p className="rounded-lg border border-dashed border-line bg-surface px-5 py-10 text-center text-sm text-subtle">
-                Soldan bir tablo seç.
+                {t("database.pickTable")}
               </p>
             )}
           </div>
@@ -693,17 +699,19 @@ export function DatabaseScreen({
 
       <Modal
         open={discovery !== null}
-        title="Container'lardan keşfedilen veritabanları"
+        title={t("database.discoverTitle")}
         onClose={() => setDiscovery(null)}
       >
         <p className="text-xs text-subtle">
-          Motor imaj adından tanınır, kullanıcı adı ve parola container&apos;ın ortam
-          değişkenlerinden önerilir. Eklenen bağlantı <strong>salt-okunur</strong> başlar.
+          <Rich
+            text={t("database.discoverIntro")}
+            values={{ strong: <strong>{t("database.readonly")}</strong> }}
+          />
         </p>
         <ul className="mt-3 divide-y divide-line rounded-md border border-line">
           {(discovery ?? []).length === 0 && (
             <li className="px-3 py-6 text-center text-sm text-subtle">
-              Tanınan bir veritabanı container&apos;ı bulunamadı.
+              {t("database.discoverNone")}
             </li>
           )}
           {(discovery ?? []).map((entry) => (
@@ -713,7 +721,7 @@ export function DatabaseScreen({
                 <span className="ml-2 text-xs text-subtle">{ENGINE_LABEL[entry.engine]}</span>
               </span>
               {entry.alreadyKnown ? (
-                <span className="text-xs text-subtle">zaten ekli</span>
+                <span className="text-xs text-subtle">{t("database.alreadyAdded")}</span>
               ) : (
                 <button
                   type="button"
@@ -725,7 +733,7 @@ export function DatabaseScreen({
                   }}
                   className="rounded-md border border-line px-2.5 py-1 text-xs transition-colors hover:border-brand disabled:opacity-50"
                 >
-                  Ekle
+                  {t("common.actions.add")}
                 </button>
               )}
             </li>
@@ -733,14 +741,13 @@ export function DatabaseScreen({
         </ul>
       </Modal>
 
-      <Modal open={showHistory} title="Sorgu geçmişim" onClose={() => setShowHistory(false)} wide>
+      <Modal open={showHistory} title={t("database.historyTitle")} onClose={() => setShowHistory(false)} wide>
         <p className="text-xs text-subtle">
-          Geçmiş kullanıcı bazında tutulur — başkasının sorguları (ve içindeki veri) burada
-          görünmez.
+          {t("database.historyIntro")}
         </p>
         <ul className="mt-3 divide-y divide-line rounded-md border border-line">
           {data.history.length === 0 && (
-            <li className="px-3 py-6 text-center text-sm text-subtle">Henüz sorgu yok.</li>
+            <li className="px-3 py-6 text-center text-sm text-subtle">{t("database.historyEmpty")}</li>
           )}
           {data.history.map((entry) => (
             <li key={entry.id} className="px-3 py-2">
@@ -755,8 +762,10 @@ export function DatabaseScreen({
               >
                 <code className="block truncate font-mono text-xs">{entry.sql}</code>
                 <span className="text-[11px] text-subtle">
-                  {new Date(entry.ts * 1000).toLocaleString("tr-TR")} · {entry.durationMs} ms ·{" "}
-                  {entry.ok ? `${entry.rowCount} satır` : `hata: ${entry.error.slice(0, 80)}`}
+                  {f.dateTime(entry.ts * 1000)} · {entry.durationMs} ms ·{" "}
+                  {entry.ok
+                    ? t("database.historyRows", { count: entry.rowCount })
+                    : t("database.historyError", { error: entry.error.slice(0, 80) })}
                 </span>
               </button>
             </li>
@@ -774,10 +783,11 @@ function ResultTable({
   columns: string[];
   rows: (string | number | boolean | null)[][];
 }) {
+  const t = useT();
   if (columns.length === 0) {
     return (
       <p className="rounded-lg border border-line bg-surface px-4 py-8 text-center text-sm text-subtle">
-        Sonuç satırı yok.
+        {t("database.noResult")}
       </p>
     );
   }
@@ -827,6 +837,7 @@ function ConnectionModal({
   onClose: () => void;
   onSubmit: (payload: Record<string, unknown>, isNew: boolean) => void;
 }) {
+  const t = useT();
   const [form, setForm] = useState(draft);
   const isNew = !form?.id;
   const isSqlite = form?.engine === "sqlite";
@@ -834,13 +845,13 @@ function ConnectionModal({
   return (
     <Modal
       open={draft !== null}
-      title={isNew ? "Veritabanı bağlantısı ekle" : "Bağlantıyı düzenle"}
+      title={isNew ? t("database.modal.add") : t("database.modal.edit")}
       onClose={onClose}
     >
       {form && (
         <div className="space-y-3">
           <label className="block text-sm">
-            <span className="text-subtle">Ad</span>
+            <span className="text-subtle">{t("users.roles.name")}</span>
             <input
               value={form.name ?? ""}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -849,7 +860,7 @@ function ConnectionModal({
           </label>
 
           <label className="block text-sm">
-            <span className="text-subtle">Motor</span>
+            <span className="text-subtle">{t("database.modal.engine")}</span>
             <select
               value={form.engine ?? "sqlite"}
               onChange={(e) => {
@@ -868,7 +879,7 @@ function ConnectionModal({
 
           <label className="block text-sm">
             <span className="text-subtle">
-              {isSqlite ? "Host üzerindeki dosya yolu" : "Sunucu adresi"}
+              {isSqlite ? t("database.modal.filePath") : t("database.modal.serverAddress")}
             </span>
             <input
               value={form.host ?? ""}
@@ -880,8 +891,7 @@ function ConnectionModal({
             />
             {isSqlite && (
               <span className="mt-1 block text-xs text-subtle">
-                Container içindeki yol değil, HOST üzerindeki yol. Panel dosyayı okuyamazsa
-                sorgu geçici bir container üzerinden çalıştırılır — dosya kopyalanmaz.
+                {t("database.modal.sqliteHelp")}
               </span>
             )}
           </label>
@@ -890,7 +900,7 @@ function ConnectionModal({
             <>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block text-sm">
-                  <span className="text-subtle">Port</span>
+                  <span className="text-subtle">{t("proxy.form.port")}</span>
                   <input
                     type="number"
                     value={form.port ?? 0}
@@ -899,7 +909,7 @@ function ConnectionModal({
                   />
                 </label>
                 <label className="block text-sm">
-                  <span className="text-subtle">Veritabanı</span>
+                  <span className="text-subtle">{t("database.modal.database")}</span>
                   <input
                     value={form.database ?? ""}
                     onChange={(e) => setForm({ ...form, database: e.target.value })}
@@ -909,7 +919,7 @@ function ConnectionModal({
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block text-sm">
-                  <span className="text-subtle">Kullanıcı</span>
+                  <span className="text-subtle">{t("database.modal.user")}</span>
                   <input
                     value={form.username ?? ""}
                     onChange={(e) => setForm({ ...form, username: e.target.value })}
@@ -918,7 +928,7 @@ function ConnectionModal({
                 </label>
                 <label className="block text-sm">
                   <span className="text-subtle">
-                    Parola {isNew ? "" : "(boş = değişmesin)"}
+                    {t("database.modal.password")} {isNew ? "" : t("database.modal.passwordKeep")}
                   </span>
                   <input
                     type="password"
@@ -940,11 +950,12 @@ function ConnectionModal({
               className="mt-0.5 size-4 accent-[var(--brand)]"
             />
             <span>
-              Yazma işlemlerine açık
+              {t("database.modal.writable")}
               <span className="block text-xs text-subtle">
-                Kapalıyken bu bağlantıdan INSERT/UPDATE/DELETE/DROP çalıştırılamaz —{" "}
-                <code>db.write</code> izni olsa bile. İki ayrı kapı, çünkü yanlış pencerede
-                çalıştırılan bir UPDATE geri alınamaz.
+                <Rich
+                  text={t("database.modal.writableHelp")}
+                  values={{ perm: <code>db.write</code> }}
+                />
               </span>
             </span>
           </label>
@@ -955,7 +966,7 @@ function ConnectionModal({
               onClick={onClose}
               className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
             >
-              Vazgeç
+              {t("common.actions.cancel")}
             </button>
             <button
               type="button"
@@ -963,7 +974,7 @@ function ConnectionModal({
               onClick={() => onSubmit({ ...form }, isNew)}
               className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              Kaydet
+              {t("common.actions.save")}
             </button>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import http from "node:http";
 import { isMockMode } from "@/lib/env";
@@ -104,7 +105,7 @@ function request(path: string): Promise<string> {
         });
       },
     );
-    req.on("timeout", () => req.destroy(new Error("tailscaled yanıt vermedi")));
+    req.on("timeout", () => req.destroy(new Error(serverT("tailscaleLib.timeout"))));
     req.on("error", reject);
     req.end();
   });
@@ -159,7 +160,7 @@ export async function tailscaleStatus(): Promise<TailscaleStatus> {
       ...empty,
       error:
         message.includes("ENOENT") || message.includes("ECONNREFUSED")
-          ? "tailscaled soketi bulunamadı. Sunucuda Tailscale kurulu değilse bu bölüm boş kalır; kuruluysa docker-compose.yml içindeki soket mount'unun açık olması gerekir."
+          ? serverT("tailscaleLib.noSocket")
           : message,
     };
   }

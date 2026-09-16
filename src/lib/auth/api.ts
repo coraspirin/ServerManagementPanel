@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { currentSession, hasPermission } from "./session";
 import { CSRF_HEADER, type ActiveSession, type PermissionKey } from "./types";
@@ -25,7 +26,7 @@ export async function guardApi(
   if (!session) {
     return {
       ok: false,
-      response: Response.json({ error: "oturum gerekli" }, { status: 401 }),
+      response: Response.json({ error: serverT("api.auth.sessionRequired") }, { status: 401 }),
     };
   }
 
@@ -36,7 +37,7 @@ export async function guardApi(
     if (!header || !safeEquals(header, session.csrfToken)) {
       return {
         ok: false,
-        response: Response.json({ error: "CSRF doğrulaması başarısız" }, { status: 403 }),
+        response: Response.json({ error: serverT("apiv1.csrfFailed") }, { status: 403 }),
       };
     }
   }
@@ -44,7 +45,7 @@ export async function guardApi(
   if (!hasPermission(session.user, permission)) {
     return {
       ok: false,
-      response: Response.json({ error: "bu işlem için yetkiniz yok" }, { status: 403 }),
+      response: Response.json({ error: serverT("apiv1.forbidden") }, { status: 403 }),
     };
   }
 

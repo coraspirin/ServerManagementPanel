@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronRight, ChevronUp, Eraser, RefreshCw, TerminalSquare } from "lucide-react";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import { CONSOLE_PRESETS, UPDATE_SEQUENCE, findPreset } from "@/lib/host/presets";
+import { useDynamicT, useFormat, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 /**
  * Sunucu konsolu (hazır kalıplar + serbest komut).
@@ -50,7 +52,7 @@ async function runOnHost(body: unknown): Promise<RunResult> {
     body: JSON.stringify(body),
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error ?? "İşlem başarısız.");
+  if (!response.ok) throw new Error(data.error ?? "");
   return data as RunResult;
 }
 
@@ -67,6 +69,12 @@ function countLines(entry: Entry): number {
 }
 
 export function ConsolePanel({ maxLines }: { maxLines: number }) {
+  const t = useT();
+  const dt = useDynamicT();
+  const f = useFormat();
+  const presetLabel = (key: string) => dt(`console.preset.${key}.label`);
+  const presetHint = (preset: { key: string; hint?: boolean }) =>
+    preset.hint ? dt(`console.preset.${preset.key}.hint`) : undefined;
   const [entries, setEntries] = useState<Entry[]>([]);
   const [input, setInput] = useState("");
   const [preset, setPreset] = useState(CONSOLE_PRESETS[0].key);
@@ -139,7 +147,7 @@ export function ConsolePanel({ maxLines }: { maxLines: number }) {
     } catch (error) {
       update(id, {
         running: false,
-        failure: error instanceof Error ? error.message : "bilinmeyen hata",
+        failure: (error instanceof Error && error.message) || t("console.unknownError"),
       });
       return false;
     }
@@ -164,8 +172,9 @@ export function ConsolePanel({ maxLines }: { maxLines: number }) {
     const definition = findPreset(key);
     if (!definition) return;
     if (definition.mutates) {
-      const note = definition.hint ? `\n\n${definition.hint}` : "";
-      if (!confirm(`Sunucuda çalıştırılacak:\n\n  ${definition.command}${note}`)) return;
+      const hint = presetHint(definition);
+      const note = hint ? `\n\n${hint}` : "";
+      if (!confirm(t("console.confirmRun", { command: definition.command }) + note)) return;
     }
     setBusy(true);
     try {
@@ -234,15 +243,17 @@ export function ConsolePanel({ maxLines }: { maxLines: number }) {
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-3">
         <div className="min-w-0">
           <h2 className="flex items-center gap-1.5 font-semibold">
-            <TerminalSquare className="size-4" /> Konsol
+            <TerminalSquare className="size-4" /> {t("console.title")}
           </h2>
           <p className="mt-0.5 text-xs text-subtle">
-            Komutlar host&apos;taki yardımcı servis üzerinden root olarak çalışır ve
-            yalnızca izin listesinde açık olanlar kabul edilir. Her komut ayrı çalışır —
-            ortak bir kabuk oturumu yoktur, <code className="font-mono">cd</code> sonraki
-            komutu etkilemez ve etkileşimli komutlar (
-            <code className="font-mono">top</code>, <code className="font-mono">nano</code>)
-            yanıt vermeden zaman aşımına uğrar.
+            <Rich
+              text={t("console.intro")}
+              values={{
+                cd: <code className="font-mono">cd</code>,
+                top: <code className="font-mono">top</code>,
+                nano: <code className="font-mono">nano</code>,
+              }}
+            />
           </p>
         </div>
 
@@ -251,11 +262,7 @@ export function ConsolePanel({ maxLines }: { maxLines: number }) {
           disabled={busy}
           onClick={() => {
             if (
-              !confirm(
-                "Sunucudaki paketler güncellenecek:\n\n" +
-                  "  apt-get update\n  apt-get -y upgrade\n\n" +
-                  "Dakikalar sürebilir. Sayfayı kapatma.",
-              )
+              !confirm(t("console.confirmUpdate"))
             ) {
               return;
             }
@@ -264,7 +271,7 @@ export function ConsolePanel({ maxLines }: { maxLines: number }) {
           className="flex items-center gap-1.5 rounded-md border border-brand/40 px-3 py-1.5 text-sm text-brand transition-colors hover:bg-brand/10 disabled:opacity-50"
         >
           <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />
-          Sunucuyu güncelle
+          {t("console.updateServer")}
         </button>
       </div>
 
@@ -278,7 +285,7 @@ export function ConsolePanel({ maxLines }: { maxLines: number }) {
         >
           {CONSOLE_PRESETS.map((item) => (
             <option key={item.key} value={item.key}>
-              {item.mutates ? `⚠ ${item.label}` : item.label}
+              {item.mutates ? `⚠ ${presetLabel(item.key)}` : presetLabel(item.key)}
             </option>
           ))}
         </select>
@@ -289,13 +296,13 @@ export function ConsolePanel({ maxLines }: { maxLines: number }) {
           onClick={() => void runPreset(preset)}
           className="rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand hover:text-brand disabled:opacity-50"
         >
-          Çalıştır
+          {t("console.run")}
         </button>
 
         {selected && (
           <code
             className="w-full min-w-0 truncate font-mono text-[11px] text-subtle sm:w-auto sm:flex-1"
-            title={selected.hint}
+            title={presetHint(selected)}
           >
             {selected.command}
           </code>
@@ -312,7 +319,7 @@ export function ConsolePanel({ maxLines }: { maxLines: number }) {
       >
         {entries.length === 0 ? (
           <p className="text-subtle">
-            Çıktı burada görünür. Bir kalıp seç ya da aşağıya komut yaz.
+            {t("console.emptyOutput")}
           </p>
         ) : (
           entries.map((entry) => (
@@ -322,7 +329,7 @@ export function ConsolePanel({ maxLines }: { maxLines: number }) {
                 <span className="break-all text-ink">{entry.command}</span>
               </div>
 
-              {entry.running && <div className="pl-4 text-subtle">çalışıyor… {elapsed} sn</div>}
+              {entry.running && <div className="pl-4 text-subtle">{t("console.running", { seconds: elapsed })}</div>}
 
               {entry.failure && (
                 <div className="whitespace-pre-wrap break-all pl-4 text-danger">
@@ -338,10 +345,15 @@ export function ConsolePanel({ maxLines }: { maxLines: number }) {
                 <div
                   className={`pl-4 ${entry.exitCode === 0 ? "text-subtle" : "text-warn"}`}
                 >
-                  çıkış kodu {entry.exitCode}
-                  {entry.output === "" && entry.exitCode === 0 ? " · çıktı yok" : ""}
+                  {t("console.exitCode", { code: entry.exitCode })}
+                  {entry.output === "" && entry.exitCode === 0 ? t("console.noOutput") : ""}
                   {entry.durationMs !== undefined
-                    ? ` · ${(entry.durationMs / 1000).toFixed(1)} sn`
+                    ? t("console.duration", {
+                        seconds: f.number(entry.durationMs / 1000, {
+                          minimumFractionDigits: 1,
+                          maximumFractionDigits: 1,
+                        }),
+                      })
                     : ""}
                 </div>
               )}
@@ -368,7 +380,7 @@ export function ConsolePanel({ maxLines }: { maxLines: number }) {
           autoCapitalize="none"
           autoCorrect="off"
           enterKeyHint="send"
-          placeholder={busy ? "komut çalışıyor…" : "komut yaz ve Enter'a bas (↑ geçmiş)"}
+          placeholder={busy ? t("console.placeholderBusy") : t("console.placeholder")}
           className="min-w-0 flex-1 bg-transparent font-mono text-sm outline-none placeholder:text-subtle disabled:opacity-50"
         />
         {/* Ok tuşu olmayan klavyeler için geçmiş — masaüstünde ↑ zaten var. */}
@@ -376,8 +388,8 @@ export function ConsolePanel({ maxLines }: { maxLines: number }) {
           type="button"
           disabled={busy}
           onClick={recallPrevious}
-          title="Önceki komut"
-          aria-label="Önceki komut"
+          title={t("console.previous")}
+          aria-label={t("console.previous")}
           className="flex items-center justify-center rounded-md border border-line p-1.5 text-subtle transition-colors hover:border-brand hover:text-brand disabled:opacity-40 sm:hidden"
         >
           <ChevronUp className="size-3.5" />
@@ -388,13 +400,13 @@ export function ConsolePanel({ maxLines }: { maxLines: number }) {
           onClick={() => void runCommand()}
           className="rounded-md border border-line px-3 py-1 text-xs transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
         >
-          Gönder
+          {t("console.send")}
         </button>
         <button
           type="button"
           disabled={entries.length === 0}
           onClick={() => setEntries([])}
-          title="Çıktıyı temizle"
+          title={t("console.clear")}
           className="rounded-md border border-line p-1.5 text-subtle transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
         >
           <Eraser className="size-3.5" />

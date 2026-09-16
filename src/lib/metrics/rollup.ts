@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
 import { getNumber } from "@/lib/settings";
@@ -149,12 +150,14 @@ export function runRollup(): { rolled: Counts; pruned: Counts; detail: string } 
       .map(([tier, n]) => `${tier}:${n}`)
       .join(" ");
 
-  const rolledText = summarize(rolled) || "yeni kova yok";
+  const rolledText = summarize(rolled) || serverT("rollupLib.noBuckets");
   const prunedText = summarize(pruned);
 
   return {
     rolled,
     pruned,
-    detail: prunedText ? `toplandı ${rolledText} · budandı ${prunedText}` : `toplandı ${rolledText}`,
+    detail: prunedText
+      ? serverT("rollupLib.detailPruned", { rolled: rolledText, pruned: prunedText })
+      : serverT("rollupLib.detail", { rolled: rolledText }),
   };
 }

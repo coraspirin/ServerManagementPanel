@@ -2,6 +2,7 @@ import "server-only";
 
 import net from "node:net";
 import { createHmac, randomBytes } from "node:crypto";
+import { serverT } from "@/lib/i18n/runtime";
 
 /**
  * host-helper istemcisi (T4 / M1.13).
@@ -112,33 +113,17 @@ function explainSocketError(error: Error): string {
   const code = (error as NodeJS.ErrnoException).code;
 
   if (code === "ENOENT") {
-    return (
-      `host-helper soketi yok (${SOCKET_PATH}) — kurulu mu ve compose'da ` +
-      "bağlı mı? Host'ta: sudo host-helper/install.sh"
-    );
+    return serverT("helper.socketMissing", { path: SOCKET_PATH });
   }
 
   if (code === "EACCES") {
-    return "host-helper soketine erişim reddedildi — panel kullanıcısı soketin grubunda mı?";
+    return serverT("helper.socketDenied");
   }
 
   if (code === "ECONNREFUSED") {
     // Şablon dizesi kullanılıyor: satır sonları mesajın bir parçası ve
     // kaçış dizisi yerine gerçek satır sonu yazmak okunaklı tutuyor.
-    return (
-      `Soket dosyası (${SOCKET_PATH}) duruyor ama onu dinleyen kimse yok.
-İki sebebi olabilir:
-
-1) host-helper çalışmıyor:
-   systemctl status panel-helper
-
-2) helper yeniden başlatıldı ve soketini yeniden yarattı; panel container'ı
-   ise eski dosyaya bağlı kaldı. Docker tek bir DOSYAYI mount ederken yola
-   değil inode'a bağlanır. Bu sürümde soket bir dizinin içine taşındı ve
-   sorun kalıcı olarak çözüldü, ama container eski mount'la çalışıyorsa bir
-   kez yeniden oluşturulmalı:
-   docker compose up -d --force-recreate panel`
-    );
+    return serverT("helper.socketStale", { path: SOCKET_PATH });
   }
 
   return error.message;
@@ -167,8 +152,7 @@ export async function callHelper(
   if (secret === "") {
     return {
       ok: false,
-      error:
-        "HELPER_SECRET tanımlı değil — host-helper kurulmamış (host-helper/install.sh).",
+      error: serverT("helper.noSecret"),
     };
   }
 
@@ -199,7 +183,7 @@ export async function callHelper(
     };
 
     socket.setTimeout(timeoutMs, () =>
-      finish({ ok: false, error: "host-helper yanıt vermedi (zaman aşımı)" }),
+      finish({ ok: false, error: serverT("helper.timeout") }),
     );
 
     socket.on("connect", () => socket.write(message));
@@ -211,7 +195,7 @@ export async function callHelper(
       try {
         finish(JSON.parse(buffer.slice(0, newline)) as HelperResponse);
       } catch {
-        finish({ ok: false, error: "host-helper geçersiz yanıt döndürdü" });
+        finish({ ok: false, error: serverT("helper.invalidResponse") });
       }
     });
 
@@ -221,7 +205,7 @@ export async function callHelper(
 
     // Bağlantı yanıt gelmeden kapanırsa sessizce beklememek gerekir.
     socket.on("close", () =>
-      finish({ ok: false, error: "host-helper bağlantısı yanıt vermeden kapandı" }),
+      finish({ ok: false, error: serverT("helper.closed") }),
     );
   });
 }

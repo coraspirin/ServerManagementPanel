@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import tls from "node:tls";
 import { listProxyHosts, saveCertificate, type CertificateInfo } from "./store";
@@ -36,7 +37,12 @@ export function inspectCertificate(
         socket.destroy();
 
         if (!cert || !cert.valid_to) {
-          resolve({ issuer: "", subject: "", notAfter: null, error: "sertifika okunamadı" });
+          resolve({
+            issuer: "",
+            subject: "",
+            notAfter: null,
+            error: serverT("certLib.unreadable"),
+          });
           return;
         }
 
@@ -59,7 +65,7 @@ export function inspectCertificate(
       resolve({ issuer: "", subject: "", notAfter: null, error: message });
     };
 
-    socket.on("timeout", () => fail("zaman aşımı"));
+    socket.on("timeout", () => fail(serverT("monitorCheck.timeout")));
     socket.on("error", (error) => fail(error.message));
   });
 }

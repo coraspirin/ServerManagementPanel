@@ -7,6 +7,8 @@ import { ImagePullPanel } from "./ImagePullPanel";
 import { ContainerCreateForm } from "./ContainerCreateForm";
 import { emptySpec, type ContainerSpec } from "@/lib/docker/spec";
 import type { DockerOverview } from "@/lib/docker/types";
+import { useT } from "@/lib/i18n/client";
+import type { MessageKey } from "@/lib/i18n/translate";
 
 /**
  * "Konteyner Ekle" penceresi (M3.46).
@@ -34,9 +36,9 @@ import type { DockerOverview } from "@/lib/docker/types";
 
 type Kaynak = "compose" | "pull";
 
-const SEKMELER: { id: Kaynak; label: string }[] = [
-  { id: "compose", label: "Compose YAML" },
-  { id: "pull", label: "Image çek" },
+const SEKMELER: { id: Kaynak; label: MessageKey }[] = [
+  { id: "compose", label: "docker.createDialog.tab.compose" },
+  { id: "pull", label: "docker.createDialog.tab.pull" },
 ];
 
 export function ContainerCreateDialog({
@@ -49,6 +51,7 @@ export function ContainerCreateDialog({
   /** Oluşturma başarılı — güncel tablo ve kullanıcıya gösterilecek metin. */
   onCreated: (data: DockerOverview, message: string) => void;
 }) {
+  const t = useT();
   const [kaynak, setKaynak] = useState<Kaynak>("compose");
 
   /*
@@ -78,7 +81,7 @@ export function ContainerCreateDialog({
     <Modal
       open={open}
       wide
-      title={spec ? "Konteyner ayrıntıları" : "Konteyner ekle"}
+      title={spec ? t("docker.createDialog.details") : t("docker.createDialog.add")}
       onClose={kapat}
     >
       {spec ? (
@@ -110,7 +113,7 @@ export function ContainerCreateDialog({
                     : "border-transparent text-subtle hover:text-ink"
                 }`}
               >
-                {sekme.label}
+                {t(sekme.label)}
               </button>
             ))}
 
@@ -125,7 +128,7 @@ export function ContainerCreateDialog({
               onClick={() => hazir(emptySpec())}
               className="ml-auto self-center text-xs text-subtle underline transition-colors hover:text-brand"
             >
-              boş formla başla
+              {t("docker.createDialog.blank")}
             </button>
           </div>
 

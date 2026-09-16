@@ -1,6 +1,7 @@
 import "server-only";
 
 import { audit } from "@/lib/auth/audit";
+import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 import { getNumber } from "@/lib/settings";
 import { validReference } from "./reference";
@@ -33,8 +34,7 @@ export async function tagImage(
   if (!parsed) {
     return {
       ok: false,
-      message:
-        "Etiket biçimi geçersiz. Örnek: `uygulama:1.2` ya da `ghcr.io/kullanici/uygulama:latest`.",
+      message: serverT("imagesLib.invalidTagExample"),
     };
   }
 
@@ -79,12 +79,12 @@ export async function untagImage(
   actor: { username: string; userId: number },
 ): Promise<ImageOutcome> {
   const parsed = validReference(reference);
-  if (!parsed) return { ok: false, message: "Etiket biçimi geçersiz." };
+  if (!parsed) return { ok: false, message: serverT("imagesLib.invalidTag") };
 
   try {
     await getDockerProvider().removeResource("image", `${parsed.repo}:${parsed.tag}`, false);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "etiket kaldırılamadı";
+    const message = error instanceof Error ? error.message : serverT("imagesLib.untagFailed");
     audit({
       userId: actor.userId,
       username: actor.username,
@@ -106,7 +106,7 @@ export async function untagImage(
     result: "ok",
   });
 
-  return { ok: true, message: `Etiket kaldırıldı: ${reference}` };
+  return { ok: true, message: serverT("imagesLib.untagged", { reference }) };
 }
 
 export type ImageExport =
@@ -131,10 +131,10 @@ export async function exportImage(
   if (sizeBytes !== null && sizeBytes > azami) {
     return {
       ok: false,
-      message:
-        `İmaj ${(sizeBytes / 1024 ** 3).toFixed(2)} GB — dışa aktarma sınırı ` +
-        `${(azami / 1024 ** 2).toFixed(0)} MB. Ayarlardan sınırı yükseltebilir ya da ` +
-        "sunucuda `docker save` kullanabilirsin.",
+      message: serverT("imagesLib.tooLarge", {
+        size: (sizeBytes / 1024 ** 3).toFixed(2),
+        limit: (azami / 1024 ** 2).toFixed(0),
+      }),
     };
   }
 
@@ -147,13 +147,13 @@ export async function exportImage(
       action: "docker.export_image",
       targetType: "image",
       targetId: id,
-      detail: `${(archive.length / 1024 ** 2).toFixed(1)} MB arşiv`,
+      detail: serverT("volumes.archiveSize", { size: (archive.length / 1024 ** 2).toFixed(1) }),
       result: "ok",
     });
 
     return { ok: true, archive, filename };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "arşiv oluşturulamadı";
+    const message = error instanceof Error ? error.message : serverT("volumes.archiveFailed");
     audit({
       userId: actor.userId,
       username: actor.username,

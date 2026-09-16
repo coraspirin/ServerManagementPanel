@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { appVersion, isMockMode } from "@/lib/env";
 import { getSystemProvider } from "@/lib/providers";
 import { dbStatus } from "@/lib/db/status";
@@ -35,7 +36,7 @@ export async function GET() {
         version: appVersion(),
         mode: isMockMode() ? "mock" : "live",
         time: new Date().toISOString(),
-        message: error instanceof Error ? error.message : "bilinmeyen hata",
+        message: error instanceof Error ? error.message : serverT("api.unknownError"),
       },
       { status: 503 },
     );

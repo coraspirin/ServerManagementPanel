@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { getDockerProvider } from "@/lib/providers";
@@ -29,12 +30,12 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as { scope?: unknown };
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const scope = body.scope as PruneScope;
   if (!SCOPES.includes(scope)) {
-    return Response.json({ error: "geçersiz kapsam" }, { status: 400 });
+    return Response.json({ error: serverT("api.docker.invalidScope") }, { status: 400 });
   }
 
   try {
@@ -45,13 +46,13 @@ export async function POST(request: Request) {
       username: guard.session.user.username,
       action: "docker.prune",
       targetId: scope,
-      detail: `${result.removed} kaynak silindi, ${(result.reclaimedBytes / 1024 ** 2).toFixed(0)} MB kazanıldı`,
+      detail: serverT("api.docker.pruned", { removed: result.removed, mb: (result.reclaimedBytes / 1024 ** 2).toFixed(0) }),
       result: "ok",
     });
 
     return Response.json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "bilinmeyen hata";
+    const message = error instanceof Error ? error.message : serverT("api.unknownError");
     audit({
       userId: guard.session.user.id,
       username: guard.session.user.username,

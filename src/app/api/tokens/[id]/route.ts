@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { findApiToken, revokeApiToken } from "@/lib/auth/apitoken";
@@ -21,18 +22,18 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const user = guard.session.user;
   const id = Number((await params).id);
   if (!Number.isInteger(id)) {
-    return Response.json({ error: "geçersiz anahtar" }, { status: 400 });
+    return Response.json({ error: serverT("api.tokens.invalid") }, { status: 400 });
   }
 
   const token = findApiToken(id);
   // Başkasının anahtarı için de 404: "var ama senin değil" demek, yönetici
   // olmayan birine sistemdeki anahtarların varlığını sızdırırdı.
   if (!token || (token.userId !== user.id && !hasPermission(user, "users.manage"))) {
-    return Response.json({ error: "anahtar bulunamadı" }, { status: 404 });
+    return Response.json({ error: serverT("api.notFound.token") }, { status: 404 });
   }
 
   if (!revokeApiToken(id)) {
-    return Response.json({ error: "anahtar zaten iptal edilmiş" }, { status: 400 });
+    return Response.json({ error: serverT("api.tokens.alreadyRevoked") }, { status: 400 });
   }
 
   audit({

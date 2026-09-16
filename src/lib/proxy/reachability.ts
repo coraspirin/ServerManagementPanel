@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { getDockerProvider } from "@/lib/providers";
 import { getString } from "@/lib/settings";
@@ -52,7 +53,9 @@ export async function proxyTargets(): Promise<ProxyTargets> {
       containers: [],
       caddyName,
       caddyNetworks: [],
-      problem: `Docker'a ulaşılamadı: ${error instanceof Error ? error.message : "bilinmeyen hata"}`,
+      problem: serverT("reachability.dockerUnreachable", {
+        error: error instanceof Error ? error.message : serverT("console.unknownError"),
+      }),
     };
   }
 
@@ -69,9 +72,7 @@ export async function proxyTargets(): Promise<ProxyTargets> {
       })),
       caddyName,
       caddyNetworks: [],
-      problem:
-        `"${caddyName}" adlı container bulunamadı; hedeflerin erişilebilirliği ` +
-        "denetlenemedi. Ayarlar → Yayınlama'daki container adını kontrol et.",
+      problem: serverT("reachability.caddyMissing", { name: caddyName }),
     };
   }
 

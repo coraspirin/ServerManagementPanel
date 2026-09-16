@@ -5,10 +5,10 @@ import { getString } from "@/lib/settings";
 import {
   currentLocale,
   getDictionary,
-  jobText,
   serverT,
   translator,
 } from "@/lib/i18n/runtime";
+import { jobText } from "@/lib/i18n/lookup";
 import { findJob, jobDefinitions } from "./definitions";
 import type { JobDefinition, JobStatusRow } from "./types";
 

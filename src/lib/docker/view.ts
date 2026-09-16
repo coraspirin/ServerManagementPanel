@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
 import { panelContainerName } from "@/lib/host/self";
@@ -27,8 +28,8 @@ export async function dockerOverview(): Promise<DockerOverview> {
       statsAt: null,
       error:
         error instanceof Error
-          ? `Docker'a erişilemedi: ${error.message}`
-          : "Docker'a erişilemedi.",
+          ? serverT("dockerView.unreachable", { error: error.message })
+          : serverT("dockerView.unreachableShort"),
     };
   }
 

@@ -1,13 +1,14 @@
 /**
  * Sayfa yardımının ARAMA mantığı.
  *
- * Metinlerin kendisi burada değil, sözlükte (`lib/i18n/dict/*​/help.ts`): bir
+ * Metinlerin kendisi burada değil, dil dosyalarında (`src/locales/*.json`, `help.<yol>.*`): bir
  * ekranın ne yaptığı da çevrilmesi gereken bir metin ve iki dili tek dosyada
  * tutmak ikisinin zamanla ayrışması demekti. Burada kalan tek şey "hangi yol
  * hangi kaydı alır" kuralı.
  */
 
-import type { Dictionary } from "@/lib/i18n/dict/tr";
+import type { Dictionary } from "@/lib/i18n/locales";
+import { helpRoutes } from "@/lib/i18n/lookup";
 
 export type HelpEntry = {
   /** Bu ekran ne işe yarar. */
@@ -26,18 +27,24 @@ export type HelpEntry = {
  * olduğu için tüm sayfalar "Genel Bakış" metnini gösterirdi.
  */
 export function helpFor(pathname: string, dict: Dictionary): HelpEntry | null {
-  // Yollar çalışma zamanında geliyor; sözlüğün harf harf bilinen anahtar tipi
-  // burada iş görmüyor, tek bir dönüşümle gevşetiliyor.
-  const pageHelp = dict.help as Record<string, HelpEntry | undefined>;
-
-  if (pathname === "/") return pageHelp["/"] ?? null;
+  const routes = helpRoutes(dict);
 
   let best: string | null = null;
-  for (const key of Object.keys(pageHelp)) {
-    if (key === "/") continue;
-    if (pathname === key || pathname.startsWith(`${key}/`)) {
-      if (!best || key.length > best.length) best = key;
+  if (pathname === "/") {
+    best = routes.includes("/") ? "/" : null;
+  } else {
+    for (const route of routes) {
+      if (route === "/") continue;
+      if (pathname === route || pathname.startsWith(`${route}/`)) {
+        if (!best || route.length > best.length) best = route;
+      }
     }
   }
-  return best ? pageHelp[best] ?? null : null;
+  if (!best) return null;
+
+  return {
+    amac: dict[`help.${best}.amac`],
+    nasil: dict[`help.${best}.nasil`] ?? "",
+    dikkat: dict[`help.${best}.dikkat`],
+  };
 }

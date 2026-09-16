@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { useContainerNames } from "@/components/settings/ContainerSelect";
 import {
-  EXPECTED_HINTS,
   MONITOR_TYPES,
   type Monitor,
   type MonitorType,
 } from "@/lib/monitors/types";
+import { useDynamicT, useT } from "@/lib/i18n/client";
 
 /**
  * Monitör ekleme/düzenleme formu (M1.2).
@@ -125,6 +125,8 @@ export function MonitorForm({
     değerlerle dolu olduğu için "boş değil" ölçütü işe yaramıyordu: her form
     açılışında dört alanlı gelişmiş bölüm de açılırdı.
   */
+  const t = useT();
+  const dt = useDynamicT();
   const [showAdvanced, setShowAdvanced] = useState(
     values.intervalSeconds !== String(defaults.intervalSeconds) ||
       values.timeoutSeconds !== String(defaults.timeoutSeconds) ||
@@ -134,7 +136,6 @@ export function MonitorForm({
 
   const { names: containerNames } = useContainerNames();
 
-  const typeInfo = MONITOR_TYPES.find((t) => t.value === values.type)!;
   const isHttps = values.type === "http" && values.target.startsWith("https://");
   const usesExpected = values.type !== "tcp" && values.type !== "ping";
 
@@ -146,7 +147,7 @@ export function MonitorForm({
         onSubmit();
       }}
     >
-      <Field label="Ad">
+      <Field label={t("users.roles.name")}>
         <input
           type="text"
           value={values.name}
@@ -158,7 +159,7 @@ export function MonitorForm({
       </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Ne kontrol edilecek">
+        <Field label={t("monitorForm.what")}>
           <select
             value={values.type}
             onChange={(e) => onChange({ type: e.target.value as MonitorType })}
@@ -166,18 +167,18 @@ export function MonitorForm({
           >
             {MONITOR_TYPES.map((type) => (
               <option key={type.value} value={type.value}>
-                {type.label}
+                {dt(`monitorType.${type.value}.label`)}
               </option>
             ))}
           </select>
         </Field>
 
         <Field
-          label="Hedef"
+          label={t("proxy.form.target")}
           help={
             values.type === "container" && containerNames
-              ? "Sistemdeki container'lardan seç. Seçim, Ad alanı boşsa onu da doldurur."
-              : typeInfo.hint
+              ? t("monitorForm.containerHelp")
+              : dt(`monitorType.${values.type}.hint`)
           }
         >
           {values.type === "container" && containerNames && containerNames.length > 0 ? (
@@ -191,9 +192,11 @@ export function MonitorForm({
               }}
               className={`font-mono ${inputClass}`}
             >
-              <option value="">— container seç —</option>
+              <option value="">{t("monitorForm.pickContainer")}</option>
               {!containerNames.includes(values.target) && values.target !== "" && (
-                <option value={values.target}>{values.target} (listede yok)</option>
+                <option value={values.target}>
+                  {t("appForm.notInList", { name: values.target })}
+                </option>
               )}
               {containerNames.map((name) => (
                 <option key={name} value={name}>
@@ -213,7 +216,7 @@ export function MonitorForm({
       </div>
 
       {usesExpected && (
-        <Field label="Beklenen yanıt (isteğe bağlı)" help={EXPECTED_HINTS[values.type]}>
+        <Field label={t("monitorForm.expected")} help={dt(`monitorType.${values.type}.expected`)}>
           <input
             type="text"
             value={values.expected}
@@ -232,10 +235,9 @@ export function MonitorForm({
             className="mt-0.5 size-4 accent-[var(--brand)]"
           />
           <span className="text-xs">
-            <span className="font-medium">Sertifika doğrulamasını atla</span>
+            <span className="font-medium">{t("monitorForm.ignoreTls")}</span>
             <span className="mt-0.5 block text-subtle">
-              Self-signed sertifika kullanan ev servisleri için. Yalnızca
-              ulaşılabilirliği ölçer; sertifikanın geçerliliğini kontrol etmez.
+              {t("monitorForm.ignoreTlsHelp")}
             </span>
           </span>
         </label>
@@ -248,7 +250,7 @@ export function MonitorForm({
           onChange={(e) => onChange({ enabled: e.target.checked })}
           className="size-4 accent-[var(--brand)]"
         />
-        Etkin
+        {t("proxy.form.enabled")}
       </label>
 
       <div className="rounded-md border border-line">
@@ -257,16 +259,15 @@ export function MonitorForm({
           onClick={() => setShowAdvanced((v) => !v)}
           className="flex w-full items-center justify-between px-3 py-2 text-xs text-subtle transition-colors hover:text-ink"
         >
-          <span>Bu monitöre özel zamanlama</span>
-          <span>{showAdvanced ? "gizle" : "göster"}</span>
+          <span>{t("monitorForm.customSchedule")}</span>
+          <span>{showAdvanced ? t("appForm.hide") : t("appForm.show")}</span>
         </button>
 
         {showAdvanced && (
           <div className="grid gap-3 border-t border-line px-3 py-3 sm:grid-cols-2">
             <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
               <p className="text-[11px] text-subtle">
-                Kutulardaki sayılar bu monitöre kaydedilir. Boş bırakılan bir alan
-                Ayarlar&apos;daki genel değeri izlemeye devam eder.
+                {t("monitorForm.customHelp")}
               </p>
               <button
                 type="button"
@@ -280,21 +281,21 @@ export function MonitorForm({
                 }
                 className="ml-auto shrink-0 text-[11px] text-brand underline transition-opacity hover:opacity-80"
               >
-                genel ayarları izle
+                {t("monitorForm.followGlobal")}
               </button>
             </div>
             {(
               [
-                ["intervalSeconds", "Kontrol aralığı (sn)", defaults.intervalSeconds],
-                ["timeoutSeconds", "Zaman aşımı (sn)", defaults.timeoutSeconds],
-                ["retries", "Yeniden deneme", defaults.retries],
-                ["downThreshold", "Çevrimdışı eşiği", defaults.downThreshold],
+                ["intervalSeconds", t("monitorForm.interval"), defaults.intervalSeconds],
+                ["timeoutSeconds", t("monitorForm.timeout"), defaults.timeoutSeconds],
+                ["retries", t("monitorForm.retries"), defaults.retries],
+                ["downThreshold", t("monitorForm.downThreshold"), defaults.downThreshold],
               ] as const
             ).map(([key, label, fallback]) => (
               <Field
                 key={key}
                 label={label}
-                help={values[key] === "" ? `genel ayar izleniyor: ${fallback}` : undefined}
+                help={values[key] === "" ? t("monitorForm.followingGlobal", { value: fallback }) : undefined}
               >
                 <input
                   type="number"
@@ -316,14 +317,14 @@ export function MonitorForm({
           onClick={onCancel}
           className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
         >
-          Vazgeç
+          {t("common.actions.cancel")}
         </button>
         <button
           type="submit"
           disabled={busy}
           className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity disabled:opacity-50"
         >
-          {busy ? "Kaydediliyor…" : "Kaydet"}
+          {busy ? t("common.states.saving") : t("common.actions.save")}
         </button>
       </div>
     </form>

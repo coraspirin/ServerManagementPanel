@@ -8,15 +8,13 @@ import { CSRF_HEADER } from "@/lib/auth/types";
 import type { Dependency } from "@/lib/docker/graph";
 import type { Runbook } from "@/lib/docker/runbooks";
 import type { ContainerDetail, RestartPolicy } from "@/lib/providers/types";
+import { useFormat, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 import { readCsrfToken, Row, Section } from "./shared";
 
-const POLICY_LABEL: Record<RestartPolicy["name"], string> = {
-  no: "Yeniden başlatma",
-  always: "Her zaman",
-  "unless-stopped": "Elle durdurulmadıkça",
-  "on-failure": "Yalnızca hata çıkışında",
-};
+/** Politikaların sırası; adları dil dosyasında (`docker.general.policy.<ad>`). */
+const POLICIES: RestartPolicy["name"][] = ["no", "always", "unless-stopped", "on-failure"];
 
 /** Genel sekmesi: etki, kimlik, sağlık, politika, mount'lar, runbook. */
 export function GeneralTab({
@@ -32,44 +30,41 @@ export function GeneralTab({
   runbook: Runbook | null;
   canAct: boolean;
 }) {
+  const t = useT();
+  const f = useFormat();
+
   return (
     <div className="space-y-5">
       <Impact impact={impact} name={detail.name} />
 
-      <Section title="Kimlik">
+      <Section title={t("docker.general.identity")}>
         <dl className="space-y-1.5 text-sm">
-          <Row label="Image">
+          <Row label={t("docker.general.image")}>
             <span className="font-mono text-[11px]">{detail.image}</span>
           </Row>
-          <Row label="Durum">
+          <Row label={t("docker.general.state")}>
             <span className="font-mono text-[11px]">{detail.status}</span>
           </Row>
           {detail.startedAt && (
-            <Row label="Başlangıç">
-              {new Date(detail.startedAt).toLocaleString("tr-TR")}
-            </Row>
+            <Row label={t("docker.general.started")}>{f.dateTime(detail.startedAt)}</Row>
           )}
-          <Row label="Oluşturma">
-            {new Date(detail.createdAt * 1000).toLocaleString("tr-TR")}
+          <Row label={t("docker.general.created")}>
+            {f.dateTime(detail.createdAt * 1000)}
           </Row>
           {detail.composeService && (
-            <Row label="Compose">
+            <Row label={t("docker.general.compose")}>
               {detail.composeProject} / {detail.composeService}
             </Row>
           )}
         </dl>
       </Section>
 
-      <Section title="Sağlık kontrolü">
+      <Section title={t("docker.general.health")}>
         {detail.healthcheck === null ? (
-          <p className="text-sm text-subtle">
-            Bu container&apos;da healthcheck tanımlı değil — Docker yalnızca sürecin ayakta
-            olduğunu bilir, hizmet verip vermediğini bilmez. Servis izleme (Servis Durumu
-            ekranı) bu boşluğu doldurur.
-          </p>
+          <p className="text-sm text-subtle">{t("docker.general.noHealthcheck")}</p>
         ) : (
           <dl className="space-y-1.5 text-sm">
-            <Row label="Durum">
+            <Row label={t("docker.general.state")}>
               <span
                 className={
                   detail.health === "healthy"
@@ -79,22 +74,28 @@ export function GeneralTab({
                       : "text-warn"
                 }
               >
-                {detail.health ?? "bilinmiyor"}
+                {detail.health ?? t("docker.general.healthUnknown")}
               </span>
               {detail.healthcheck.failingStreak > 0 && (
                 <span className="ml-2 text-xs text-danger">
-                  {detail.healthcheck.failingStreak} ardışık başarısız
+                  {t("docker.general.failingStreak", {
+                    count: detail.healthcheck.failingStreak,
+                  })}
                 </span>
               )}
             </Row>
-            <Row label="Komut">
+            <Row label={t("docker.general.command")}>
               <code className="font-mono text-[11px]">{detail.healthcheck.test.join(" ")}</code>
             </Row>
             {detail.healthcheck.intervalSeconds !== null && (
-              <Row label="Aralık">{detail.healthcheck.intervalSeconds} sn</Row>
+              <Row label={t("docker.general.interval")}>
+                {t("docker.general.intervalValue", {
+                  value: detail.healthcheck.intervalSeconds,
+                })}
+              </Row>
             )}
             {detail.healthcheck.lastOutput && (
-              <Row label="Son çıktı">
+              <Row label={t("docker.general.lastOutput")}>
                 <pre className="mt-0.5 overflow-x-auto whitespace-pre-wrap rounded border border-line bg-canvas p-2 font-mono text-[11px]">
                   {detail.healthcheck.lastOutput}
                 </pre>
@@ -112,18 +113,17 @@ export function GeneralTab({
         canAct={canAct}
       />
 
-      <Section title="Mount'lar">
+      <Section title={t("docker.general.mounts")}>
         {detail.mounts.length === 0 ? (
-          <p className="text-sm text-subtle">
-            Bu container hiçbir volume ya da host dizini bağlamıyor — durdurulup
-            silindiğinde içindeki her şey gider.
-          </p>
+          <p className="text-sm text-subtle">{t("docker.general.noMounts")}</p>
         ) : (
           <ul className="space-y-0.5 break-all font-mono text-[11px]">
             {detail.mounts.map((mount) => (
               <li key={mount.destination}>
                 {mount.volumeName ?? mount.source} → {mount.destination}
-                {mount.readOnly && <span className="text-subtle"> (salt-okunur)</span>}
+                {mount.readOnly && (
+                  <span className="text-subtle"> {t("docker.general.readOnly")}</span>
+                )}
               </li>
             ))}
           </ul>
@@ -141,11 +141,15 @@ export function GeneralTab({
 }
 
 function Impact({ impact, name }: { impact: Dependency[]; name: string }) {
+  const t = useT();
+
   if (impact.length === 0) {
     return (
       <div className="rounded-lg border border-line bg-surface px-4 py-3 text-sm text-subtle">
-        <span className="font-medium text-ink">{name}</span> durdurulursa etkilenecek başka
-        container görünmüyor.
+        <Rich
+          text={t("docker.general.impactNone")}
+          values={{ name: <span className="font-medium text-ink">{name}</span> }}
+        />
       </div>
     );
   }
@@ -164,7 +168,7 @@ function Impact({ impact, name }: { impact: Dependency[]; name: string }) {
         ) : (
           <Link2 className="size-4 text-warn" aria-hidden />
         )}
-        Bunu durdurursan etkilenecekler
+        {t("docker.general.impactTitle")}
       </p>
 
       <ul className="mt-2 space-y-1 text-sm">
@@ -176,7 +180,7 @@ function Impact({ impact, name }: { impact: Dependency[]; name: string }) {
                 entry.hard ? "bg-danger/15 text-danger" : "bg-warn/15 text-warn"
               }`}
             >
-              {entry.hard ? "çalışamaz" : "işlevini kaybeder"}
+              {entry.hard ? t("docker.general.impactHard") : t("docker.general.impactSoft")}
             </span>
             <span className="text-xs text-subtle">{entry.reason}</span>
           </li>
@@ -199,6 +203,7 @@ function RestartPolicySection({
   composeProject: string | null;
   canAct: boolean;
 }) {
+  const t = useT();
   const [policy, setPolicy] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -218,20 +223,20 @@ function RestartPolicySection({
         },
       );
       const payload = await response.json();
-      if (!response.ok) setError(payload.error ?? "Değiştirilemedi.");
+      if (!response.ok) setError(payload.error ?? t("docker.general.changeFailed"));
       else {
         setPolicy(next);
         setSaved(true);
       }
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Section title="Yeniden başlatma politikası">
+    <Section title={t("docker.general.restartTitle")}>
       <div className="flex flex-wrap items-center gap-2">
         <select
           value={policy.name}
@@ -244,16 +249,16 @@ function RestartPolicySection({
           }
           className="rounded-md border border-line bg-canvas px-2 py-1.5 text-sm outline-none focus:border-brand disabled:opacity-50"
         >
-          {(Object.keys(POLICY_LABEL) as RestartPolicy["name"][]).map((name) => (
+          {POLICIES.map((name) => (
             <option key={name} value={name}>
-              {POLICY_LABEL[name]}
+              {t(`docker.general.policy.${name}`)}
             </option>
           ))}
         </select>
 
         {policy.name === "on-failure" && (
           <label className="flex items-center gap-1.5 text-xs text-subtle">
-            en fazla
+            {t("docker.general.atMost")}
             <input
               type="number"
               min={0}
@@ -268,26 +273,30 @@ function RestartPolicySection({
               }}
               className="w-16 rounded-md border border-line bg-canvas px-2 py-1 text-sm outline-none focus:border-brand"
             />
-            deneme
+            {t("docker.general.attempts")}
           </label>
         )}
 
         <span className="text-xs text-subtle">
-          bugüne kadar {restartCount} yeniden başlatma
+          {t("docker.general.restartCount", { count: restartCount })}
         </span>
-        {saved && <span className="text-xs text-ok">uygulandı</span>}
+        {saved && <span className="text-xs text-ok">{t("docker.general.applied")}</span>}
       </div>
 
       {error && <p className="mt-1.5 text-xs text-danger">{error}</p>}
 
       <p className="mt-2 text-xs text-subtle">
-        Bu değişiklik container&apos;ı yeniden oluşturmadan, çalışırken uygulanır.
+        {t("docker.general.restartNote")}
         {composeProject && (
           <>
             {" "}
-            Ancak bu container <span className="font-medium">{composeProject}</span> compose
-            yığınına ait: bir sonraki <code className="font-mono">compose up</code> dosyadaki
-            değeri geri yazar. Kalıcı olması için Compose sekmesinden de güncelle.
+            <Rich
+              text={t("docker.general.restartComposeNote")}
+              values={{
+                project: <span className="font-medium">{composeProject}</span>,
+                cmd: <code className="font-mono">compose up</code>,
+              }}
+            />
           </>
         )}
       </p>
@@ -306,6 +315,8 @@ function RunbookSection({
   initial: Runbook | null;
   canAct: boolean;
 }) {
+  const t = useT();
+  const f = useFormat();
   const [runbook, setRunbook] = useState(initial);
   const [editing, setEditing] = useState(initial === null);
   const [draft, setDraft] = useState(initial?.body ?? "");
@@ -323,13 +334,13 @@ function RunbookSection({
       });
       const payload = await response.json();
       if (!response.ok) {
-        setError(payload.error ?? "Kaydedilemedi.");
+        setError(payload.error ?? t("common.errors.notSaved"));
         return;
       }
       setRunbook(payload.runbook as Runbook | null);
       setEditing(payload.runbook === null);
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
@@ -337,7 +348,7 @@ function RunbookSection({
 
   return (
     <Section
-      title="Runbook"
+      title={t("docker.general.runbook")}
       action={
         canAct && !editing ? (
           <button
@@ -345,7 +356,7 @@ function RunbookSection({
             onClick={() => setEditing(true)}
             className="flex items-center gap-1 text-xs text-subtle transition-colors hover:text-brand"
           >
-            <Pencil className="size-3.5" /> düzenle
+            <Pencil className="size-3.5" /> {t("docker.general.edit")}
           </button>
         ) : null
       }
@@ -357,7 +368,7 @@ function RunbookSection({
             onChange={(e) => setDraft(e.target.value)}
             disabled={!canAct || busy}
             rows={8}
-            placeholder={`${containerName} çökerse ne yapılmalı?\n\nÖrn:\n# İlk kontroller\n- \`docker logs ${containerName}\` — izin hatası var mı\n- /veri volume'unun sahibi 1000:1000 olmalı`}
+            placeholder={t("docker.general.runbookPlaceholder", { name: containerName })}
             className="w-full rounded-md border border-line bg-canvas p-2.5 font-mono text-[12px] outline-none focus:border-brand disabled:opacity-50"
           />
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -367,7 +378,7 @@ function RunbookSection({
               disabled={!canAct || busy}
               className="rounded-md border border-brand px-3 py-1.5 text-xs text-brand transition-colors hover:bg-brand/10 disabled:opacity-50"
             >
-              {busy ? "kaydediliyor…" : "Kaydet"}
+              {busy ? t("docker.general.saving") : t("common.actions.save")}
             </button>
             {runbook && (
               <button
@@ -378,11 +389,11 @@ function RunbookSection({
                 }}
                 className="rounded-md border border-line px-3 py-1.5 text-xs text-subtle transition-colors hover:text-ink"
               >
-                Vazgeç
+                {t("common.actions.cancel")}
               </button>
             )}
             <span className="text-[11px] text-subtle">
-              Markdown yazabilirsin. Boş bırakıp kaydedersen not silinir.
+              {t("docker.general.markdownHint")}
             </span>
           </div>
           {error && <p className="mt-1.5 text-xs text-danger">{error}</p>}
@@ -391,14 +402,16 @@ function RunbookSection({
         <>
           <Markdown source={runbook.body} />
           <p className="mt-2 text-[11px] text-subtle">
-            {new Date(runbook.updatedAt * 1000).toLocaleString("tr-TR")} · {runbook.updatedBy} ·
-            bu not kritik alarm bildiriminde de gönderilir
+            {t("docker.general.runbookMeta", {
+              date: f.dateTime(runbook.updatedAt * 1000),
+              user: runbook.updatedBy,
+            })}
           </p>
         </>
       ) : (
         <p className="flex items-center gap-1.5 text-sm text-subtle">
           <BookText className="size-4" aria-hidden />
-          Not yok. Buraya yazılan müdahale adımları alarm bildirimine eklenir.
+          {t("docker.general.noRunbook")}
         </p>
       )}
     </Section>

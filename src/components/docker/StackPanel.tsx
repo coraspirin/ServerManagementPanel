@@ -19,7 +19,8 @@ import { StackInstaller } from "./StackInstaller";
 import { readCsrfToken } from "./detail/shared";
 import { CSRF_HEADER } from "@/lib/auth/types";
 import { formatBytes } from "@/lib/metrics/catalog";
-import { useFormat } from "@/lib/i18n/client";
+import { useFormat, useT } from "@/lib/i18n/client";
+import type { MessageKey } from "@/lib/i18n/translate";
 import type { StackRow } from "@/lib/docker/stacks";
 import type { ContainerView } from "@/lib/docker/types";
 
@@ -52,12 +53,17 @@ type Payload = {
 };
 
 /** Compose komutları — `/api/host/compose`'un kabul ettiği eylemler. */
-const KOMUTLAR = [
-  { action: "compose.pull", label: "Çek", icon: Download, danger: false },
-  { action: "compose.up", label: "Uygula", icon: Play, danger: false },
-  { action: "compose.restart", label: "Yeniden başlat", icon: RotateCw, danger: false },
-  { action: "compose.down", label: "Durdur", icon: Square, danger: true },
-] as const;
+const KOMUTLAR: {
+  action: string;
+  labelKey: MessageKey;
+  icon: typeof Download;
+  danger: boolean;
+}[] = [
+  { action: "compose.pull", labelKey: "docker.stacks.cmd.pull", icon: Download, danger: false },
+  { action: "compose.up", labelKey: "docker.stacks.cmd.up", icon: Play, danger: false },
+  { action: "compose.restart", labelKey: "docker.stacks.cmd.restart", icon: RotateCw, danger: false },
+  { action: "compose.down", labelKey: "docker.stacks.cmd.down", icon: Square, danger: true },
+];
 
 export function StackPanel({
   query,
@@ -84,6 +90,7 @@ export function StackPanel({
   /** Değiştiğinde liste yeniden çekilir (araç çubuğundaki Yenile). */
   refreshToken: number;
 }) {
+  const t = useT();
   const f = useFormat();
   const [data, setData] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -98,9 +105,9 @@ export function StackPanel({
       setData(payload);
       setError(null);
     } else {
-      setError(payload.error ?? "Yığınlar okunamadı.");
+      setError(payload.error ?? t("docker.stacks.loadFailed"));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -113,12 +120,12 @@ export function StackPanel({
         });
         apply(await response.json(), response.ok);
       } catch (fetchError) {
-        if ((fetchError as Error)?.name !== "AbortError") setError("Sunucuya ulaşılamadı.");
+        if ((fetchError as Error)?.name !== "AbortError") setError(t("common.errors.network"));
       }
     })();
 
     return () => controller.abort();
-  }, [apply, refreshToken]);
+  }, [apply, refreshToken, t]);
 
   const tazele = useCallback(async () => {
     try {
@@ -138,7 +145,7 @@ export function StackPanel({
 
   async function run(stack: StackRow, action: string, label: string) {
     if (!stack.workingDir) return;
-    if (!confirm(`${stack.name}: ${label.toLocaleLowerCase("tr")}?`)) return;
+    if (!confirm(t("docker.stacks.confirm", { stack: stack.name, action: f.lower(label) }))) return;
 
     setBusy(`${stack.name}:${action}`);
     setSonuc(null);
@@ -153,23 +160,23 @@ export function StackPanel({
         stack: stack.name,
         ok: response.ok,
         text: response.ok
-          ? payload.output?.trim() || `${label} tamamlandı.`
-          : (payload.error ?? "İşlem başarısız."),
+          ? payload.output?.trim() || t("docker.stacks.done", { action: label })
+          : (payload.error ?? t("common.errors.actionFailed")),
       });
 
       // Durum değişti; liste yeniden çekiliyor.
       await tazele();
     } catch {
-      setSonuc({ stack: stack.name, ok: false, text: "Sunucuya ulaşılamadı." });
+      setSonuc({ stack: stack.name, ok: false, text: t("common.errors.network") });
     } finally {
       setBusy(null);
     }
   }
 
   if (error) return <p className="text-sm text-danger">{error}</p>;
-  if (!data) return <p className="text-sm text-subtle">yükleniyor…</p>;
+  if (!data) return <p className="text-sm text-subtle">{t("common.states.loadingInline")}</p>;
 
-  const q = query.trim().toLocaleLowerCase("tr");
+  const q = f.lower(query.trim());
 
   /*
     Arama YALNIZCA satırları süzüyor; yığının "2/3" sayısı süzülmemiş veriden
@@ -177,7 +184,7 @@ export function StackPanel({
     "kaç container çalışıyor" cevabını değiştirirdi.
   */
   const stacks = q
-    ? data.stacks.filter((stack) => stack.name.toLocaleLowerCase("tr").includes(q))
+    ? data.stacks.filter((stack) => f.lower(stack.name).includes(q))
     : data.stacks;
 
   const uyeleri = (stack: StackRow) =>
@@ -193,7 +200,7 @@ export function StackPanel({
             className="inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1.5 text-xs text-subtle transition-colors hover:border-brand hover:text-brand"
           >
             <Plus className="size-3.5" aria-hidden />
-            {kurulum ? "Kurulumu kapat" : "Yeni yığın"}
+            {kurulum ? t("docker.stacks.closeInstall") : t("docker.stacks.newStack")}
           </button>
         </div>
       )}
@@ -208,7 +215,7 @@ export function StackPanel({
 
       {stacks.length === 0 ? (
         <p className="rounded-lg border border-dashed border-line bg-surface px-5 py-8 text-center text-sm text-subtle">
-          {data.stacks.length === 0 ? "Compose ile yönetilen yığın yok." : "Eşleşen yığın yok."}
+          {data.stacks.length === 0 ? t("docker.stacks.none") : t("docker.stacks.noMatch")}
         </p>
       ) : (
         <div className="divide-y divide-line rounded-lg border border-line bg-surface">
@@ -237,11 +244,13 @@ export function StackPanel({
                     className="rounded border border-line px-1.5 py-0.5 text-[10px] text-subtle"
                     title={
                       stack.source === "panel"
-                        ? "Panelden kuruldu — kaydı panelde tutuluyor"
-                        : "Panel dışında oluşturuldu; container etiketlerinden keşfedildi"
+                        ? t("docker.stacks.sourcePanelTitle")
+                        : t("docker.stacks.sourceExternalTitle")
                     }
                   >
-                    {stack.source === "panel" ? "panel" : "dış"}
+                    {stack.source === "panel"
+                      ? t("docker.stacks.sourcePanel")
+                      : t("docker.stacks.sourceExternal")}
                   </span>
 
                   <span
@@ -254,8 +263,11 @@ export function StackPanel({
                     }`}
                   >
                     {stack.total === 0
-                      ? "container yok"
-                      : `${stack.running}/${stack.total} çalışıyor`}
+                      ? t("docker.stacks.noContainers")
+                      : t("docker.stacks.runningCount", {
+                          running: stack.running,
+                          total: stack.total,
+                        })}
                   </span>
 
                   {stack.cpuPct !== null && (
@@ -267,9 +279,9 @@ export function StackPanel({
 
                   <span
                     className="truncate font-mono text-[11px] text-subtle"
-                    title={stack.workingDir ?? "proje dizini etiketlerde yazmıyor"}
+                    title={stack.workingDir ?? t("docker.stacks.dirMissingTitle")}
                   >
-                    {stack.workingDir ?? "dizin bilinmiyor"}
+                    {stack.workingDir ?? t("docker.stacks.dirUnknown")}
                   </span>
 
                   <div className="ml-auto flex flex-wrap items-center gap-1">
@@ -280,13 +292,13 @@ export function StackPanel({
                         disabled={members.length === 0}
                         title={
                           members.length === 0
-                            ? "Compose düzenleyici dosyayı çalışan bir container üzerinden buluyor; bu yığında container yok."
-                            : "Compose dosyasını düzenle"
+                            ? t("docker.stacks.editDisabled")
+                            : t("docker.stacks.editCompose")
                         }
                         className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-xs text-subtle transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
                       >
                         <FileCode2 className="size-3" aria-hidden />
-                        Compose
+                        {t("docker.stacks.composeButton")}
                       </button>
                     )}
 
@@ -296,7 +308,7 @@ export function StackPanel({
                           key={komut.action}
                           type="button"
                           disabled={busy !== null}
-                          onClick={() => void run(stack, komut.action, komut.label)}
+                          onClick={() => void run(stack, komut.action, t(komut.labelKey))}
                           className={`inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-xs text-subtle transition-colors disabled:opacity-40 ${
                             komut.danger
                               ? "hover:border-danger hover:text-danger"
@@ -304,7 +316,7 @@ export function StackPanel({
                           }`}
                         >
                           <komut.icon className="size-3" aria-hidden />
-                          {busy === `${stack.name}:${komut.action}` ? "…" : komut.label}
+                          {busy === `${stack.name}:${komut.action}` ? "…" : t(komut.labelKey)}
                         </button>
                       ))}
                   </div>
@@ -318,15 +330,14 @@ export function StackPanel({
                 {stack.workingDir && !komutlarAcik && (
                   <p className="px-4 pb-2 text-[11px] text-subtle">
                     {!data.helperReady
-                      ? "Compose komutları için host-helper gerekiyor — `docker compose` bir CLI eklentisi ve panel container'ından çağrılamıyor."
-                      : "Compose komutları için host servis yetkisi (host.service) gerekiyor."}
+                      ? t("docker.stacks.needHelper")
+                      : t("docker.stacks.needPermission")}
                   </p>
                 )}
 
                 {!stack.workingDir && (
                   <p className="px-4 pb-2 text-[11px] text-subtle">
-                    Proje dizini container etiketlerinde yazmıyor; bu yığın compose dışında
-                    bir yolla oluşturulmuş olabilir.
+                    {t("docker.stacks.noWorkingDir")}
                   </p>
                 )}
 
@@ -334,7 +345,10 @@ export function StackPanel({
                   <p className="flex items-start gap-1.5 px-4 pb-2 text-[11px] text-danger">
                     <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden />
                     <span>
-                      Son işlem ({stack.lastAction}) başarısız: {stack.lastError}
+                      {t("docker.stacks.lastError", {
+                        action: stack.lastAction ?? "",
+                        error: stack.lastError,
+                      })}
                     </span>
                   </p>
                 )}
@@ -364,7 +378,7 @@ export function StackPanel({
                   <div className="overflow-x-auto border-t border-line">
                     {members.length === 0 ? (
                       <p className="px-4 py-3 text-xs text-subtle">
-                        Bu yığının çalışan ya da durmuş container&apos;ı yok.
+                        {t("docker.stacks.noMembers")}
                       </p>
                     ) : (
                       <table className="rtable w-full min-w-[52rem] text-sm">
@@ -396,9 +410,7 @@ export function StackPanel({
       )}
 
       <p className="text-[11px] text-subtle">
-        &quot;dış&quot; yığınlar container etiketlerinden keşfedilir; &quot;panel&quot;
-        olanların kaydı panelde durur — kurulumu başarısız olan bir yığının
-        container&apos;ı olmaz ve yalnızca o kayıt sayesinde burada görünür.
+        {t("docker.stacks.footer")}
       </p>
     </div>
   );

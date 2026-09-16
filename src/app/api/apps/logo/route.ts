@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { saveLogo } from "@/lib/apps/logos";
@@ -22,18 +23,18 @@ export async function POST(request: Request) {
 
   const declared = Number(request.headers.get("content-length") ?? "0");
   if (declared > MAX_UPLOAD_BYTES) {
-    return Response.json({ error: "dosya çok büyük" }, { status: 413 });
+    return Response.json({ error: serverT("api.apps.fileTooLarge") }, { status: 413 });
   }
 
   let file: unknown;
   try {
     file = (await request.formData()).get("file");
   } catch {
-    return Response.json({ error: "geçersiz yükleme" }, { status: 400 });
+    return Response.json({ error: serverT("api.apps.invalidUpload") }, { status: 400 });
   }
 
   if (!(file instanceof File)) {
-    return Response.json({ error: "dosya seçilmedi" }, { status: 400 });
+    return Response.json({ error: serverT("api.apps.noFile") }, { status: 400 });
   }
 
   const result = saveLogo(Buffer.from(await file.arrayBuffer()));

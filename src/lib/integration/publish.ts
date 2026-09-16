@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { getBool, getNumber, getString } from "@/lib/settings";
 import { mqttPublish, type MqttConfig, type MqttMessage } from "./mqtt";
@@ -153,8 +154,8 @@ export async function publishDiscovery(): Promise<{ announced: number }> {
         // otuz ayrı cihaz görünürdü.
         device: {
           identifiers: [base],
-          name: "Sunucu Paneli",
-          manufacturer: "Sunucu Yönetim Paneli",
+          name: "Sunucu Paneli", // i18n-ignore — Home Assistant cihaz adı, dil değişince değişmemeli
+          manufacturer: serverT("common.appName"),
         },
       }),
       retain: true,

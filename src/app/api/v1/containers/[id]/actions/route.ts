@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { auditAction } from "@/lib/apiv1/action";
 import { guardV1 } from "@/lib/apiv1/guard";
 import { readJsonBody } from "@/lib/apiv1/parse";
@@ -36,7 +37,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const action = String(body.body.action ?? "") as ContainerAction;
   if (!ALLOWED.includes(action)) {
-    return apiError("invalid_request", `geçersiz eylem. Geçerli değerler: ${ALLOWED.join(", ")}`);
+    return apiError("invalid_request", serverT("api.v1.invalidValue", { field: serverT("api.v1.field.action"), values: ALLOWED.join(", ") }));
   }
 
   const id = (await params).id;
@@ -48,12 +49,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const target = overview.containers.find(
     (item) => item.id === id || item.name === id || item.id.startsWith(id),
   );
-  if (!target) return apiError("not_found", "container bulunamadı");
+  if (!target) return apiError("not_found", serverT("api.notFound.container"));
 
   try {
     await getDockerProvider().action(target.id, action, getNumber("docker.stop_timeout"));
   } catch (error) {
-    const message = error instanceof Error ? error.message : "bilinmeyen hata";
+    const message = error instanceof Error ? error.message : serverT("api.unknownError");
     auditAction(guard.actor, {
       action: `docker.${action}`,
       targetType: "container",

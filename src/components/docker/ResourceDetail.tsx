@@ -11,6 +11,8 @@ import { readCsrfToken } from "./detail/shared";
 import { CSRF_HEADER } from "@/lib/auth/types";
 import { formatBytes } from "@/lib/metrics/catalog";
 import type { DockerImage, DockerVolume, ImageLayer } from "@/lib/providers/types";
+import { useFormat, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 /**
  * Image ve volume detay pencereleri (M3.24).
@@ -35,6 +37,8 @@ export function ImageDetail({
   onChanged: (data: unknown) => void;
   onClose: () => void;
 }) {
+  const t = useT();
+  const f = useFormat();
   const [data, setData] = useState<ImagePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -50,15 +54,15 @@ export function ImageDetail({
           { cache: "no-store", signal: controller.signal },
         );
         const payload = await response.json();
-        if (!response.ok) setError(payload.error ?? "Detay alınamadı.");
+        if (!response.ok) setError(payload.error ?? t("docker.image.detailFailed"));
         else setData(payload as ImagePayload);
       } catch (fetchError) {
-        if ((fetchError as Error)?.name !== "AbortError") setError("Sunucuya ulaşılamadı.");
+        if ((fetchError as Error)?.name !== "AbortError") setError(t("common.errors.network"));
       }
     })();
 
     return () => controller.abort();
-  }, [image.id]);
+  }, [image.id, t]);
 
   const config = (data?.raw as { Config?: Record<string, unknown> } | undefined)?.Config;
 
@@ -73,36 +77,28 @@ export function ImageDetail({
       });
       const payload = await response.json();
       if (response.ok) {
-        setSonuc({ ok: true, text: payload.message ?? "Tamam." });
+        setSonuc({ ok: true, text: payload.message ?? t("docker.image.done") });
         onChanged(payload);
       } else {
-        setSonuc({ ok: false, text: payload.error ?? "İşlem başarısız." });
+        setSonuc({ ok: false, text: payload.error ?? t("common.errors.actionFailed") });
       }
     } catch {
-      setSonuc({ ok: false, text: "Sunucuya ulaşılamadı." });
+      setSonuc({ ok: false, text: t("common.errors.network") });
     } finally {
       setBusy(false);
     }
   }
 
   function etiketle() {
-    const reference = prompt(
-      "Yeni etiket (örn. `uygulama:1.2` ya da `ghcr.io/kullanici/uygulama:latest`):\n\n" +
-        "Docker'da imajın ADI yoktur, etiketleri vardır — bu işlem var olan etiketleri " +
-        "KALDIRMAZ, yenisini ekler. Ad değiştirmek istiyorsan önce yenisini ekle, sonra " +
-        "eskisini kaldır.",
-      image.tags[0] ?? "",
-    );
+    const reference = prompt(t("docker.image.tagPrompt"), image.tags[0] ?? "");
     if (reference) void etiketIslemi("tag", reference.trim());
   }
 
   function etiketiKaldir(reference: string) {
     const sonu = image.tags.length === 1;
     const onay = sonu
-      ? `"${reference}" imajın SON etiketi.\n\n` +
-        "Kaldırmak imajı etiketsiz (sarkan) bırakır ve bir sonraki temizlikte silinir. " +
-        "Devam edilsin mi?"
-      : `"${reference}" etiketi kaldırılsın mı?\n\nİmaj diğer etiketleriyle kalmaya devam eder.`;
+      ? t("docker.image.confirmUntagLast", { tag: reference })
+      : t("docker.image.confirmUntag", { tag: reference });
     if (confirm(onay)) void etiketIslemi("untag", reference);
   }
 
@@ -110,7 +106,7 @@ export function ImageDetail({
     <Modal open title={image.tags[0] ?? image.id.replace(/^sha256:/, "").slice(0, 12)} onClose={onClose} wide>
       <div className="space-y-4">
         <dl className="space-y-1.5 text-sm">
-          <Satir label="Etiketler">
+          <Satir label={t("docker.image.tags")}>
             {image.tags.length > 0 ? (
               <span className="flex flex-wrap items-center gap-1">
                 {image.tags.map((tag) => (
@@ -124,8 +120,8 @@ export function ImageDetail({
                         type="button"
                         disabled={busy}
                         onClick={() => etiketiKaldir(tag)}
-                        title="Bu etiketi kaldır"
-                        aria-label={`${tag} etiketini kaldır`}
+                        title={t("docker.image.removeTag")}
+                        aria-label={t("docker.image.removeTagAria", { tag })}
                         className="text-subtle transition-colors hover:text-danger disabled:opacity-40"
                       >
                         <X className="size-3" aria-hidden />
@@ -135,27 +131,25 @@ export function ImageDetail({
                 ))}
               </span>
             ) : (
-              <span className="text-subtle">etiketsiz (sarkan)</span>
+              <span className="text-subtle">{t("docker.image.untagged")}</span>
             )}
           </Satir>
-          <Satir label="ID">
+          <Satir label={t("docker.image.id")}>
             <span className="font-mono text-[11px]">{image.id.replace(/^sha256:/, "")}</span>
           </Satir>
-          <Satir label="Boyut">{formatBytes(image.sizeBytes)}</Satir>
-          <Satir label="Oluşturma">
-            {image.createdAt > 0
-              ? new Date(image.createdAt * 1000).toLocaleString("tr-TR")
-              : "—"}
+          <Satir label={t("docker.image.size")}>{formatBytes(image.sizeBytes)}</Satir>
+          <Satir label={t("docker.image.created")}>
+            {image.createdAt > 0 ? f.dateTime(image.createdAt * 1000) : "—"}
           </Satir>
-          <Satir label="Kullanan">
+          <Satir label={t("docker.image.usedBy")}>
             {image.usedBy.length === 0 ? (
-              <span className="text-warn">hiçbir container kullanmıyor</span>
+              <span className="text-warn">{t("docker.image.unused")}</span>
             ) : (
               image.usedBy.join(", ")
             )}
           </Satir>
           {image.repoDigests.length > 0 && (
-            <Satir label="Digest">
+            <Satir label={t("docker.image.digest")}>
               <span className="break-all font-mono text-[10px] text-subtle">
                 {image.repoDigests.join(" ")}
               </span>
@@ -165,7 +159,7 @@ export function ImageDetail({
 
         {config && (
           <section className="rounded-lg border border-line px-3 py-2.5">
-            <h3 className="mb-1.5 text-sm font-semibold">Çalıştırma yapılandırması</h3>
+            <h3 className="mb-1.5 text-sm font-semibold">{t("docker.image.runConfig")}</h3>
             <dl className="space-y-1 text-xs">
               <Satir label="Entrypoint">
                 <Kod value={config.Entrypoint} />
@@ -195,7 +189,7 @@ export function ImageDetail({
               className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-xs text-subtle transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
             >
               <Tag className="size-3" aria-hidden />
-              Etiketle
+              {t("docker.image.tag")}
             </button>
 
             {/*
@@ -208,7 +202,7 @@ export function ImageDetail({
               className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-xs text-subtle transition-colors hover:border-brand hover:text-brand"
             >
               <Download className="size-3" aria-hidden />
-              Tar olarak indir
+              {t("docker.image.downloadTar")}
             </a>
           </div>
         )}
@@ -219,23 +213,23 @@ export function ImageDetail({
 
         {canAct && (
           <p className="text-[11px] text-subtle">
-            Docker&apos;da imajın <strong>adı</strong> yoktur, etiketleri vardır. &quot;Ad
-            değiştirmek&quot; iki adımdır: yenisini ekle, sonra eskisini kaldır — panel
-            ikisini ayrı tutuyor ki arada bir şey ters giderse ne olduğu görünsün.
+            <Rich
+              text={t("docker.image.nameNote")}
+              values={{ name: <strong>{t("docker.image.nameWord")}</strong> }}
+            />
           </p>
         )}
 
         <section className="rounded-lg border border-line px-3 py-2.5">
-          <h3 className="mb-1.5 text-sm font-semibold">Katmanlar</h3>
+          <h3 className="mb-1.5 text-sm font-semibold">{t("docker.image.layers")}</h3>
 
           {error && <p className="text-sm text-danger">{error}</p>}
-          {!error && !data && <p className="text-sm text-subtle">yükleniyor…</p>}
+          {!error && !data && (
+            <p className="text-sm text-subtle">{t("common.states.loadingInline")}</p>
+          )}
 
           {data && data.layers.length === 0 && (
-            <p className="text-sm text-subtle">
-              Katman geçmişi yok — uzak bir kayıt defterinden çekilen image&apos;larda
-              Docker ara katmanların komutlarını saklamaz.
-            </p>
+            <p className="text-sm text-subtle">{t("docker.image.noLayers")}</p>
           )}
 
           {data && data.layers.length > 0 && <ImageLayers layers={data.layers} />}
@@ -260,6 +254,8 @@ export function VolumeDetail({
   onChanged: (data: unknown) => void;
   onClose: () => void;
 }) {
+  const t = useT();
+  const f = useFormat();
   const [raw, setRaw] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [dosyalar, setDosyalar] = useState(false);
@@ -295,16 +291,12 @@ export function VolumeDetail({
     */
     const uyari =
       volume.usedBy.length > 0
-        ? `
-
-⚠️ Bu volume şu an kullanılıyor: ${volume.usedBy.join(", ")}. ` +
-          "Çalışan bir uygulama yazarken alınan kopya tutarsız olabilir; " +
-          "tutarlı bir kopya için önce container'ı durdurman gerekir."
+        ? t("docker.volume.inUseWarning", { list: volume.usedBy.join(", ") })
         : "";
 
     const target = prompt(
-      `"${volume.name}" volume'ünün kopyası hangi adla oluşturulsun?${uyari}`,
-      `${volume.name}-kopya`,
+      t("docker.volume.clonePrompt", { name: volume.name, warning: uyari }),
+      t("docker.volume.cloneName", { name: volume.name }),
     );
     if (!target) return;
 
@@ -318,13 +310,13 @@ export function VolumeDetail({
       });
       const payload = await response.json();
       if (response.ok) {
-        setResult({ ok: true, text: payload.message ?? "Kopyalandı." });
+        setResult({ ok: true, text: payload.message ?? t("docker.volume.cloned") });
         onChanged(payload);
       } else {
-        setResult({ ok: false, text: payload.error ?? "Kopyalama başarısız." });
+        setResult({ ok: false, text: payload.error ?? t("docker.volume.cloneFailed") });
       }
     } catch {
-      setResult({ ok: false, text: "Sunucuya ulaşılamadı." });
+      setResult({ ok: false, text: t("common.errors.network") });
     } finally {
       setBusy(false);
     }
@@ -334,30 +326,24 @@ export function VolumeDetail({
     <Modal open title={volume.name} onClose={onClose} wide>
       <div className="space-y-4">
         <dl className="space-y-1.5 text-sm">
-          <Satir label="Sürücü">{volume.driver}</Satir>
-          <Satir label="Host yolu">
+          <Satir label={t("docker.volume.driver")}>{volume.driver}</Satir>
+          <Satir label={t("docker.volume.hostPath")}>
             <span className="break-all font-mono text-[11px]">{volume.mountpoint}</span>
           </Satir>
-          <Satir label="Boyut">
+          <Satir label={t("docker.volume.size")}>
             {sizeBytes === null ? (
-              <span className="text-subtle">
-                hesaplanmadı — listedeki &quot;Boyutları hesapla&quot; düğmesi
-              </span>
+              <span className="text-subtle">{t("docker.volume.notCalculated")}</span>
             ) : (
               formatBytes(sizeBytes)
             )}
           </Satir>
-          <Satir label="Oluşturma">
-            {volume.createdAt
-              ? new Date(volume.createdAt * 1000).toLocaleString("tr-TR")
-              : "—"}
+          <Satir label={t("docker.volume.created")}>
+            {volume.createdAt ? f.dateTime(volume.createdAt * 1000) : "—"}
           </Satir>
-          <Satir label="Compose">{volume.composeProject ?? "—"}</Satir>
-          <Satir label="Kullanan">
+          <Satir label={t("docker.volume.compose")}>{volume.composeProject ?? "—"}</Satir>
+          <Satir label={t("docker.volume.usedBy")}>
             {volume.usedBy.length === 0 ? (
-              <span className="text-warn">
-                hiçbir container kullanmıyor — durmuş container&apos;lar dahil
-              </span>
+              <span className="text-warn">{t("docker.volume.unused")}</span>
             ) : (
               volume.usedBy.join(", ")
             )}
@@ -366,7 +352,7 @@ export function VolumeDetail({
 
         {Object.keys(options).length > 0 && (
           <section className="rounded-lg border border-line px-3 py-2.5">
-            <h3 className="mb-1.5 text-sm font-semibold">Sürücü seçenekleri</h3>
+            <h3 className="mb-1.5 text-sm font-semibold">{t("docker.volume.driverOptions")}</h3>
             <ul className="space-y-0.5 font-mono text-[11px]">
               {Object.entries(options).map(([key, value]) => (
                 <li key={key}>
@@ -380,7 +366,7 @@ export function VolumeDetail({
 
         {Object.keys(labels).length > 0 && (
           <section className="rounded-lg border border-line px-3 py-2.5">
-            <h3 className="mb-1.5 text-sm font-semibold">Etiketler</h3>
+            <h3 className="mb-1.5 text-sm font-semibold">{t("docker.volume.labels")}</h3>
             <ul className="space-y-0.5 break-all font-mono text-[11px]">
               {Object.entries(labels).map(([key, value]) => (
                 <li key={key}>
@@ -399,7 +385,7 @@ export function VolumeDetail({
             className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-xs text-subtle transition-colors hover:border-brand hover:text-brand"
           >
             <FolderOpen className="size-3" aria-hidden />
-            {dosyalar ? "Dosyaları gizle" : "Dosyaları göster"}
+            {dosyalar ? t("docker.volume.hideFiles") : t("docker.volume.showFiles")}
           </button>
 
           {canAct && (
@@ -411,7 +397,7 @@ export function VolumeDetail({
                 className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-xs text-subtle transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
               >
                 <Copy className="size-3" aria-hidden />
-                {busy ? "kopyalanıyor…" : "Klonla"}
+                {busy ? t("docker.volume.cloning") : t("docker.volume.clone")}
               </button>
 
               {/*
@@ -424,7 +410,7 @@ export function VolumeDetail({
                 className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-xs text-subtle transition-colors hover:border-brand hover:text-brand"
               >
                 <Download className="size-3" aria-hidden />
-                Tar olarak indir
+                {t("docker.image.downloadTar")}
               </a>
             </>
           )}
@@ -436,16 +422,13 @@ export function VolumeDetail({
 
         {dosyalar && (
           <section className="rounded-lg border border-line px-3 py-2.5">
-            <h3 className="mb-2 text-sm font-semibold">Dosyalar</h3>
+            <h3 className="mb-2 text-sm font-semibold">{t("docker.volume.files")}</h3>
             <VolumeBrowser volume={volume.name} canAct={canAct} />
           </section>
         )}
 
         <p className="text-xs text-warn">
-          Bu volume&apos;ü silmek İÇİNDEKİ VERİYİ siler ve geri getirilemez. Host yolundaki
-          dosyalara Dosya Yöneticisi&apos;nden bakabilir, silmeden önce içeriğini
-          doğrulayabilirsin. Riskli bir güncellemeden önce &quot;Klonla&quot; ile anlık bir
-          kopya alabilirsin — zamanlanmış yedeği beklemeden.
+          {t("docker.volume.deleteWarning")}
         </p>
       </div>
     </Modal>

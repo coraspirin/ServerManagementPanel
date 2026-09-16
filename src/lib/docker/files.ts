@@ -3,6 +3,7 @@ import "server-only";
 import path from "node:path";
 
 import { audit } from "@/lib/auth/audit";
+import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 import { getNumber } from "@/lib/settings";
 
@@ -45,7 +46,7 @@ export async function listContainerPath(id: string, input: string): Promise<List
     return {
       ok: false,
       path: directory,
-      error: error instanceof Error ? error.message : "komut çalıştırılamadı",
+      error: error instanceof Error ? error.message : serverT("containerFiles.execFailed"),
     };
   }
 
@@ -57,13 +58,11 @@ export async function listContainerPath(id: string, input: string): Promise<List
         ok: false,
         path: directory,
         error:
-          "Bu container'da `ls` komutu yok — distroless ve scratch imajlarda kabuk " +
-          "bulunmaz. Dizin listelenemiyor; yolu doğrudan yazarak dosya indirmek yine " +
-          "çalışır.",
+          serverT("containerFiles.noLs"),
       };
     }
 
-    return { ok: false, path: directory, error: output || "dizin okunamadı" };
+    return { ok: false, path: directory, error: output || serverT("containerFiles.dirUnreadable") };
   }
 
   return { ok: true, path: directory, entries: parseListing(result.output, directory) };
@@ -90,7 +89,10 @@ export async function readContainerFile(id: string, input: string): Promise<Read
   try {
     archive = await getDockerProvider().readContainerArchive(id, target);
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "dosya okunamadı" };
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : serverT("containerFiles.fileUnreadable"),
+    };
   }
 
   const entries = readTar(archive);
@@ -101,8 +103,8 @@ export async function readContainerFile(id: string, input: string): Promise<Read
       ok: false,
       error:
         entries.length > 0
-          ? `${target} bir dizin; indirmek için içindeki bir dosyayı seç.`
-          : `${target} bulunamadı.`,
+          ? serverT("containerFiles.isDirectory", { path: target })
+          : serverT("containerFiles.notFound", { path: target }),
     };
   }
 
@@ -126,13 +128,16 @@ export async function writeContainerFile(
   containerName: string,
 ): Promise<WriteResult> {
   const target = normalizePath(input);
-  if (target === "/") return { ok: false, error: "Kök dizinin üzerine yazılamaz." };
+  if (target === "/") return { ok: false, error: serverT("containerFiles.rootWrite") };
 
   const limit = maxFileBytes();
   if (data.length > limit) {
     return {
       ok: false,
-      error: `Dosya ${Math.round(limit / 1024)} KB sınırını aşıyor (${data.length} bayt).`,
+      error: serverT("containerFiles.tooLarge", {
+        limit: Math.round(limit / 1024),
+        size: data.length,
+      }),
     };
   }
 
@@ -155,8 +160,11 @@ export async function writeContainerFile(
     // arşivi reddediyor.
     await getDockerProvider().writeContainerArchive(id, directory, writeTar([{ name, data }]));
   } catch (error) {
-    const message = error instanceof Error ? error.message : "yazılamadı";
-    kaydet("error", `${target} (${data.length} bayt) — ${message}`);
+    const message = error instanceof Error ? error.message : serverT("containerFiles.writeFailed");
+    kaydet(
+      "error",
+      serverT("containerFiles.auditBytes", { path: target, size: data.length, message }),
+    );
     return { ok: false, error: message };
   }
 

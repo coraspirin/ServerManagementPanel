@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { listTables, tableStructure, testConnection } from "@/lib/dbadmin";
@@ -44,7 +45,7 @@ export async function GET(request: Request) {
     const connection = connectionSecrets(id);
     if (!connection) {
       return Response.json(
-        { error: "Bağlantı bulunamadı ya da parolası çözülemedi (MASTER_KEY değişmiş olabilir)." },
+        { error: serverT("api.db.connectionOrPasswordMaster") },
         { status: 400 },
       );
     }
@@ -62,7 +63,7 @@ export async function GET(request: Request) {
       });
     } catch (error) {
       return Response.json(
-        { error: error instanceof Error ? error.message : "okunamadı" },
+        { error: error instanceof Error ? error.message : serverT("api.unreadable") },
         { status: 400 },
       );
     }
@@ -89,14 +90,14 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const action = String(body.action ?? "create");
 
   if (action === "test") {
     const connection = connectionSecrets(Number(body.id ?? 0));
-    if (!connection) return Response.json({ error: "Bağlantı bulunamadı." }, { status: 404 });
+    if (!connection) return Response.json({ error: serverT("api.notFound.connection") }, { status: 404 });
 
     const outcome = await testConnection(connection);
     markConnection(connection.id, outcome.ok, outcome.ok ? "" : outcome.message);
@@ -157,7 +158,7 @@ export async function POST(request: Request) {
     action: "db.connection.create",
     targetType: "db_connection",
     targetId: String(id),
-    detail: `${input.name} (${input.engine}) · ${input.writable ? "YAZILABİLİR" : "salt-okunur"}`,
+    detail: `${input.name} (${input.engine}) · ${input.writable ? serverT("api.db.writable") : serverT("api.db.readOnly")}`,
     result: "ok",
   });
 
@@ -172,7 +173,7 @@ export async function PATCH(request: Request) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const id = Number(body.id ?? 0);
@@ -181,7 +182,7 @@ export async function PATCH(request: Request) {
   if (problem) return Response.json({ error: problem }, { status: 400 });
 
   if (!updateConnection(id, input)) {
-    return Response.json({ error: "Bağlantı bulunamadı." }, { status: 404 });
+    return Response.json({ error: serverT("api.notFound.connection") }, { status: 404 });
   }
 
   audit({
@@ -191,7 +192,7 @@ export async function PATCH(request: Request) {
     targetType: "db_connection",
     targetId: String(id),
     // Yazma yetkisinin açılması özellikle kayda değer.
-    detail: `${input.name} · ${input.writable ? "YAZILABİLİR" : "salt-okunur"}`,
+    detail: `${input.name} · ${input.writable ? serverT("api.db.writable") : serverT("api.db.readOnly")}`,
     result: "ok",
   });
 
@@ -204,7 +205,7 @@ export async function DELETE(request: Request) {
 
   const id = Number(new URL(request.url).searchParams.get("id") ?? 0);
   if (!deleteConnection(id)) {
-    return Response.json({ error: "Bağlantı bulunamadı." }, { status: 404 });
+    return Response.json({ error: serverT("api.notFound.connection") }, { status: 404 });
   }
 
   audit({

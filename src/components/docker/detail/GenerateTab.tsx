@@ -6,6 +6,8 @@ import { AlertTriangle, Copy, Download, Save } from "lucide-react";
 import { readCsrfToken, Section } from "./shared";
 import { CSRF_HEADER } from "@/lib/auth/types";
 import type { Finding } from "@/lib/compose/checks";
+import { useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 /**
  * Container'dan compose üretme sekmesi (M3.31).
@@ -40,6 +42,7 @@ export function GenerateTab({
   /** `apps.install` izni — yoksa yalnızca kopyalama ve indirme sunuluyor. */
   canInstall: boolean;
 }) {
+  const t = useT();
   const [env, setEnv] = useState<"user" | "all">("user");
   const [data, setData] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -56,10 +59,10 @@ export function GenerateTab({
       setData(payload);
       setError(null);
     } else {
-      setError(payload.error ?? "Compose üretilemedi.");
+      setError(payload.error ?? t("docker.generate.failed"));
       setData(null);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -72,24 +75,19 @@ export function GenerateTab({
         );
         apply(await response.json(), response.ok);
       } catch (fetchError) {
-        if ((fetchError as Error)?.name !== "AbortError") setError("Sunucuya ulaşılamadı.");
+        if ((fetchError as Error)?.name !== "AbortError") setError(t("common.errors.network"));
       }
     })();
 
     return () => controller.abort();
-  }, [containerId, env, apply]);
+  }, [containerId, env, apply, t]);
 
   async function save() {
     if (!data) return;
 
     // Yığın adı servis adından öneriliyor ama kullanıcıya SORULUYOR: dizin adı
     // /opt/stacks altında kalıcı ve sonradan değiştirmek yığını taşımak demek.
-    const name = prompt(
-      "Yığın adı (küçük harf, rakam ve tire):\n\n" +
-        "Dosya /opt/stacks/<ad>/docker-compose.yml olarak yazılır ve `compose up` çalıştırılır. " +
-        "Var olan bir dizinin üzerine ASLA yazılmaz.",
-      data.serviceName,
-    );
+    const name = prompt(t("docker.generate.stackPrompt"), data.serviceName);
     if (!name) return;
 
     setSaving(true);
@@ -110,11 +108,11 @@ export function GenerateTab({
       };
       setSaveResult(
         response.ok
-          ? { ok: true, text: payload.message ?? "Yığın kuruldu." }
-          : { ok: false, text: payload.error ?? "Kurulum başarısız." },
+          ? { ok: true, text: payload.message ?? t("docker.generate.installed") }
+          : { ok: false, text: payload.error ?? t("docker.generate.installFailed") },
       );
     } catch {
-      setSaveResult({ ok: false, text: "Sunucuya ulaşılamadı." });
+      setSaveResult({ ok: false, text: t("common.errors.network") });
     } finally {
       setSaving(false);
     }
@@ -133,20 +131,20 @@ export function GenerateTab({
 
   return (
     <div className="space-y-3">
-      <Section title="Compose üret">
+      <Section title={t("docker.generate.title")}>
         <p className="text-xs text-subtle">
-          <strong className="text-ink">{containerName}</strong> bir compose yığınına ait değil,
-          bu yüzden düzenlenecek bir dosyası yok. Aşağıdaki dosya container&apos;ın şu anki
-          yapılandırmasından üretildi; yığın olarak kaydedersen port, ağ ve ortam
-          düzenleyicileri bu container için de açılır.
+          <Rich
+            text={t("docker.generate.intro")}
+            values={{ name: <strong className="text-ink">{containerName}</strong> }}
+          />
         </p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="text-xs text-subtle">Ortam değişkenleri:</span>
+          <span className="text-xs text-subtle">{t("docker.generate.envLabel")}</span>
           {(
             [
-              ["user", "Yalnızca kendi verdiklerim"],
-              ["all", "Hepsi (imajınkiler dahil)"],
+              ["user", t("docker.generate.envUser")],
+              ["all", t("docker.generate.envAll")],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -164,19 +162,18 @@ export function GenerateTab({
           ))}
         </div>
         <p className="mt-1.5 text-[11px] text-subtle">
-          &quot;Hepsi&quot; imajın kendi varsayılanlarını da dosyaya yazar. Bu değerler imaj
-          güncellendiğinde eskide donar — gerçekten gerekmedikçe ilk seçenek doğru olan.
+          {t("docker.generate.envNote")}
         </p>
       </Section>
 
       {error && <p className="text-sm text-danger">{error}</p>}
-      {!error && !data && <p className="text-sm text-subtle">üretiliyor…</p>}
+      {!error && !data && <p className="text-sm text-subtle">{t("docker.generate.generating")}</p>}
 
       {data && data.warnings.length > 0 && (
         <div className="rounded-lg border border-warn/40 bg-surface px-4 py-3">
           <p className="flex items-center gap-1.5 text-sm font-medium text-warn">
             <AlertTriangle className="size-3.5" aria-hidden />
-            Taşınamayan ya da dikkat isteyen şeyler
+            {t("docker.generate.warningsTitle")}
           </p>
           <ul className="mt-1.5 space-y-1 text-xs text-subtle">
             {data.warnings.map((entry) => (
@@ -187,13 +184,13 @@ export function GenerateTab({
       )}
 
       {data && data.findings.length > 0 && (
-        <Section title="Ön kontrol">
+        <Section title={t("docker.generate.precheck")}>
           <ul className="space-y-1 text-xs">
             {data.findings.map((finding, index) => (
               <li key={`${finding.title}-${index}`} className={SEVERITY_STYLE[finding.severity]}>
                 · <strong>{finding.title}</strong>
                 {finding.line !== undefined && (
-                  <span className="text-subtle"> (satır {finding.line})</span>
+                  <span className="text-subtle"> {t("docker.generate.line", { line: finding.line })}</span>
                 )}{" "}
                 <span className="text-subtle">{finding.detail}</span>
               </li>
@@ -210,19 +207,19 @@ export function GenerateTab({
               <SmallButton
                 onClick={() => void navigator.clipboard?.writeText(data.yaml)}
                 icon={<Copy className="size-3" />}
-                label="Kopyala"
+                label={t("common.actions.copy")}
               />
               <SmallButton
                 onClick={download}
                 icon={<Download className="size-3" />}
-                label="İndir"
+                label={t("docker.generate.download")}
               />
               {canInstall && (
                 <SmallButton
                   onClick={() => void save()}
                   disabled={saving}
                   icon={<Save className="size-3" />}
-                  label={saving ? "kuruluyor…" : "Yığın olarak kaydet"}
+                  label={saving ? t("docker.generate.installing") : t("docker.generate.saveAsStack")}
                 />
               )}
             </div>
@@ -239,9 +236,12 @@ export function GenerateTab({
           )}
 
           <p className="mt-2 text-[11px] text-subtle">
-            Kaydetmek yeni bir yığın kurar; <strong className="text-ink">bu container&apos;ı
-            kaldırmaz</strong>. İkisi aynı portu dinlediği için yeni yığın önce hata verir —
-            eskisini durdurup sonra kurmak ya da üretilen dosyada portu değiştirmek gerekiyor.
+            <Rich
+              text={t("docker.generate.saveNote")}
+              values={{
+                strong: <strong className="text-ink">{t("docker.generate.saveNoteStrong")}</strong>,
+              }}
+            />
           </p>
         </Section>
       )}

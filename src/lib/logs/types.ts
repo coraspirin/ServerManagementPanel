@@ -55,10 +55,3 @@ export type LogPattern = {
   lastHitAt: number | null;
   hitCount: number;
 };
-
-export const LEVEL_LABEL: Record<LogLevel, string> = {
-  debug: "ayıklama",
-  info: "bilgi",
-  warning: "uyarı",
-  error: "hata",
-};

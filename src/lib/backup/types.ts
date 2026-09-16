@@ -61,15 +61,3 @@ export type Snapshot = {
   tags: string[];
   sizeBytes: number | null;
 };
-
-export const SOURCE_LABEL: Record<SourceKind, string> = {
-  volume: "Docker volume",
-  host_dir: "Host dizini",
-  panel_db: "Panel veritabanı",
-};
-
-export const REPO_LABEL: Record<RepoKind, string> = {
-  local: "Yerel dizin",
-  rclone: "rclone (off-site)",
-  s3: "S3 uyumlu",
-};

@@ -6,6 +6,8 @@ import { Layers, Power, Server } from "lucide-react";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import type { SystemdUnit } from "@/lib/host/helper";
 import { ConsolePanel } from "./ConsolePanel";
+import { useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 type Stack = {
   project: string;
@@ -26,7 +28,7 @@ async function callHost(path: string, body: unknown) {
     body: JSON.stringify(body),
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error ?? "İşlem başarısız.");
+  if (!response.ok) throw new Error(data.error ?? "");
   return data;
 }
 
@@ -52,6 +54,7 @@ export function HostScreen({
   canShell: boolean;
   consoleMaxLines: number;
 }) {
+  const t = useT();
   const [stacks, setStacks] = useState<Stack[] | null>(null);
   const [units, setUnits] = useState<SystemdUnit[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -81,7 +84,7 @@ export function HostScreen({
     try {
       setMessage({ kind: "ok", text: await fn() });
     } catch (error) {
-      setMessage({ kind: "hata", text: error instanceof Error ? error.message : "hata" });
+      setMessage({ kind: "hata", text: (error instanceof Error && error.message) || t("common.errors.actionFailed") });
     } finally {
       setBusy(null);
     }
@@ -91,23 +94,16 @@ export function HostScreen({
     return (
       <div className="rounded-lg border border-warn/40 bg-surface px-5 py-4">
         <h2 className="flex items-center gap-2 font-semibold">
-          <Server className="size-4" /> host-helper kurulu değil
+          <Server className="size-4" /> {t("hostScreen.helperMissing")}
         </h2>
         <p className="mt-2 text-sm text-subtle">
-          Güç yönetimi, systemd ve compose komutları host&apos;ta çalışmak zorunda.
-          Panel container&apos;ına root vermek yerine host&apos;ta küçük bir daemon
-          çalışır; panel ona <em>rica eder</em>, ne çalıştırılacağına host&apos;taki
-          izin listesi karar verir. O liste container&apos;a mount edilmez — panel ele
-          geçirilse bile genişletilemez.
+          <Rich
+            text={t("hostScreen.helperIntro")}
+            values={{ ask: <em>{t("hostScreen.helperAsk")}</em> }}
+          />
         </p>
         <pre className="mt-3 overflow-x-auto rounded border border-line bg-canvas p-3 font-mono text-[11px]">
-{`# sunucuda, panel dizininde
-sudo host-helper/install.sh
-
-# çıktıdaki HELPER_SECRET satırını .env'e ekle
-# docker-compose.yml'de /run/panel-helper mount satırının yorumunu kaldır
-# /etc/panel-helper/allow.conf içinde izin verilecek satırları aç
-docker compose up -d`}
+{t("hostScreen.helperSteps")}
         </pre>
       </div>
     );
@@ -133,18 +129,16 @@ docker compose up -d`}
         <section className="rounded-lg border border-danger/30 bg-surface">
           <div className="border-b border-line px-5 py-3">
             <h2 className="flex items-center gap-1.5 font-semibold">
-              <Power className="size-4 text-danger" /> Güç
+              <Power className="size-4 text-danger" /> {t("hostScreen.power")}
             </h2>
             <p className="mt-0.5 text-xs text-subtle">
-              Kapatma geri alınamaz: uzaktaki bir sunucuyu kapatmak, fiziksel erişim
-              olmadan geri getirilemez. Gecikme verirsen &quot;İptal&quot; ile
-              vazgeçebilirsin.
+              {t("hostScreen.powerIntro")}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 px-5 py-3">
             <label className="flex items-center gap-1.5 text-xs text-subtle">
-              gecikme
+              {t("hostScreen.delay")}
               <input
                 type="number"
                 min={0}
@@ -153,25 +147,25 @@ docker compose up -d`}
                 onChange={(e) => setDelayMinutes(Number(e.target.value))}
                 className="w-16 rounded-md border border-line bg-canvas px-2 py-1 text-sm outline-none focus:border-brand"
               />
-              dk
+              {t("hostScreen.minutes")}
             </label>
 
             <button
               type="button"
               disabled={busy !== null}
               onClick={() => {
-                if (!confirm(`Sunucu ${delayMinutes} dakika sonra YENİDEN BAŞLATILACAK.`)) return;
+                if (!confirm(t("hostScreen.confirmReboot", { minutes: delayMinutes }))) return;
                 void run("reboot", async () => {
                   await callHost("/api/host", {
                     action: "power.reboot",
                     args: { delaySeconds: delayMinutes * 60 },
                   });
-                  return `Yeniden başlatma ${delayMinutes} dk sonraya planlandı.`;
+                  return t("hostScreen.rebootScheduled", { minutes: delayMinutes });
                 });
               }}
               className="rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-warn hover:text-warn disabled:opacity-50"
             >
-              Yeniden başlat
+              {t("hostScreen.reboot")}
             </button>
 
             <button
@@ -179,10 +173,7 @@ docker compose up -d`}
               disabled={busy !== null}
               onClick={() => {
                 if (
-                  !confirm(
-                    `Sunucu ${delayMinutes} dakika sonra KAPATILACAK.\n\n` +
-                      "Uzaktan tekrar açmanın bir yolu yoksa panel bir daha erişilemez.",
-                  )
+                  !confirm(t("hostScreen.confirmShutdown", { minutes: delayMinutes }))
                 ) {
                   return;
                 }
@@ -191,12 +182,12 @@ docker compose up -d`}
                     action: "power.shutdown",
                     args: { delaySeconds: delayMinutes * 60 },
                   });
-                  return `Kapatma ${delayMinutes} dk sonraya planlandı.`;
+                  return t("hostScreen.shutdownScheduled", { minutes: delayMinutes });
                 });
               }}
               className="rounded-md border border-danger/40 px-3 py-1.5 text-sm text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
             >
-              Kapat
+              {t("hostScreen.shutdown")}
             </button>
 
             <button
@@ -205,12 +196,12 @@ docker compose up -d`}
               onClick={() =>
                 void run("cancel", async () => {
                   await callHost("/api/host", { action: "power.cancel", args: {} });
-                  return "Planlanmış güç işlemi iptal edildi.";
+                  return t("hostScreen.cancelled");
                 })
               }
               className="rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand hover:text-brand disabled:opacity-50"
             >
-              İptal
+              {t("hostScreen.cancel")}
             </button>
           </div>
         </section>
@@ -220,7 +211,7 @@ docker compose up -d`}
         <section className="rounded-lg border border-line bg-surface">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-3">
             <h2 className="flex items-center gap-1.5 font-semibold">
-              <Server className="size-4" /> systemd birimleri
+              <Server className="size-4" /> {t("hostScreen.units")}
             </h2>
             <button
               type="button"
@@ -229,12 +220,12 @@ docker compose up -d`}
                 void run("units", async () => {
                   const data = await callHost("/api/host", { action: "service.list", args: {} });
                   setUnits(data.units as SystemdUnit[]);
-                  return `${(data.units as SystemdUnit[]).length} birim listelendi.`;
+                  return t("hostScreen.unitsListed", { count: (data.units as SystemdUnit[]).length });
                 })
               }
               className="rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand hover:text-brand disabled:opacity-50"
             >
-              {busy === "units" ? "yükleniyor…" : "Birimleri listele"}
+              {busy === "units" ? t("common.states.loadingInline") : t("hostScreen.listUnits")}
             </button>
           </div>
 
@@ -263,18 +254,18 @@ docker compose up -d`}
                           type="button"
                           disabled={busy !== null}
                           onClick={() => {
-                            if (!confirm(`"${unit.unit}" yeniden başlatılsın mı?`)) return;
+                            if (!confirm(t("hostScreen.confirmRestartUnit", { unit: unit.unit }))) return;
                             void run(unit.unit, async () => {
                               await callHost("/api/host", {
                                 action: "service.restart",
                                 args: { unit: unit.unit },
                               });
-                              return `${unit.unit} yeniden başlatıldı.`;
+                              return t("hostScreen.unitRestarted", { unit: unit.unit });
                             });
                           }}
                           className="rounded border border-line px-2 py-0.5 text-[11px] text-subtle transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
                         >
-                          yeniden başlat
+                          {t("hostScreen.restartUnit")}
                         </button>
                       </td>
                     </tr>
@@ -289,20 +280,18 @@ docker compose up -d`}
       <section className="rounded-lg border border-line bg-surface">
         <div className="border-b border-line px-5 py-3">
           <h2 className="flex items-center gap-1.5 font-semibold">
-            <Layers className="size-4" /> Compose yığınları
+            <Layers className="size-4" /> {t("hostScreen.stacks")}
           </h2>
           <p className="mt-0.5 text-xs text-subtle">
-            Yığınlar çalışan container&apos;ların compose etiketlerinden bulunur; ayrıca
-            yol tanımlamak gerekmez. Komutlar host-helper üzerinden çalışır ve yalnızca
-            izin listesindeki dizinlerde çalıştırılabilir.
+            {t("hostScreen.stacksIntro")}
           </p>
         </div>
 
         <div className="divide-y divide-line">
           {stacks === null ? (
-            <p className="px-5 py-3 text-sm text-subtle">yükleniyor…</p>
+            <p className="px-5 py-3 text-sm text-subtle">{t("common.states.loadingInline")}</p>
           ) : stacks.length === 0 ? (
-            <p className="px-5 py-3 text-sm text-subtle">Compose ile yönetilen yığın yok.</p>
+            <p className="px-5 py-3 text-sm text-subtle">{t("hostScreen.noStacks")}</p>
           ) : (
             stacks.map((stack) => (
               <div key={stack.project} className="px-5 py-3">
@@ -310,7 +299,7 @@ docker compose up -d`}
                   <div className="min-w-0">
                     <div className="font-medium">{stack.project}</div>
                     <div className="truncate font-mono text-[11px] text-subtle">
-                      {stack.workingDir ?? "dizin etiketi yok"}
+                      {stack.workingDir ?? t("hostScreen.noDirLabel")}
                     </div>
                     <div className="mt-0.5 text-xs text-subtle">
                       {stack.services
@@ -333,7 +322,7 @@ docker compose up -d`}
                     href="/docker?tab=stack"
                     className="shrink-0 rounded border border-line px-2 py-1 text-[11px] text-subtle transition-colors hover:border-brand hover:text-brand"
                   >
-                    Stack sekmesinde yönet
+                    {t("hostScreen.manageInStacks")}
                   </Link>
                 </div>
               </div>

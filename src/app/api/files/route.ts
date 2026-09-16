@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { analyzeUsage, listDirectory, openForDownload, readTextFile } from "@/lib/files/browse";
@@ -13,18 +14,18 @@ import {
 export const dynamic = "force-dynamic";
 
 function fail(error: unknown): Response {
-  const message = error instanceof Error ? error.message : "Beklenmeyen hata.";
+  const message = error instanceof Error ? error.message : serverT("api.unexpectedError");
   // ENOENT/EACCES gibi sistem hataları kullanıcıya anlaşılır çevriliyor;
   // "Error: ENOENT: no such file or directory, scandir '/host/root/x'"
   // container ayrıntısını da sızdırırdı.
   if (message.includes("ENOENT")) {
-    return Response.json({ error: "Dosya ya da klasör bulunamadı." }, { status: 404 });
+    return Response.json({ error: serverT("api.files.notFound") }, { status: 404 });
   }
   if (message.includes("EACCES") || message.includes("EPERM")) {
-    return Response.json({ error: "Bu dosyayı okuma izni yok." }, { status: 403 });
+    return Response.json({ error: serverT("api.files.noRead") }, { status: 403 });
   }
   if (message.includes("ENOTDIR")) {
-    return Response.json({ error: "Bu bir klasör değil." }, { status: 400 });
+    return Response.json({ error: serverT("api.files.notDir") }, { status: 400 });
   }
   return Response.json({ error: message }, { status: 400 });
 }
@@ -88,7 +89,7 @@ export async function POST(request: Request) {
     const dir = String(form.get("path") ?? "");
 
     if (!(file instanceof File)) {
-      return Response.json({ error: "Dosya bulunamadı." }, { status: 400 });
+      return Response.json({ error: serverT("api.notFound.file") }, { status: 400 });
     }
 
     const target = `${dir.replace(/\/+$/, "")}/${file.name}`;
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const action = String(body.action ?? "");
@@ -138,7 +139,7 @@ export async function POST(request: Request) {
       outcome = await writeFile(target, Buffer.from(String(body.content ?? ""), "utf8"));
       break;
     default:
-      return Response.json({ error: "Bilinmeyen işlem." }, { status: 400 });
+      return Response.json({ error: serverT("api.unknownAction") }, { status: 400 });
   }
 
   audit({

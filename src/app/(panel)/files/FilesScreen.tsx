@@ -20,6 +20,9 @@ import { Modal } from "@/components/Modal";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import type { FileEntry, Listing, UsageEntry } from "@/lib/files/browse";
 import type { CleanupItem } from "@/lib/files/cleanup";
+import { useFormat, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
+import type { MessageKey } from "@/lib/i18n/translate";
 
 /**
  * M3.5 — dosya yöneticisi, disk analizi ve temizlik asistanı.
@@ -53,10 +56,10 @@ const RISK_STYLE: Record<CleanupItem["risk"], string> = {
   destructive: "bg-danger/15 text-danger",
 };
 
-const RISK_LABEL: Record<CleanupItem["risk"], string> = {
-  safe: "güvenli",
-  caution: "dikkatli ol",
-  destructive: "veri kaybı riski",
+const RISK_LABEL: Record<CleanupItem["risk"], MessageKey> = {
+  safe: "filesScreen.risk.safe",
+  caution: "filesScreen.risk.caution",
+  destructive: "filesScreen.risk.destructive",
 };
 
 export function FilesScreen({
@@ -66,6 +69,8 @@ export function FilesScreen({
   initial: Payload;
   canWrite: boolean;
 }) {
+  const t = useT();
+  const f = useFormat();
   const [listing, setListing] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,16 +90,16 @@ export function FilesScreen({
       });
       const data = (await response.json()) as Payload & { error?: string };
       if (!response.ok) {
-        setError(data.error ?? "Klasör açılamadı.");
+        setError(data.error ?? t("filesScreen.openFailed"));
         return;
       }
       setListing(data);
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [t]);
 
   async function act(body: Record<string, unknown>) {
     setBusy(true);
@@ -108,14 +113,14 @@ export function FilesScreen({
       });
       const data = (await response.json()) as { ok?: boolean; message?: string; error?: string };
       if (!response.ok || data.ok === false) {
-        setError(data.error ?? data.message ?? "İşlem başarısız.");
+        setError(data.error ?? data.message ?? t("common.errors.actionFailed"));
         return false;
       }
-      setNotice(data.message ?? "Tamam.");
+      setNotice(data.message ?? t("docker.installer.ok"));
       await go(listing.path);
       return true;
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
       return false;
     } finally {
       setBusy(false);
@@ -125,7 +130,7 @@ export function FilesScreen({
   async function upload(file: File) {
     setBusy(true);
     setError(null);
-    setNotice(`${file.name} yükleniyor…`);
+    setNotice(t("filesScreen.uploading", { name: file.name }));
     try {
       const form = new FormData();
       form.set("file", file);
@@ -138,13 +143,13 @@ export function FilesScreen({
       });
       const data = (await response.json()) as { ok?: boolean; message?: string; error?: string };
       if (!response.ok || data.ok === false) {
-        setError(data.error ?? data.message ?? "Yükleme başarısız.");
+        setError(data.error ?? data.message ?? t("filesScreen.uploadFailed"));
         return;
       }
-      setNotice(`${file.name} yüklendi.`);
+      setNotice(t("filesScreen.uploaded", { name: file.name }));
       await go(listing.path);
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
@@ -153,7 +158,7 @@ export function FilesScreen({
   async function analyze() {
     setBusy(true);
     setError(null);
-    setNotice("Klasör boyutları hesaplanıyor…");
+    setNotice(t("filesScreen.analyzing"));
     try {
       const response = await fetch(
         `/api/files?mode=usage&path=${encodeURIComponent(listing.path)}`,
@@ -166,7 +171,7 @@ export function FilesScreen({
         error?: string;
       };
       if (!response.ok) {
-        setError(data.error ?? "Analiz başarısız.");
+        setError(data.error ?? t("filesScreen.analyzeFailed"));
         return;
       }
       setUsage({
@@ -195,11 +200,11 @@ export function FilesScreen({
         error?: string;
       };
       if (!response.ok) {
-        setError(data.error ?? "Dosya okunamadı.");
+        setError(data.error ?? t("docker.files.readFailed"));
         return;
       }
       if (data.binary) {
-        setError("Bu bir ikili dosya; metin olarak açılamaz. İndirebilirsin.");
+        setError(t("filesScreen.binary"));
         return;
       }
       setEditing({
@@ -209,7 +214,7 @@ export function FilesScreen({
         readOnly: !canWrite || Boolean(data.truncated),
       });
       if (data.truncated) {
-        setNotice("Dosya çok büyük — kesilerek gösteriliyor, salt-okunur açıldı.");
+        setNotice(t("filesScreen.truncated"));
       }
     } finally {
       setBusy(false);
@@ -219,7 +224,7 @@ export function FilesScreen({
   async function loadCleanup() {
     setBusy(true);
     setError(null);
-    setNotice("Disk taranıyor…");
+    setNotice(t("filesScreen.scanning"));
     try {
       const response = await fetch("/api/files/cleanup", { cache: "no-store" });
       const data = (await response.json()) as { items?: CleanupItem[]; totalBytes?: number };
@@ -267,7 +272,7 @@ export function FilesScreen({
             type="button"
             onClick={() => void go(listing.path)}
             disabled={busy}
-            title="Yenile"
+            title={t("common.actions.refresh")}
             className="rounded-md border border-line p-1.5 text-subtle transition-colors hover:text-ink disabled:opacity-50"
           >
             <RotateCw className={`size-4 ${busy ? "animate-spin" : ""}`} />
@@ -278,7 +283,7 @@ export function FilesScreen({
             disabled={busy}
             className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
           >
-            <PieChart className="size-4" /> Boyut analizi
+            <PieChart className="size-4" /> {t("filesScreen.sizeAnalysis")}
           </button>
           <button
             type="button"
@@ -286,12 +291,12 @@ export function FilesScreen({
             disabled={busy}
             className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
           >
-            <Sparkles className="size-4" /> Temizlik asistanı
+            <Sparkles className="size-4" /> {t("filesScreen.cleanupAssistant")}
           </button>
         </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-subtle">
-          <span>Kökler:</span>
+          <span>{t("filesScreen.roots")}</span>
           {listing.roots.map((root) => (
             <button
               key={root}
@@ -308,17 +313,17 @@ export function FilesScreen({
               <button
                 type="button"
                 onClick={() => {
-                  const name = prompt("Yeni klasör adı:");
+                  const name = prompt(t("filesScreen.newFolderPrompt"));
                   if (name?.trim()) {
                     void act({ action: "mkdir", path: `${listing.path}/${name.trim()}` });
                   }
                 }}
                 className="flex items-center gap-1 text-brand hover:underline"
               >
-                <FolderPlus className="size-3.5" /> Klasör
+                <FolderPlus className="size-3.5" /> {t("filesScreen.folder")}
               </button>
               <label className="flex cursor-pointer items-center gap-1 text-brand hover:underline">
-                <Upload className="size-3.5" /> Yükle
+                <Upload className="size-3.5" /> {t("filesScreen.upload")}
                 <input
                   type="file"
                   className="hidden"
@@ -348,7 +353,7 @@ export function FilesScreen({
             {listing.path} — {formatBytes(usage.totalBytes)}
             {usage.timedOut && (
               <span className="text-xs font-normal text-warn">
-                (süre doldu, sonuç eksik olabilir)
+                {t("filesScreen.timedOut")}
               </span>
             )}
           </h2>
@@ -389,11 +394,11 @@ export function FilesScreen({
         <table className="rtable w-full min-w-[46rem] text-sm">
           <thead className="border-b border-line text-left text-xs text-subtle">
             <tr>
-              <th className="px-4 py-2.5 font-medium">Ad</th>
-              <th className="px-4 py-2.5 font-medium">Boyut</th>
-              <th className="px-4 py-2.5 font-medium">Değişim</th>
-              <th className="px-4 py-2.5 font-medium">İzin</th>
-              <th className="px-4 py-2.5 font-medium">Sahip</th>
+              <th className="px-4 py-2.5 font-medium">{t("users.roles.name")}</th>
+              <th className="px-4 py-2.5 font-medium">{t("docker.resources.size")}</th>
+              <th className="px-4 py-2.5 font-medium">{t("filesScreen.col.modified")}</th>
+              <th className="px-4 py-2.5 font-medium">{t("filesScreen.col.mode")}</th>
+              <th className="px-4 py-2.5 font-medium">{t("filesScreen.col.owner")}</th>
               <th className="px-4 py-2.5" />
             </tr>
           </thead>
@@ -415,7 +420,7 @@ export function FilesScreen({
             {listing.entries.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-10 text-center text-subtle">
-                  Bu klasör boş.
+                  {t("filesScreen.emptyFolder")}
                 </td>
               </tr>
             )}
@@ -443,16 +448,16 @@ export function FilesScreen({
                     )}
                   </button>
                 </td>
-                <td data-label="Boyut" className="px-4 py-1.5 tabular-nums text-subtle">
+                <td data-label={t("docker.resources.size")} className="px-4 py-1.5 tabular-nums text-subtle">
                   {entry.kind === "dir" ? "—" : formatBytes(entry.sizeBytes)}
                 </td>
-                <td data-label="Değişim" className="whitespace-nowrap px-4 py-1.5 text-xs text-subtle">
-                  {new Date(entry.modifiedAt * 1000).toLocaleString("tr-TR")}
+                <td data-label={t("filesScreen.col.modified")} className="whitespace-nowrap px-4 py-1.5 text-xs text-subtle">
+                  {f.dateTime(entry.modifiedAt * 1000)}
                 </td>
-                <td data-label="İzin" className="px-4 py-1.5 font-mono text-xs text-subtle">
+                <td data-label={t("filesScreen.col.mode")} className="px-4 py-1.5 font-mono text-xs text-subtle">
                   {entry.modeText}
                 </td>
-                <td data-label="Sahip" className="px-4 py-1.5 text-xs text-subtle">
+                <td data-label={t("filesScreen.col.owner")} className="px-4 py-1.5 text-xs text-subtle">
                   {entry.uid}:{entry.gid}
                 </td>
                 <td data-label="" className="px-4 py-1.5">
@@ -460,7 +465,7 @@ export function FilesScreen({
                     {entry.kind === "file" && (
                       <a
                         href={`/api/files?mode=download&path=${encodeURIComponent(entry.path)}`}
-                        title="İndir"
+                        title={t("docker.files.download")}
                         className="rounded border border-line p-1.5 text-subtle transition-colors hover:text-brand"
                       >
                         <Download className="size-3.5" />
@@ -470,9 +475,9 @@ export function FilesScreen({
                       <>
                         <button
                           type="button"
-                          title="Yeniden adlandır"
+                          title={t("filesScreen.rename")}
                           onClick={() => {
-                            const name = prompt("Yeni ad:", entry.name);
+                            const name = prompt(t("filesScreen.renamePrompt"), entry.name);
                             if (name?.trim() && name !== entry.name) {
                               void act({ action: "rename", path: entry.path, newName: name.trim() });
                             }
@@ -483,9 +488,9 @@ export function FilesScreen({
                         </button>
                         <button
                           type="button"
-                          title="İzin değiştir"
+                          title={t("filesScreen.chmod")}
                           onClick={() => {
-                            const mode = prompt("Yeni izin (sekizlik):", entry.modeOctal.slice(-3));
+                            const mode = prompt(t("filesScreen.chmodPrompt"), entry.modeOctal.slice(-3));
                             if (mode?.trim()) {
                               void act({ action: "chmod", path: entry.path, mode: mode.trim() });
                             }
@@ -496,12 +501,12 @@ export function FilesScreen({
                         </button>
                         <button
                           type="button"
-                          title="Sil"
+                          title={t("common.actions.delete")}
                           onClick={() => {
                             const question =
                               entry.kind === "dir"
-                                ? `"${entry.name}" klasörü ve İÇİNDEKİ HER ŞEY silinsin mi? Bu geri alınamaz.`
-                                : `"${entry.name}" silinsin mi?`;
+                                ? t("filesScreen.confirmDeleteDir", { name: entry.name })
+                                : t("filesScreen.confirmDelete", { name: entry.name });
                             if (confirm(question)) {
                               void act({
                                 action: "delete",
@@ -526,8 +531,7 @@ export function FilesScreen({
 
       {listing.truncated && (
         <p className="text-center text-xs text-subtle">
-          Klasörde {listing.totalEntries.toLocaleString("tr-TR")} girdi var; ilk 2000 tanesi
-          gösteriliyor.
+          {t("filesScreen.listTruncated", { count: f.number(listing.totalEntries) })}
         </p>
       )}
 
@@ -565,6 +569,7 @@ function EditorModal({
   onClose: () => void;
   onSave: (content: string) => void;
 }) {
+  const t = useT();
   const [content, setContent] = useState(target?.content ?? "");
 
   return (
@@ -581,7 +586,9 @@ function EditorModal({
           />
           <div className="flex items-center justify-between">
             <span className="text-xs text-subtle">
-              {target.readOnly ? "Salt-okunur" : `${content.length} karakter`}
+              {target.readOnly
+                ? t("filesScreen.readOnly")
+                : t("filesScreen.characters", { count: content.length })}
             </span>
             <div className="flex gap-2">
               <button
@@ -589,7 +596,7 @@ function EditorModal({
                 onClick={onClose}
                 className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
               >
-                Kapat
+                {t("common.actions.close")}
               </button>
               {!target.readOnly && (
                 <button
@@ -598,7 +605,7 @@ function EditorModal({
                   onClick={() => onSave(content)}
                   className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
-                  Kaydet
+                  {t("common.actions.save")}
                 </button>
               )}
             </div>
@@ -622,6 +629,7 @@ function CleanupModal({
   onClose: () => void;
   onChanged: (next: { items: CleanupItem[]; totalBytes: number }) => void;
 }) {
+  const t = useT();
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -643,29 +651,33 @@ function CleanupModal({
       };
       setMessage(
         `${result.message ?? ""}${
-          result.reclaimedBytes ? ` — ${formatBytes(result.reclaimedBytes)} kazanıldı.` : ""
+          result.reclaimedBytes
+            ? t("filesScreen.reclaimed", { size: formatBytes(result.reclaimedBytes) })
+            : ""
         }`,
       );
       if (result.items) {
         onChanged({ items: result.items, totalBytes: result.totalBytes ?? 0 });
       }
     } catch {
-      setMessage("Sunucuya ulaşılamadı.");
+      setMessage(t("common.errors.network"));
     } finally {
       setBusy(null);
     }
   }
 
   return (
-    <Modal open={open} title="Disk temizlik asistanı" onClose={onClose} wide>
+    <Modal open={open} title={t("filesScreen.cleanupTitle")} onClose={onClose} wide>
       <p className="text-xs leading-snug text-subtle">
-        Her kalem ayrı ayrı temizlenir. Toplu bir &quot;hepsini sil&quot; düğmesi bilerek yok:
-        sarkan image&apos;ları silmek zararsız, kullanılmayan volume&apos;leri silmek veri kaybıdır.
+        {t("filesScreen.cleanupIntro")}
       </p>
 
       {data && (
         <p className="mt-2 text-sm">
-          Toplam geri kazanılabilir: <strong>{formatBytes(data.totalBytes)}</strong>
+          <Rich
+            text={t("filesScreen.cleanupTotal")}
+            values={{ size: <strong>{formatBytes(data.totalBytes)}</strong> }}
+          />
         </p>
       )}
 
@@ -680,13 +692,13 @@ function CleanupModal({
                 <span
                   className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${RISK_STYLE[item.risk]}`}
                 >
-                  {RISK_LABEL[item.risk]}
+                  {t(RISK_LABEL[item.risk])}
                 </span>
               </div>
               <p className="text-xs text-subtle">{item.description}</p>
             </div>
             <span className="shrink-0 text-right tabular-nums text-sm">
-              {item.bytes > 0 ? formatBytes(item.bytes) : `${item.count} öğe`}
+              {item.bytes > 0 ? formatBytes(item.bytes) : t("filesScreen.items", { count: item.count })}
             </span>
             {canWrite && (
               <button
@@ -695,8 +707,8 @@ function CleanupModal({
                 onClick={() => {
                   const question =
                     item.risk === "destructive"
-                      ? `${item.label}: bu işlem VERİ KAYBINA yol açabilir. Devam edilsin mi?`
-                      : `${item.label} temizlensin mi?`;
+                      ? t("filesScreen.confirmDestructive", { label: item.label })
+                      : t("filesScreen.confirmClean", { label: item.label });
                   if (confirm(question)) void clean(item);
                 }}
                 className={`shrink-0 rounded-md border px-3 py-1.5 text-sm transition-colors disabled:opacity-50 ${
@@ -705,14 +717,14 @@ function CleanupModal({
                     : "border-line hover:border-brand"
                 }`}
               >
-                {busy === item.id ? "Temizleniyor…" : "Temizle"}
+                {busy === item.id ? t("filesScreen.cleaning") : t("docker.prune.clean")}
               </button>
             )}
           </li>
         ))}
         {data?.items.length === 0 && (
           <li className="px-3 py-8 text-center text-sm text-subtle">
-            Temizlenecek bir şey bulunamadı.
+            {t("filesScreen.nothingToClean")}
           </li>
         )}
       </ul>

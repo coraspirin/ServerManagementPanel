@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { randomBytes } from "node:crypto";
 import { getDb } from "@/lib/db/client";
@@ -25,12 +26,12 @@ export function bootstrapAdmin(): void {
   db.prepare(
     `INSERT INTO users (username, display_name, password_hash, role_id, must_change_pw)
      VALUES (?, ?, ?, 1, 1)`,
-  ).run(username, "Yönetici", hashPassword(password));
+  ).run(username, serverT("bootstrapLib.displayName"), hashPassword(password));
 
   audit({
     username,
     action: "auth.bootstrap",
-    detail: provided ? "ADMIN_PASSWORD ile oluşturuldu" : "rastgele parola üretildi",
+    detail: provided ? serverT("bootstrapLib.fromEnv") : serverT("bootstrapLib.random"),
   });
 
   const banner = "=".repeat(64);

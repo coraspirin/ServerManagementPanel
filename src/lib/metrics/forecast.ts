@@ -1,4 +1,6 @@
 import "server-only";
+import { formatPct } from "@/lib/i18n/format";
+import { currentDictionary, serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
 import { getNumber } from "@/lib/settings";
@@ -95,7 +97,7 @@ function forecastFor(metric: string, label: string): Forecast {
   if (points.length < minDays) {
     return {
       ...base,
-      reason: `Tahmin için en az ${minDays} günlük geçmiş gerekiyor (şu an ${points.length} gün).`,
+      reason: serverT("forecast.needHistory", { min: minDays, have: points.length }),
     };
   }
 
@@ -103,7 +105,7 @@ function forecastFor(metric: string, label: string): Forecast {
   const slopePerDay = slope * 86400;
 
   if (slopePerDay <= 0.001) {
-    return { ...base, slopePerDay, confidence: r2, reason: "Doluluk artmıyor." };
+    return { ...base, slopePerDay, confidence: r2, reason: serverT("forecast.notRising") };
   }
 
   // Doğrunun 100'e ulaştığı an: 100 = intercept + slope·t  →  t = (100 - a) / b
@@ -118,7 +120,9 @@ function forecastFor(metric: string, label: string): Forecast {
     daysToFull: daysToFull > 0 ? daysToFull : 0,
     reason:
       r2 < minConfidence
-        ? `Veri düz bir eğilim göstermiyor (uyum %${Math.round(r2 * 100)}) — tahmin bilgi amaçlı, alarm üretmiyor.`
+        ? serverT("forecast.lowFit", {
+            fit: formatPct(Math.round(r2 * 100), currentDictionary(), 0),
+          })
         : null,
   };
 }

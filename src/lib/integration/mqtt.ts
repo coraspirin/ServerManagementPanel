@@ -2,6 +2,8 @@ import "server-only";
 
 import net from "node:net";
 import tls from "node:tls";
+import { currentDictionary, serverT } from "@/lib/i18n/runtime";
+import { translateLoose } from "@/lib/i18n/translate";
 
 /**
  * M3.11 — minimal MQTT 3.1.1 yayıncısı.
@@ -105,13 +107,14 @@ function publishPacket(message: MqttMessage, packetId: number): Buffer {
 }
 
 /** CONNACK dönüş kodları — "bağlanamadı" demek yerine sebebini söylemek için. */
-const CONNACK_ERRORS: Record<number, string> = {
-  1: "broker MQTT 3.1.1 sürümünü reddetti",
-  2: "istemci kimliği reddedildi",
-  3: "broker şu an hizmet vermiyor",
-  4: "kullanıcı adı veya parola hatalı",
-  5: "yetkisiz (broker bu istemciye izin vermiyor)",
-};
+/** CONNACK dönüş kodlarının açıklaması — `mqtt.connack.<kod>` (dil dosyası). */
+function connackError(code: number): string {
+  const key = `mqtt.connack.${code}`;
+  const dict = currentDictionary();
+  return dict[key] === undefined
+    ? serverT("mqtt.rejected", { code })
+    : translateLoose(dict, key);
+}
 
 /**
  * Tek bağlantıda birden çok mesaj yayınlar.
@@ -148,7 +151,7 @@ export function mqttPublish(
     };
 
     socket.setTimeout(config.timeoutMs);
-    socket.on("timeout", () => finish(new Error("MQTT zaman aşımı")));
+    socket.on("timeout", () => finish(new Error(serverT("mqtt.timeout"))));
     socket.on("error", (error) => finish(error));
 
     // QoS 1 kullanılan mesajlar için beklenen PUBACK sayısı.
@@ -177,7 +180,7 @@ export function mqttPublish(
         if (type === 2) {
           const code = body[1];
           if (code !== 0) {
-            finish(new Error(CONNACK_ERRORS[code] ?? `broker bağlantıyı reddetti (kod ${code})`));
+            finish(new Error(connackError(code)));
             return;
           }
 

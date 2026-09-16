@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { audit } from "@/lib/auth/audit";
 import { attemptLogin, changePassword } from "@/lib/auth/login";
 import { currentSession, destroyAllSessionsForUser } from "@/lib/auth/session";
@@ -13,14 +14,14 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   const session = await currentSession();
   if (!session) {
-    return Response.json({ error: "oturum gerekli" }, { status: 401 });
+    return Response.json({ error: serverT("api.auth.sessionRequired") }, { status: 401 });
   }
 
   let body: { currentPassword?: unknown; newPassword?: unknown };
   try {
     body = await request.json();
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const currentPassword =
@@ -33,13 +34,13 @@ export async function POST(request: Request) {
   if (problem) return Response.json({ error: problem }, { status: 400 });
 
   if (newPassword === currentPassword) {
-    return Response.json({ error: "Yeni parola eskisiyle aynı olamaz." }, { status: 400 });
+    return Response.json({ error: serverT("api.auth.passwordSame") }, { status: 400 });
   }
 
   const ip = clientIp(request);
   const check = attemptLogin(session.user.username, currentPassword, ip);
   if (!check.ok) {
-    return Response.json({ error: "Mevcut parola hatalı." }, { status: 401 });
+    return Response.json({ error: serverT("api.auth.currentPasswordWrong") }, { status: 401 });
   }
 
   changePassword(session.user.id, newPassword);
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
     username: session.user.username,
     action: "auth.password_change",
     ip,
-    detail: "tüm oturumlar sonlandırıldı",
+    detail: serverT("api.auth.sessionsEnded"),
   });
 
   return Response.json({ ok: true });

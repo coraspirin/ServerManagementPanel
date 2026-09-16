@@ -1,30 +1,27 @@
 /**
- * Desteklenen arayüz dilleri.
+ * Dil kodu ve sözlük tipi — BAĞIMLILIKSIZ.
  *
- * Bu modül BİLEREK bağımlılıksız: hem sunucu kodu, hem istemci bileşenleri,
- * hem de `node --test` altında koşan saf testler aynı dosyayı içe aktarıyor.
- * Bu yüzden burada ne `server-only`, ne `@/` takma adı, ne de veritabanı var —
- * test koşucusu takma adları çözemiyor, `@/` yazmak testleri kırar.
+ * İstemci bileşenleri, sunucu kodu ve `node --test` altında koşan testler aynı
+ * dosyayı içe aktarıyor. Burada JSON YOK: dillerin kendisi `src/locales/`
+ * kaydında. Buraya bir dil dosyası içe aktarmak onu tarayıcı paketine taşır.
  */
 
-export type Locale = "tr" | "en";
+/** "tr", "en", "fr"… — kayıtlı dil dosyasının adı. */
+export type Locale = string;
 
-export const LOCALES = ["tr", "en"] as const satisfies readonly Locale[];
+/** Düz sözlük: `"nav.items.host": "Sunucu"`. */
+export type Dictionary = Readonly<Record<string, string>>;
 
-/** Ayar okunamazsa ya da bozuksa düşülecek dil. Panelin ana dili Türkçe. */
-export const DEFAULT_LOCALE: Locale = "tr";
-
-export function isLocale(value: unknown): value is Locale {
-  return value === "tr" || value === "en";
-}
+/** Kaynak dil: anahtarların listesi ondan çıkıyor, eksik metin ona düşüyor. */
+export const SOURCE_LOCALE: Locale = "tr";
 
 /**
- * Intl API'lerinin beklediği BCP-47 etiketi.
+ * Intl API'lerinin beklediği BCP-47 etiketi — dil dosyasının `_meta.intl` alanı.
  *
- * Bölge kodu BİLEREK yazılıyor: yalnızca "tr" verildiğinde tarih/saat biçimini
- * çalışma ortamının varsayılanı belirler. Sunucu ile tarayıcı farklı ortamlar
- * olduğu için bu, sessiz bir hydration uyuşmazlığı demek.
+ * Bölge kodu BİLEREK dosyada ("tr-TR", "en-US"): yalnızca "tr" verildiğinde
+ * tarih/saat biçimini çalışma ortamı belirler, sunucu ile tarayıcı farklı
+ * ortamlar olduğu için bu sessiz bir hydration uyuşmazlığı demek.
  */
-export function intlLocale(locale: Locale): string {
-  return locale === "en" ? "en-US" : "tr-TR";
+export function intlOf(dict: Dictionary): string {
+  return dict["_meta.intl"] || "tr-TR";
 }

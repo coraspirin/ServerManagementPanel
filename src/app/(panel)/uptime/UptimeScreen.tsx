@@ -20,59 +20,57 @@ import {
 } from "@/components/monitors/MonitorForm";
 import { UptimeBars } from "@/components/monitors/UptimeBars";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
-import { WEEKDAY_NAMES } from "@/lib/cron/friendly";
-import { MONITOR_TYPES, type MaintenanceWindow, type MonitorView } from "@/lib/monitors/types";
+import type { MaintenanceWindow, MonitorView } from "@/lib/monitors/types";
+import { useDynamicT, useFormat, useT } from "@/lib/i18n/client";
+import type { MessageKey, TFunction } from "@/lib/i18n/translate";
 
 function readCsrfToken(): string {
   const match = document.cookie.match(new RegExp(`(?:^|; )${CSRF_COOKIE}=([^;]*)`));
   return match ? decodeURIComponent(match[1]) : "";
 }
 
-function statusStyle(monitor: MonitorView): { dot: string; text: string; label: string } {
+function statusStyle(monitor: MonitorView): { dot: string; text: string; label: MessageKey } {
   if (monitor.inMaintenance) {
-    return { dot: "bg-brand", text: "text-brand", label: "bakımda" };
+    return { dot: "bg-brand", text: "text-brand", label: "uptime.status.maintenance" };
   }
-  if (!monitor.enabled) return { dot: "bg-line", text: "text-subtle", label: "kapalı" };
-  if (monitor.status === "up") return { dot: "bg-ok", text: "text-ok", label: "çalışıyor" };
+  if (!monitor.enabled) return { dot: "bg-line", text: "text-subtle", label: "uptime.status.disabled" };
+  if (monitor.status === "up") return { dot: "bg-ok", text: "text-ok", label: "uptime.status.up" };
   if (monitor.status === "down") {
-    return { dot: "bg-danger", text: "text-danger", label: "çevrimdışı" };
+    return { dot: "bg-danger", text: "text-danger", label: "uptime.status.down" };
   }
-  return { dot: "bg-line", text: "text-subtle", label: "bekleniyor" };
+  return { dot: "bg-line", text: "text-subtle", label: "uptime.status.pending" };
 }
 
-function formatPct(value: number | null): string {
-  return value === null ? "—" : `%${value.toFixed(value >= 99.95 ? 2 : 1)}`;
+type Format = ReturnType<typeof useFormat>;
+
+function uptimePct(value: number | null, f: Format): string {
+  return value === null ? "—" : f.pct(value, value >= 99.95 ? 2 : 1);
 }
 
-function formatAgo(ts: number | null): string {
-  if (!ts) return "—";
-  const seconds = Math.max(0, Math.floor(Date.now() / 1000) - ts);
-  if (seconds < 60) return `${seconds} sn önce`;
-  if (seconds < 3600) return `${Math.round(seconds / 60)} dk önce`;
-  if (seconds < 86400) return `${Math.round(seconds / 3600)} sa önce`;
-  return `${Math.round(seconds / 86400)} gün önce`;
-}
+const WINDOW_TIME: Intl.DateTimeFormatOptions = {
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+};
 
-function describeWindow(window: MaintenanceWindow, monitors: MonitorView[]): string {
+function describeWindow(
+  window: MaintenanceWindow,
+  monitors: MonitorView[],
+  t: TFunction,
+  f: Format,
+): string {
   const scope =
     window.monitorId === null
-      ? "tüm servisler"
-      : (monitors.find((m) => m.id === window.monitorId)?.name ?? "silinmiş servis");
+      ? t("uptime.allServices")
+      : (monitors.find((m) => m.id === window.monitorId)?.name ?? t("uptime.deletedService"));
 
   if (window.kind === "once") {
-    const fmt = (ts: number | null) =>
-      ts === null
-        ? "?"
-        : new Date(ts * 1000).toLocaleString("tr-TR", {
-            day: "2-digit",
-            month: "short",
-            hour: "2-digit",
-            minute: "2-digit",
-          });
+    const fmt = (ts: number | null) => (ts === null ? "?" : f.dateTime(ts * 1000, WINDOW_TIME));
     return `${fmt(window.startsAt)} – ${fmt(window.endsAt)} · ${scope}`;
   }
 
-  const days = window.weekdays.map((d) => WEEKDAY_NAMES[d].slice(0, 3)).join(", ");
+  const days = window.weekdays.map((d) => f.weekday(d, "short")).join(", ");
   const time = (minute: number | null) =>
     minute === null
       ? "?"
@@ -95,6 +93,9 @@ export function UptimeScreen({
   canManage,
   refreshSeconds,
 }: Props) {
+  const t = useT();
+  const dt = useDynamicT();
+  const f = useFormat();
   const [monitors, setMonitors] = useState(initialMonitors);
   const [windows, setWindows] = useState(initialWindows);
   const [busy, setBusy] = useState(false);
@@ -158,14 +159,14 @@ export function UptimeScreen({
       const data = (await response.json()) as Record<string, unknown>;
 
       if (!response.ok) {
-        setFormError((data.error as string) ?? "İşlem başarısız.");
+        setFormError((data.error as string) ?? t("common.errors.actionFailed"));
         return null;
       }
       if (Array.isArray(data.monitors)) setMonitors(data.monitors as MonitorView[]);
       if (Array.isArray(data.windows)) setWindows(data.windows as MaintenanceWindow[]);
       return data;
     } catch {
-      setFormError("Sunucuya ulaşılamadı.");
+      setFormError(t("common.errors.network"));
       return null;
     } finally {
       setBusy(false);
@@ -225,8 +226,8 @@ export function UptimeScreen({
     if (!result) return;
     setNotice(
       result.ok
-        ? `${monitor.name}: yanıt verdi (${result.latencyMs} ms)`
-        : `${monitor.name}: ${result.error ?? "yanıt yok"}`,
+        ? t("uptime.checkOk", { name: monitor.name, ms: String(result.latencyMs) })
+        : `${monitor.name}: ${result.error ?? t("uptime.noResponse")}`,
     );
     setTimeout(() => setNotice(null), 5000);
   }
@@ -238,15 +239,17 @@ export function UptimeScreen({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm">
-          <span className="font-medium">{monitors.length} servis</span>
+          <span className="font-medium">{t("uptime.serviceCount", { count: monitors.length })}</span>
           {down.length > 0 && (
-            <span className="text-danger"> · {down.length} çevrimdışı</span>
+            <span className="text-danger">{t("uptime.downCount", { count: down.length })}</span>
           )}
           {inMaintenance.length > 0 && (
-            <span className="text-brand"> · {inMaintenance.length} bakımda</span>
+            <span className="text-brand">
+              {t("uptime.maintenanceCount", { count: inMaintenance.length })}
+            </span>
           )}
           {monitors.length > 0 && down.length === 0 && inMaintenance.length === 0 && (
-            <span className="text-ok"> · hepsi çalışıyor</span>
+            <span className="text-ok">{t("uptime.allUp")}</span>
           )}
         </div>
 
@@ -259,7 +262,7 @@ export function UptimeScreen({
             }}
             className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white"
           >
-            <Plus className="size-4" /> Servis ekle
+            <Plus className="size-4" /> {t("uptime.addService")}
           </button>
         )}
       </div>
@@ -270,15 +273,13 @@ export function UptimeScreen({
 
       {monitors.length === 0 ? (
         <p className="rounded-lg border border-dashed border-line bg-surface px-5 py-8 text-center text-sm text-subtle">
-          Henüz izlenen servis yok. Home Assistant, Pi-hole ya da MQTT broker&apos;ı
-          ekleyerek başlayabilirsin.
+          {t("uptime.empty")}
         </p>
       ) : (
         <div className="space-y-3">
           {monitors.map((monitor) => {
             const style = statusStyle(monitor);
-            const typeLabel =
-              MONITOR_TYPES.find((t) => t.value === monitor.type)?.label ?? monitor.type;
+            const typeLabel = dt(`monitorType.${monitor.type}.label`);
 
             return (
               <section
@@ -290,7 +291,7 @@ export function UptimeScreen({
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={`size-2.5 shrink-0 rounded-full ${style.dot}`} />
                       <span className="font-medium">{monitor.name}</span>
-                      <span className={`text-xs ${style.text}`}>{style.label}</span>
+                      <span className={`text-xs ${style.text}`}>{t(style.label)}</span>
                       <span className="rounded border border-line px-1 text-[10px] text-subtle">
                         {typeLabel}
                       </span>
@@ -305,15 +306,15 @@ export function UptimeScreen({
 
                   <div className="flex items-center gap-4">
                     <div className="text-right text-xs">
-                      <div className="text-subtle">24 saat</div>
-                      <div className="font-medium">{formatPct(monitor.uptime24h)}</div>
+                      <div className="text-subtle">{t("uptime.hours24")}</div>
+                      <div className="font-medium">{uptimePct(monitor.uptime24h, f)}</div>
                     </div>
                     <div className="text-right text-xs">
-                      <div className="text-subtle">30 gün</div>
-                      <div className="font-medium">{formatPct(monitor.uptime30d)}</div>
+                      <div className="text-subtle">{t("uptime.days30")}</div>
+                      <div className="font-medium">{uptimePct(monitor.uptime30d, f)}</div>
                     </div>
                     <div className="text-right text-xs">
-                      <div className="text-subtle">yanıt</div>
+                      <div className="text-subtle">{t("uptime.response")}</div>
                       <div className="font-medium">
                         {monitor.lastLatencyMs === null ? "—" : `${monitor.lastLatencyMs} ms`}
                       </div>
@@ -322,14 +323,14 @@ export function UptimeScreen({
                     {canManage && (
                       <div className="flex items-center gap-1">
                         <IconButton
-                          title="Şimdi kontrol et"
+                          title={t("uptime.checkNow")}
                           onClick={() => void checkNow(monitor)}
                           disabled={busy}
                         >
                           <Play className="size-3.5" />
                         </IconButton>
                         <IconButton
-                          title="Düzenle"
+                          title={t("common.actions.edit")}
                           onClick={() => {
                             setFormError(null);
                             setMonitorModal({
@@ -342,10 +343,10 @@ export function UptimeScreen({
                           <Pencil className="size-3.5" />
                         </IconButton>
                         <IconButton
-                          title="Sil"
+                          title={t("common.actions.delete")}
                           danger
                           onClick={() => {
-                            if (confirm(`"${monitor.name}" silinsin mi?`)) {
+                            if (confirm(t("uptime.confirmDelete", { name: monitor.name }))) {
                               void send(`/api/monitors/${monitor.id}`, "DELETE");
                             }
                           }}
@@ -360,12 +361,14 @@ export function UptimeScreen({
                 <div className="mt-3">
                   <UptimeBars days={monitor.days} />
                   <div className="mt-1 flex justify-between text-[10px] text-subtle">
-                    <span>{monitor.days.length} gün önce</span>
+                    <span>{t("uptime.daysAgo", { count: monitor.days.length })}</span>
                     <span>
-                      son kontrol {formatAgo(monitor.lastCheckAt)} · her{" "}
-                      {monitor.effective.intervalSeconds} sn
+                      {t("uptime.lastCheck", {
+                        when: monitor.lastCheckAt ? f.relative(monitor.lastCheckAt * 1000) : "—",
+                        seconds: monitor.effective.intervalSeconds,
+                      })}
                     </span>
-                    <span>bugün</span>
+                    <span>{t("uptime.today")}</span>
                   </div>
                 </div>
               </section>
@@ -378,10 +381,10 @@ export function UptimeScreen({
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-3">
           <div>
             <h2 className="flex items-center gap-1.5 font-semibold">
-              <Wrench className="size-4" /> Bakım pencereleri
+              <Wrench className="size-4" /> {t("uptime.windows")}
             </h2>
             <p className="mt-0.5 text-xs text-subtle">
-              Pencere içindeyken kontrol sürer ama kesinti sayılmaz ve alarm üretilmez.
+              {t("uptime.windowsIntro")}
             </p>
           </div>
           {canManage && (
@@ -393,14 +396,14 @@ export function UptimeScreen({
               }}
               className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand hover:text-brand"
             >
-              <Plus className="size-3.5" /> Pencere ekle
+              <Plus className="size-3.5" /> {t("uptime.addWindow")}
             </button>
           )}
         </div>
 
         {windows.length === 0 ? (
           <p className="px-5 py-6 text-center text-sm text-subtle">
-            Tanımlı bakım penceresi yok.
+            {t("uptime.noWindows")}
           </p>
         ) : (
           <div className="divide-y divide-line">
@@ -415,24 +418,24 @@ export function UptimeScreen({
                     <span className="text-sm font-medium">{window.name}</span>
                     {window.active && (
                       <span className="rounded bg-brand/15 px-1.5 text-[10px] font-medium text-brand">
-                        şu an aktif
+                        {t("uptime.activeNow")}
                       </span>
                     )}
                     {!window.enabled && (
                       <span className="rounded bg-line px-1.5 text-[10px] text-subtle">
-                        kapalı
+                        {t("uptime.status.disabled")}
                       </span>
                     )}
                   </div>
                   <p className="mt-0.5 text-xs text-subtle">
-                    {describeWindow(window, monitors)}
+                    {describeWindow(window, monitors, t, f)}
                   </p>
                 </div>
 
                 {canManage && (
                   <div className="flex items-center gap-1">
                     <IconButton
-                      title="Düzenle"
+                      title={t("common.actions.edit")}
                       onClick={() => {
                         setFormError(null);
                         setWindowModal({
@@ -445,10 +448,10 @@ export function UptimeScreen({
                       <Pencil className="size-3.5" />
                     </IconButton>
                     <IconButton
-                      title="Sil"
+                      title={t("common.actions.delete")}
                       danger
                       onClick={() => {
-                        if (confirm(`"${window.name}" silinsin mi?`)) {
+                        if (confirm(t("uptime.confirmDelete", { name: window.name }))) {
                           void send(`/api/maintenance/${window.id}`, "DELETE");
                         }
                       }}
@@ -465,7 +468,7 @@ export function UptimeScreen({
 
       <Modal
         open={monitorModal.open}
-        title={monitorModal.id === null ? "Servis ekle" : "Servisi düzenle"}
+        title={monitorModal.id === null ? t("uptime.addService") : t("uptime.editService")}
         onClose={() => setMonitorModal((m) => ({ ...m, open: false }))}
       >
         <MonitorForm
@@ -483,7 +486,7 @@ export function UptimeScreen({
 
       <Modal
         open={windowModal.open}
-        title={windowModal.id === null ? "Bakım penceresi ekle" : "Bakım penceresini düzenle"}
+        title={windowModal.id === null ? t("uptime.addWindowTitle") : t("uptime.editWindowTitle")}
         onClose={() => setWindowModal((w) => ({ ...w, open: false }))}
       >
         <MaintenanceForm

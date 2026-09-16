@@ -22,6 +22,8 @@ import type {
   LogSearchResult,
   LogSourceInfo,
 } from "@/lib/logs/types";
+import { useFormat, useT } from "@/lib/i18n/client";
+import type { MessageKey } from "@/lib/i18n/translate";
 
 /**
  * M3.3 — merkezi log arama.
@@ -53,12 +55,18 @@ const LEVEL_CHIP: Record<LogLevel, string> = {
 
 const ALL_LEVELS: LogLevel[] = ["error", "warning", "info", "debug"];
 
-const RANGES: { label: string; seconds: number }[] = [
-  { label: "1 sa", seconds: 3600 },
-  { label: "24 sa", seconds: 86400 },
-  { label: "7 gün", seconds: 7 * 86400 },
-  { label: "Tümü", seconds: 0 },
+const RANGES: { label: MessageKey; seconds: number }[] = [
+  { label: "logsScreen.range.1h", seconds: 3600 },
+  { label: "logsScreen.range.24h", seconds: 86400 },
+  { label: "logsScreen.range.7d", seconds: 7 * 86400 },
+  { label: "logsScreen.range.all", seconds: 0 },
 ];
+
+const SEVERITY_LABEL: Record<LogPattern["severity"], MessageKey> = {
+  info: "logsScreen.severity.info",
+  warning: "logsScreen.severity.warning",
+  critical: "logsScreen.severity.critical",
+};
 
 const PAGE_SIZE = 200;
 
@@ -89,6 +97,8 @@ export function LogsScreen({
   initial: Payload;
   canManagePatterns: boolean;
 }) {
+  const t = useT();
+  const f = useFormat();
   const [data, setData] = useState(initial);
   const [filters, setFilters] = useState<Filters>({
     q: "",
@@ -126,7 +136,7 @@ export function LogsScreen({
 
   async function collectNow() {
     setBusy(true);
-    setNotice("Toplanıyor…");
+    setNotice(t("logsScreen.collecting"));
     try {
       const response = await fetch("/api/logs", {
         method: "POST",
@@ -136,20 +146,24 @@ export function LogsScreen({
         outcome?: { collected: number; sources: number; skipped: string[]; errors: string[] };
       };
       if (!response.ok) {
-        setNotice("Toplama başarısız.");
+        setNotice(t("logsScreen.collectFailed"));
         return;
       }
       const outcome = payload.outcome;
       setNotice(
         outcome
-          ? `${outcome.collected} yeni satır, ${outcome.sources} kaynak` +
-              (outcome.skipped.length > 0 ? ` · atlanan: ${outcome.skipped.join("; ")}` : "") +
-              (outcome.errors.length > 0 ? ` · hata: ${outcome.errors.join("; ")}` : "")
-          : "Tamamlandı.",
+          ? t("logsScreen.collected", { count: outcome.collected, sources: outcome.sources }) +
+              (outcome.skipped.length > 0
+                ? t("logsScreen.skipped", { list: outcome.skipped.join("; ") })
+                : "") +
+              (outcome.errors.length > 0
+                ? t("logsScreen.errors", { list: outcome.errors.join("; ") })
+                : "")
+          : t("logsScreen.done"),
       );
       await load(filters, 0);
     } catch {
-      setNotice("Sunucuya ulaşılamadı.");
+      setNotice(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
@@ -189,7 +203,7 @@ export function LogsScreen({
               onKeyDown={(e) => {
                 if (e.key === "Enter") apply({});
               }}
-              placeholder="Kelime ara — Enter ile çalıştır (sonuna * yazarak ön ek araması)"
+              placeholder={t("logsScreen.search")}
               className="w-full rounded-md border border-line bg-canvas py-1.5 pl-9 pr-3 text-sm outline-none focus:border-brand"
             />
           </div>
@@ -206,7 +220,7 @@ export function LogsScreen({
                     : "text-subtle hover:text-ink"
                 }`}
               >
-                {entry.label}
+                {t(entry.label)}
               </button>
             ))}
           </div>
@@ -217,7 +231,8 @@ export function LogsScreen({
             disabled={busy}
             className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
           >
-            <RotateCw className={`size-4 ${busy ? "animate-spin" : ""}`} /> Şimdi topla
+            <RotateCw className={`size-4 ${busy ? "animate-spin" : ""}`} />{" "}
+            {t("logsScreen.collectNow")}
           </button>
 
           <button
@@ -225,7 +240,7 @@ export function LogsScreen({
             onClick={() => setShowPatterns(true)}
             className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand"
           >
-            <Bell className="size-4" /> Kurallar
+            <Bell className="size-4" /> {t("logsScreen.rules")}
             <span className="text-xs text-subtle">{activePatterns}</span>
           </button>
         </div>
@@ -260,7 +275,7 @@ export function LogsScreen({
             download
             className="ml-auto flex items-center gap-1 text-xs text-brand hover:underline"
           >
-            <Download className="size-3.5" /> Metin olarak indir
+            <Download className="size-3.5" /> {t("logsScreen.download")}
           </a>
         </div>
 
@@ -270,10 +285,9 @@ export function LogsScreen({
       {data.totalLines === 0 ? (
         <div className="rounded-lg border border-dashed border-line bg-surface px-5 py-12 text-center">
           <ScrollText className="mx-auto size-8 text-subtle" aria-hidden />
-          <p className="mt-3 text-sm">Henüz toplanmış log yok.</p>
+          <p className="mt-3 text-sm">{t("logsScreen.emptyTitle")}</p>
           <p className="mt-1 text-xs text-subtle">
-            Toplama beş dakikada bir çalışıyor. Beklemek istemiyorsan &quot;Şimdi topla&quot;
-            düğmesini kullan.
+            {t("logsScreen.emptyHelp")}
           </p>
         </div>
       ) : (
@@ -282,7 +296,7 @@ export function LogsScreen({
             <ul className="divide-y divide-line font-mono text-xs">
               {data.records.length === 0 && (
                 <li className="px-4 py-10 text-center font-sans text-sm text-subtle">
-                  Bu filtreyle eşleşen satır yok.
+                  {t("logsScreen.noMatch")}
                 </li>
               )}
               {data.records.map((record) => (
@@ -293,10 +307,11 @@ export function LogsScreen({
 
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-subtle">
             <span>
-              {data.total.toLocaleString("tr-TR")} eşleşme · toplam{" "}
-              {data.totalLines.toLocaleString("tr-TR")} satır saklanıyor
-              {data.oldest !== null &&
-                ` · en eskisi ${new Date(data.oldest * 1000).toLocaleDateString("tr-TR")}`}
+              {t("logsScreen.summary", {
+                matches: f.number(data.total),
+                lines: f.number(data.totalLines),
+              })}
+              {data.oldest !== null && t("logsScreen.oldest", { date: f.date(data.oldest * 1000) })}
             </span>
             <div className="flex gap-2">
               <button
@@ -305,7 +320,7 @@ export function LogsScreen({
                 onClick={() => void load(filters, Math.max(0, offset - PAGE_SIZE))}
                 className="rounded-md border border-line px-3 py-1.5 transition-colors hover:border-brand disabled:opacity-40"
               >
-                Önceki
+                {t("database.previous")}
               </button>
               <button
                 type="button"
@@ -313,7 +328,7 @@ export function LogsScreen({
                 onClick={() => void load(filters, offset + PAGE_SIZE)}
                 className="rounded-md border border-line px-3 py-1.5 transition-colors hover:border-brand disabled:opacity-40"
               >
-                Sonraki
+                {t("database.next")}
               </button>
             </div>
           </div>
@@ -341,6 +356,8 @@ function SourceChip({
   active: boolean;
   onClick: () => void;
 }) {
+  const t = useT();
+  const f = useFormat();
   const Icon = source.kind === "journald" ? Server : Container;
 
   return (
@@ -349,8 +366,8 @@ function SourceChip({
       onClick={onClick}
       title={
         source.lastError
-          ? `Son hata: ${source.lastError}`
-          : `${source.lines.toLocaleString("tr-TR")} satır`
+          ? t("logsScreen.lastError", { error: source.lastError })
+          : t("logsScreen.lines", { count: f.number(source.lines) })
       }
       className={`flex items-center gap-1 rounded border border-line px-2 py-0.5 text-xs transition-opacity ${
         active ? "" : "opacity-30"
@@ -368,6 +385,7 @@ function SourceChip({
 }
 
 function Line({ record }: { record: LogRecord }) {
+  const f = useFormat();
   return (
     <li className="flex flex-col gap-0.5 px-3 py-1 hover:bg-line/30 md:flex-row md:gap-3">
       {/*
@@ -378,7 +396,7 @@ function Line({ record }: { record: LogRecord }) {
       */}
       <span className="flex min-w-0 gap-3 md:contents">
         <span className="shrink-0 tabular-nums text-subtle md:w-36">
-          {new Date(record.ts * 1000).toLocaleString("tr-TR", {
+          {f.dateTime(record.ts * 1000, {
             day: "2-digit",
             month: "2-digit",
             hour: "2-digit",
@@ -423,6 +441,8 @@ function PatternsModal({
   onClose: () => void;
   onChanged: (patterns: LogPattern[]) => void;
 }) {
+  const t = useT();
+  const f = useFormat();
   const [draft, setDraft] = useState<typeof EMPTY_PATTERN | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -438,13 +458,13 @@ function PatternsModal({
       });
       const data = (await response.json()) as { error?: string; patterns?: LogPattern[] };
       if (!response.ok) {
-        setError(data.error ?? "İşlem başarısız.");
+        setError(data.error ?? t("common.errors.actionFailed"));
         return false;
       }
       if (data.patterns) onChanged(data.patterns);
       return true;
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
       return false;
     } finally {
       setBusy(false);
@@ -455,11 +475,9 @@ function PatternsModal({
     "mt-1 w-full rounded-md border border-line bg-canvas px-3 py-1.5 text-sm outline-none focus:border-brand";
 
   return (
-    <Modal open={open} title="Log kuralları" onClose={onClose} wide>
+    <Modal open={open} title={t("logsScreen.rulesTitle")} onClose={onClose} wide>
       <p className="text-xs leading-snug text-subtle">
-        Bir kural eşleştiğinde olay üretilir ve bildirim kanallarına gider. Aynı kural,
-        bekleme süresi dolana kadar tekrar bildirilmez — bir OOM döngüsü dakikada yüzlerce
-        satır yazabilir.
+        {t("logsScreen.rulesIntro")}
       </p>
 
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
@@ -488,7 +506,7 @@ function PatternsModal({
                         : "bg-brand/10 text-brand"
                   }`}
                 >
-                  {pattern.severity}
+                  {t(SEVERITY_LABEL[pattern.severity])}
                 </span>
                 {pattern.isRegex && (
                   <span className="rounded border border-line px-1 text-[10px] text-subtle">
@@ -500,10 +518,13 @@ function PatternsModal({
                 {pattern.pattern}
               </code>
               <span className="text-[11px] text-subtle">
-                {pattern.sourceFilter || "tüm kaynaklar"} · {pattern.cooldownMinutes} dk bekleme ·{" "}
-                {pattern.hitCount} kez eşleşti
+                {t("logsScreen.ruleMeta", {
+                  source: pattern.sourceFilter || t("logsScreen.allSources"),
+                  cooldown: pattern.cooldownMinutes,
+                  hits: pattern.hitCount,
+                })}
                 {pattern.lastHitAt &&
-                  ` · son: ${new Date(pattern.lastHitAt * 1000).toLocaleString("tr-TR")}`}
+                  t("logsScreen.lastHit", { when: f.dateTime(pattern.lastHitAt * 1000) })}
               </span>
             </div>
             {canManage && (
@@ -511,7 +532,7 @@ function PatternsModal({
                 type="button"
                 disabled={busy}
                 onClick={() => {
-                  if (confirm(`"${pattern.name}" kuralı silinsin mi?`)) {
+                  if (confirm(t("logsScreen.confirmDeleteRule", { name: pattern.name }))) {
                     void send("DELETE", undefined, `?id=${pattern.id}`);
                   }
                 }}
@@ -528,7 +549,7 @@ function PatternsModal({
         (draft ? (
           <div className="mt-4 space-y-3 rounded-md border border-brand/40 bg-brand/5 p-3">
             <label className="block text-sm">
-              <span className="text-subtle">Kural adı</span>
+              <span className="text-subtle">{t("logsScreen.ruleName")}</span>
               <input
                 value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
@@ -536,7 +557,7 @@ function PatternsModal({
               />
             </label>
             <label className="block text-sm">
-              <span className="text-subtle">Desen</span>
+              <span className="text-subtle">{t("logsScreen.pattern")}</span>
               <input
                 value={draft.pattern}
                 onChange={(e) => setDraft({ ...draft, pattern: e.target.value })}
@@ -546,13 +567,13 @@ function PatternsModal({
             </label>
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="block text-sm">
-                <span className="text-subtle">Kaynak</span>
+                <span className="text-subtle">{t("logsScreen.source")}</span>
                 <select
                   value={draft.sourceFilter}
                   onChange={(e) => setDraft({ ...draft, sourceFilter: e.target.value })}
                   className={inputClass}
                 >
-                  <option value="">Tümü</option>
+                  <option value="">{t("logsScreen.range.all")}</option>
                   {sources.map((source) => (
                     <option key={source} value={source}>
                       {source}
@@ -561,7 +582,7 @@ function PatternsModal({
                 </select>
               </label>
               <label className="block text-sm">
-                <span className="text-subtle">Önem</span>
+                <span className="text-subtle">{t("logsScreen.severityLabel")}</span>
                 <select
                   value={draft.severity}
                   onChange={(e) =>
@@ -569,13 +590,13 @@ function PatternsModal({
                   }
                   className={inputClass}
                 >
-                  <option value="info">bilgi</option>
-                  <option value="warning">uyarı</option>
-                  <option value="critical">kritik</option>
+                  <option value="info">{t("logsScreen.severity.info")}</option>
+                  <option value="warning">{t("logsScreen.severity.warning")}</option>
+                  <option value="critical">{t("logsScreen.severity.critical")}</option>
                 </select>
               </label>
               <label className="block text-sm">
-                <span className="text-subtle">Bekleme (dk)</span>
+                <span className="text-subtle">{t("logsScreen.cooldown")}</span>
                 <input
                   type="number"
                   min={0}
@@ -595,7 +616,7 @@ function PatternsModal({
                 onChange={(e) => setDraft({ ...draft, isRegex: e.target.checked })}
                 className="size-4 accent-[var(--brand)]"
               />
-              Düzenli ifade olarak yorumla
+              {t("logsScreen.isRegex")}
             </label>
             <div className="flex justify-end gap-2">
               <button
@@ -603,7 +624,7 @@ function PatternsModal({
                 onClick={() => setDraft(null)}
                 className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
               >
-                Vazgeç
+                {t("common.actions.cancel")}
               </button>
               <button
                 type="button"
@@ -613,7 +634,7 @@ function PatternsModal({
                 }}
                 className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
               >
-                Ekle
+                {t("common.actions.add")}
               </button>
             </div>
           </div>
@@ -623,7 +644,7 @@ function PatternsModal({
             onClick={() => setDraft({ ...EMPTY_PATTERN })}
             className="mt-4 flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand"
           >
-            <Plus className="size-4" /> Kural ekle
+            <Plus className="size-4" /> {t("logsScreen.addRule")}
           </button>
         ))}
     </Modal>

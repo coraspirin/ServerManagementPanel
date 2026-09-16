@@ -1,6 +1,8 @@
 import "server-only";
 
 import { getDb } from "@/lib/db/client";
+import { currentDictionary, serverT } from "@/lib/i18n/runtime";
+import { translateLoose } from "@/lib/i18n/translate";
 import type { PermissionKey } from "@/lib/auth/types";
 import { findWidget, WIDGETS, type WidgetPlacement } from "./catalog";
 
@@ -27,13 +29,14 @@ export function layoutFor(userId: number, permissions: PermissionKey[]): WidgetP
     (widget) => !widget.permission || permissions.includes(widget.permission),
   );
 
+  const dict = currentDictionary();
   return allowed
     .map((widget, index) => {
       const row = saved.get(widget.key);
       return {
         key: widget.key,
-        label: widget.label,
-        description: widget.description,
+        label: translateLoose(dict, `dashboard.widget.${widget.key}.label`),
+        description: translateLoose(dict, `dashboard.widget.${widget.key}.description`),
         wide: widget.wide,
         visible: row ? row.visible === 1 : widget.visible,
         // Kaydı olmayan widget kataloğun sonuna değil, kataloğdaki kendi
@@ -55,14 +58,14 @@ export function layoutFor(userId: number, permissions: PermissionKey[]): WidgetP
 export type LayoutInput = { key: string; visible: boolean }[];
 
 export function validateLayout(input: LayoutInput): string | null {
-  if (!Array.isArray(input)) return "Düzen listesi bekleniyordu.";
-  if (input.length === 0) return "Düzen boş olamaz.";
-  if (input.length > WIDGETS.length) return "Düzende tanımsız widget var.";
+  if (!Array.isArray(input)) return serverT("dashboard.layout.expectedList");
+  if (input.length === 0) return serverT("dashboard.layout.empty");
+  if (input.length > WIDGETS.length) return serverT("dashboard.layout.tooMany");
 
   const seen = new Set<string>();
   for (const entry of input) {
-    if (!findWidget(entry.key)) return `Bilinmeyen widget: ${entry.key}`;
-    if (seen.has(entry.key)) return `Widget iki kez geçiyor: ${entry.key}`;
+    if (!findWidget(entry.key)) return serverT("dashboard.layout.unknown", { key: entry.key });
+    if (seen.has(entry.key)) return serverT("dashboard.layout.duplicate", { key: entry.key });
     seen.add(entry.key);
   }
   return null;

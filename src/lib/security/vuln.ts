@@ -2,6 +2,7 @@ import "server-only";
 
 import { announce } from "@/lib/alerts/announce";
 import { getDb } from "@/lib/db/client";
+import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 import { getBool, getNumber, getString } from "@/lib/settings";
 
@@ -66,13 +67,10 @@ type TrivyOutput = {
  */
 function explain(raw: string, image: string): string {
   if (raw.includes("not found in tar") || raw.includes("unable to populate")) {
-    return (
-      `Trivy bu imajı Docker'dan okuyamadı (büyük, çok katmanlı imajlarda görülen bilinen bir sınır): ${image}. ` +
-      "Ayarlarda 'kayıt defterinden oku' seçeneğini açarak deneyebilirsin — imajı yeniden indirir, uzun sürer."
-    );
+    return serverT("vuln.dockerReadLimit", { image });
   }
   if (raw.includes("no space left")) {
-    return "Diskte yer kalmadı; tarama tamamlanamadı.";
+    return serverT("vuln.noSpace");
   }
   return raw.slice(0, 600);
 }
@@ -132,7 +130,8 @@ export async function scanImage(image: string): Promise<ScanRow> {
         low: 0,
         findings: [],
         durationMs: Date.now() - started,
-        error: explain(result.output, image) || `trivy çıkış kodu ${result.exitCode}`,
+        error:
+          explain(result.output, image) || serverT("vuln.exitCode", { code: result.exitCode }),
       });
     }
 
@@ -149,7 +148,7 @@ export async function scanImage(image: string): Promise<ScanRow> {
         low: 0,
         findings: [],
         durationMs: Date.now() - started,
-        error: "trivy çıktısı ayrıştırılamadı",
+        error: serverT("vuln.parseFailed"),
       });
     }
 
@@ -199,7 +198,7 @@ export async function scanImage(image: string): Promise<ScanRow> {
       low: 0,
       findings: [],
       durationMs: Date.now() - started,
-      error: error instanceof Error ? error.message : "tarama başarısız",
+      error: error instanceof Error ? error.message : serverT("vuln.scanFailed"),
     });
   }
 }
@@ -276,7 +275,7 @@ export async function scanAllImages(): Promise<{ scanned: number; critical: numb
     return {
       scanned: 0,
       critical: 0,
-      detail: `docker listesi alınamadı: ${error instanceof Error ? error.message : "?"}`,
+      detail: serverT("vuln.listFailed", { error: error instanceof Error ? error.message : "?" }),
     };
   }
 
@@ -308,10 +307,8 @@ export async function scanAllImages(): Promise<{ scanned: number; critical: numb
       alertKey: "security.cve",
       source: "system",
       severity: "warning",
-      title: "Yeni kritik güvenlik açığı bulundu",
-      detail:
-        `${newlyCritical.join(", ")}\n` +
-        "Panel → Güvenlik ekranında ayrıntılar var. Çoğu açık image güncellemesiyle kapanır.",
+      title: serverT("vuln.newCriticalTitle"),
+      detail: serverT("vuln.newCriticalDetail", { images: newlyCritical.join(", ") }),
     });
   }
 
@@ -319,8 +316,8 @@ export async function scanAllImages(): Promise<{ scanned: number; critical: numb
     scanned: images.length,
     critical,
     detail:
-      `${images.length} image tarandı, ${critical} kritik bulgu` +
-      (problems.length > 0 ? ` · hata: ${problems.join("; ")}` : ""),
+      serverT("vuln.summary", { images: images.length, critical }) +
+      (problems.length > 0 ? serverT("vuln.errors", { list: problems.join("; ") }) : ""),
   };
 }
 

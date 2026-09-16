@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 
 import { hasPermission } from "@/lib/auth/session";
 import { requirePermission } from "@/lib/auth/guard";
+import { Rich } from "@/lib/i18n/rich";
+import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -21,13 +23,18 @@ export default async function StacksPage() {
   const session = await requirePermission("apps.install");
 
   if (!hasPermission(session.user, "docker.view")) {
+    const t = getT();
     return (
       <div className="rounded-lg border border-warn/40 bg-surface px-5 py-4">
-        <p className="text-sm font-medium text-warn">Compose yığınları taşındı</p>
+        <p className="text-sm font-medium text-warn">{t("stacksMoved.title")}</p>
         <p className="mt-1 text-xs text-subtle">
-          Yığın yönetimi Docker ekranının <strong>Stack</strong> sekmesinde toplandı. O
-          ekranı görebilmek için <code className="font-mono">docker.view</code> iznin
-          olması gerekiyor; şu anki rolünde yok. Bir yöneticiden istemen gerekiyor.
+          <Rich
+            text={t("stacksMoved.body")}
+            values={{
+              tab: <strong>{t("stacksMoved.tab")}</strong>,
+              perm: <code className="font-mono">docker.view</code>,
+            }}
+          />
         </p>
       </div>
     );

@@ -31,14 +31,20 @@ export type SettingType =
   /** "uid:gid" — host kullanıcı/grup listesinden seçilir. */
   | "owner"
   /** Sınırlı HTML alt kümesi; popup'ta zengin metin kutusuyla yazılır. */
-  | "richtext";
+  | "richtext"
+  /**
+   * Arayüz dili. Seçenekler şemada değil, dil kaydında (`src/locales/`):
+   * yeni bir dil dosyası eklendiğinde listede kendiliğinden görünür.
+   */
+  | "locale";
 
 export type SettingScope = "global" | "host" | "container" | "volume" | "app" | "repo";
 
 /**
  * Bir ayarın YAPISI. Ekranda görünen metin (ad, yardım, birim, bölüm başlığı,
- * enum seçenek adları) burada değil, sözlükte: `dict/*\/settings.ts` içindeki
- * `items`, `sections` ve `units`. Şema iki dili birden taşıyamaz.
+ * enum seçenek adları) burada değil, dil dosyalarında (`src/locales/*.json`):
+ * `settings.items.<anahtar>.*` ve `settings.sections.<bölüm>`. Şema tek bir
+ * dilin metnini taşısaydı diğer diller onu kopyalamak zorunda kalırdı.
  */
 export type SettingDef = {
   key: string;
@@ -74,9 +80,8 @@ export type SettingDef = {
  * bu yüzden yeni bir kategori eklemek yeni bir sayfa açar — ayrıca route
  * yazmak gerekmez.
  *
- * Kategorinin ADI ve AÇIKLAMASI burada değil, sözlükte: `dict/*\/settings.ts`
- * içindeki `groups.<key>`. Şema iki dili birden taşıyamaz; burada kalan tek
- * şey yapı.
+ * Kategorinin ADI ve AÇIKLAMASI burada değil, dil dosyalarında
+ * (`settings.groups.<key>.label` / `.description`). Burada kalan tek şey yapı.
  */
 export type SettingGroupDef = {
   key: string;

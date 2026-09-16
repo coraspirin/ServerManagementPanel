@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
 import { isInMaintenance } from "@/lib/monitors/maintenance";
@@ -274,7 +275,9 @@ async function notifyFor(
   escalation: boolean,
 ): Promise<{ notified: boolean; event: boolean; reason: string | null }> {
   const reason = suppressionReason(condition, state, now, at);
-  const title = escalation ? `${condition.title} (sürüyor)` : condition.title;
+  const title = escalation
+    ? serverT("alertsLib.ongoing", { title: condition.title })
+    : condition.title;
 
   // Runbook notu YALNIZCA bildirime eklenir, olay kaydına değil: panelde
   // zaten container detayında duruyor ve olay listesini şişirmesi gereksiz.
@@ -298,7 +301,9 @@ async function notifyFor(
 
     const failures = Object.entries(result.failed);
     if (failures.length > 0) {
-      failureNote = `\nGönderilemedi: ${failures.map(([k, v]) => `${k} (${v})`).join(", ")}`;
+      failureNote = serverT("alertsLib.sendFailed", {
+        list: failures.map(([k, v]) => `${k} (${v})`).join(", "),
+      });
     }
 
     if (result.sent.length > 0) {

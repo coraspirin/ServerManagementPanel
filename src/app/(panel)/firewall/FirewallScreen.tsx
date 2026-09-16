@@ -12,6 +12,8 @@ import {
 
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import type { FirewallState } from "@/lib/security/firewall";
+import { useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 /**
  * M3.18 — güvenlik duvarı ekranı.
@@ -56,6 +58,7 @@ export function FirewallScreen({
   portsScannedAt: number | null;
   canManage: boolean;
 }) {
+  const t = useT();
   const [firewall, setFirewall] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,14 +113,14 @@ export function FirewallScreen({
 
       if (data.firewall) setFirewall(data.firewall);
       if (!response.ok) {
-        setError(data.error ?? data.message ?? "İşlem başarısız.");
+        setError(data.error ?? data.message ?? t("common.errors.actionFailed"));
         return false;
       }
-      setNotice(data.message ?? "Tamam.");
+      setNotice(data.message ?? t("docker.installer.ok"));
       setPending(null);
       return true;
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
       return false;
     } finally {
       setBusy(false);
@@ -139,7 +142,10 @@ export function FirewallScreen({
             <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden /> {pending.warning}
           </p>
           <p className="mt-1 text-xs text-subtle">
-            İşlem: <code className="font-mono">{pending.label}</code>
+            <Rich
+              text={t("firewall.operation")}
+              values={{ label: <code className="font-mono">{pending.label}</code> }}
+            />
           </p>
           <div className="mt-3 flex gap-2">
             <button
@@ -147,7 +153,7 @@ export function FirewallScreen({
               onClick={() => setPending(null)}
               className="rounded-md border border-line px-3 py-1.5 text-sm"
             >
-              Vazgeç
+              {t("common.actions.cancel")}
             </button>
             <button
               type="button"
@@ -155,7 +161,7 @@ export function FirewallScreen({
               onClick={() => void send({ ...pending.body, confirmed: true }, pending.label)}
               className="rounded-md bg-danger px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              Riski anladım, devam et
+              {t("firewall.acceptRisk")}
             </button>
           </div>
         </div>
@@ -170,7 +176,7 @@ export function FirewallScreen({
             ) : (
               <ShieldOff className="size-4 text-warn" aria-hidden />
             )}
-            Güvenlik duvarı (ufw)
+            {t("firewall.title")}
           </h2>
           <div className="flex items-center gap-3">
             <span
@@ -192,7 +198,7 @@ export function FirewallScreen({
                 }
                 className="rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
               >
-                {firewall.active ? "Kapat" : "Etkinleştir"}
+                {firewall.active ? t("firewall.disable") : t("firewall.enable")}
               </button>
             )}
           </div>
@@ -201,7 +207,7 @@ export function FirewallScreen({
         {firewall.setupHint && (
           <div className="border-b border-line bg-warn/5 px-5 py-3">
             <p className="text-xs text-warn">
-              Bunu açmak için host&apos;ta root olarak izin listesine satır eklemen gerekiyor:
+              {t("firewall.setupHint")}
             </p>
             <code className="mt-1 block select-all overflow-x-auto whitespace-pre rounded bg-canvas px-2 py-1.5 font-mono text-[11px]">
               {firewall.setupHint}
@@ -214,7 +220,7 @@ export function FirewallScreen({
             {firewall.defaults ? (
               <>
                 <Policy
-                  label="Gelen"
+                  label={t("firewall.incoming")}
                   value={firewall.defaults.incoming}
                   direction="incoming"
                   busy={busy}
@@ -227,7 +233,7 @@ export function FirewallScreen({
                   }
                 />
                 <Policy
-                  label="Giden"
+                  label={t("firewall.outgoing")}
                   value={firewall.defaults.outgoing}
                   direction="outgoing"
                   busy={busy}
@@ -239,13 +245,17 @@ export function FirewallScreen({
                     )
                   }
                 />
-                <span className="text-subtle">Yönlendirilen: {firewall.defaults.routed}</span>
+                <span className="text-subtle">
+                  {t("firewall.routed", { value: firewall.defaults.routed })}
+                </span>
                 {firewall.logging && <span className="text-subtle">Log: {firewall.logging}</span>}
               </>
             ) : (
               <span className="text-subtle">
-                Varsayılan politika okunamadı — izin listesinde{" "}
-                <code className="font-mono">ufw.status_verbose</code> satırı yok.
+                <Rich
+                  text={t("firewall.noDefaults")}
+                  values={{ line: <code className="font-mono">ufw.status_verbose</code> }}
+                />
               </span>
             )}
           </div>
@@ -256,31 +266,39 @@ export function FirewallScreen({
       {firewall.available && (
         <section className="rounded-lg border border-line bg-surface">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
-            <h2 className="text-sm font-semibold">Kurallar ({firewall.rules.length})</h2>
+            <h2 className="text-sm font-semibold">
+              {t("firewall.rules", { count: firewall.rules.length })}
+            </h2>
             <span className="text-xs text-subtle">
               {portsScannedAt === null ? (
-                <>
-                  Port sahipliği bilinmiyor —{" "}
-                  <Link href="/ports" className="underline underline-offset-2">
-                    Port Haritası
-                  </Link>{" "}
-                  henüz taranmadı.
-                </>
+                <Rich
+                  text={t("firewall.ownershipUnknown")}
+                  values={{
+                    link: (
+                      <Link href="/ports" className="underline underline-offset-2">
+                        {t("firewall.portMap")}
+                      </Link>
+                    ),
+                  }}
+                />
               ) : (
-                <>
-                  Sahiplik bilgisi{" "}
-                  <Link href="/ports" className="underline underline-offset-2">
-                    Port Haritası
-                  </Link>
-                  &apos;ndan
-                </>
+                <Rich
+                  text={t("firewall.ownershipFrom")}
+                  values={{
+                    link: (
+                      <Link href="/ports" className="underline underline-offset-2">
+                        {t("firewall.portMap")}
+                      </Link>
+                    ),
+                  }}
+                />
               )}
             </span>
           </div>
 
           <ul className="divide-y divide-line">
             {firewall.rules.length === 0 && (
-              <li className="px-5 py-6 text-center text-sm text-subtle">Tanımlı kural yok.</li>
+              <li className="px-5 py-6 text-center text-sm text-subtle">{t("firewall.noRules")}</li>
             )}
             {firewall.rules.map((entry) => {
               const rulePort = Number(entry.to.match(/^(\d{1,5})/)?.[1] ?? 0);
@@ -302,17 +320,17 @@ export function FirewallScreen({
                   </span>
 
                   {listener && (
-                    <span className="text-[11px] text-subtle" title="Bu portu dinleyen">
+                    <span className="text-[11px] text-subtle" title={t("firewall.listener")}>
                       {listener}
                     </span>
                   )}
                   {bypassed && (
                     <span
                       className="flex items-center gap-1 rounded border border-warn/40 px-1.5 py-0.5 text-[11px] text-warn"
-                      title="Docker bu portu yayınlıyor. Docker'ın iptables kuralları ufw'den önce çalıştığı için bu deny kuralı uygulanmaz."
+                      title={t("firewall.bypassTitle")}
                     >
                       <AlertTriangle className="size-3" aria-hidden />
-                      ufw atlanıyor
+                      {t("firewall.bypassed")}
                     </span>
                   )}
 
@@ -320,9 +338,9 @@ export function FirewallScreen({
                     <button
                       type="button"
                       disabled={busy}
-                      title="Kuralı sil"
+                      title={t("firewall.deleteRule")}
                       onClick={() => {
-                        if (confirm(`${entry.number}. kural silinsin mi?\n${entry.raw}`)) {
+                        if (confirm(t("firewall.confirmDelete", { number: entry.number, raw: entry.raw }))) {
                           void send(
                             { action: "delete", number: entry.number },
                             `ufw delete ${entry.number}`,
@@ -347,16 +365,16 @@ export function FirewallScreen({
                   onChange={(event) => setKind(event.target.value as "allow" | "deny")}
                   className="rounded-md border border-line bg-canvas px-2 py-1.5 text-sm outline-none focus:border-brand"
                 >
-                  <option value="allow">İzin ver</option>
-                  <option value="deny">Reddet</option>
+                  <option value="allow">{t("firewall.allow")}</option>
+                  <option value="deny">{t("firewall.deny")}</option>
                 </select>
                 <select
                   value={mode}
                   onChange={(event) => setMode(event.target.value as "port" | "source")}
                   className="rounded-md border border-line bg-canvas px-2 py-1.5 text-sm outline-none focus:border-brand"
                 >
-                  <option value="port">Herkese</option>
-                  <option value="source">Yalnızca kaynaktan</option>
+                  <option value="port">{t("firewall.anyone")}</option>
+                  <option value="source">{t("firewall.sourceOnly")}</option>
                 </select>
 
                 {mode === "source" && (
@@ -382,12 +400,12 @@ export function FirewallScreen({
                 >
                   <option value="tcp">tcp</option>
                   <option value="udp">udp</option>
-                  <option value="">ikisi</option>
+                  <option value="">{t("firewall.both")}</option>
                 </select>
                 <input
                   value={comment}
                   onChange={(event) => setComment(event.target.value)}
-                  placeholder="açıklama (isteğe bağlı)"
+                  placeholder={t("firewall.comment")}
                   className="min-w-0 flex-1 rounded-md border border-line bg-canvas px-3 py-1.5 text-sm outline-none focus:border-brand sm:min-w-48"
                 />
 
@@ -408,14 +426,15 @@ export function FirewallScreen({
                   }}
                   className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
-                  <Plus className="size-4" /> Ekle
+                  <Plus className="size-4" /> {t("common.actions.add")}
                 </button>
               </div>
 
               <p className="text-xs text-subtle">
-                Oluşacak kural:{" "}
-                <code className="font-mono">{buildRule() || "—"}</code> · Söz dizimi host tarafında
-                da doğrulanıyor, panel yalnızca kabul edilen iki kalıbı üretebilir.
+                <Rich
+                  text={t("firewall.preview")}
+                  values={{ rule: <code className="font-mono">{buildRule() || "—"}</code> }}
+                />
               </p>
             </div>
           )}

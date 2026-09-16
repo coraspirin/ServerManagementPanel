@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { loginLogoExists } from "@/lib/apps/store";
 import { readLogo } from "@/lib/apps/logos";
 
@@ -23,12 +24,12 @@ export const dynamic = "force-dynamic";
 export async function GET(_request: Request, { params }: { params: Promise<{ file: string }> }) {
   const { file } = await params;
 
-  if (!loginLogoExists(file)) return new Response("bulunamadı", { status: 404 });
+  if (!loginLogoExists(file)) return new Response(serverT("api.notFound.generic"), { status: 404 });
 
   // `readLogo` dosya adı desenini ayrıca doğruluyor; DB'den geçmiş olmak
   // diskte gezinmeye izin vermek anlamına gelmemeli.
   const logo = readLogo(file);
-  if (!logo) return new Response("bulunamadı", { status: 404 });
+  if (!logo) return new Response(serverT("api.notFound.generic"), { status: 404 });
 
   return new Response(new Uint8Array(logo.bytes), {
     headers: {

@@ -1,5 +1,6 @@
 import { CloudOff, Globe, TriangleAlert } from "lucide-react";
 import type { InternetStatus } from "@/lib/home/internet";
+import { getT } from "@/lib/i18n/server";
 
 /**
  * M2.7 — ev halkı için büyük gösterge.
@@ -19,6 +20,7 @@ export function InternetIndicator({
   status: InternetStatus;
   big?: boolean;
 }) {
+  const t = getT();
   const broken = status.servicesDown > 0;
 
   const view = !status.online
@@ -26,26 +28,26 @@ export function InternetIndicator({
         Icon: CloudOff,
         tone: "text-danger",
         ring: "border-danger/40 bg-danger/5",
-        title: "İnternet yok",
-        detail: "Sunucu dışarıya çıkamıyor. Modemi kontrol et.",
+        title: t("home.internet.offline"),
+        detail: t("home.internet.offlineDetail"),
       }
     : broken
       ? {
           Icon: TriangleAlert,
           tone: "text-warn",
           ring: "border-warn/40 bg-warn/5",
-          title: "İnternet çalışıyor",
-          detail: `Ama ${status.servicesDown} servis çevrimdışı — sorun sunucuda.`,
+          title: t("home.internet.degraded"),
+          detail: t("home.internet.degradedDetail", { count: status.servicesDown }),
         }
       : {
           Icon: Globe,
           tone: "text-ok",
           ring: "border-ok/40 bg-ok/5",
-          title: "Her şey çalışıyor",
+          title: t("home.internet.ok"),
           detail:
             status.servicesTotal > 0
-              ? `İnternet var, ${status.servicesTotal} servisin hepsi ayakta.`
-              : "İnternet var.",
+              ? t("home.internet.okDetail", { count: status.servicesTotal })
+              : t("home.internet.okSimple"),
         };
 
   return (

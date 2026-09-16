@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getDb } from "@/lib/db/client";
+import { serverT } from "@/lib/i18n/runtime";
 import type { MaintenanceKind, MaintenanceWindow } from "./types";
 
 /**
@@ -111,22 +112,22 @@ export type MaintenanceInput = {
 
 /** Kaydetmeden önce doğrular; sorun varsa açıklayıcı mesaj döner. */
 export function validateMaintenance(input: MaintenanceInput): string | null {
-  if (!input.name.trim()) return "Ad boş olamaz.";
+  if (!input.name.trim()) return serverT("monitorStore.nameEmpty");
 
   if (input.kind === "once") {
     if (input.startsAt === null || input.endsAt === null) {
-      return "Başlangıç ve bitiş zamanı gerekli.";
+      return serverT("maintenanceLib.startEndRequired");
     }
-    if (input.endsAt <= input.startsAt) return "Bitiş, başlangıçtan sonra olmalı.";
+    if (input.endsAt <= input.startsAt) return serverT("maintenanceLib.endAfterStart");
     return null;
   }
 
-  if (input.weekdays.length === 0) return "En az bir gün seçilmeli.";
+  if (input.weekdays.length === 0) return serverT("maintenanceLib.pickDay");
   if (input.startMinute === null || input.endMinute === null) {
-    return "Başlangıç ve bitiş saati gerekli.";
+    return serverT("maintenanceLib.timesRequired");
   }
   if (input.startMinute === input.endMinute) {
-    return "Başlangıç ve bitiş saati aynı olamaz.";
+    return serverT("maintenanceLib.timesEqual");
   }
   return null;
 }

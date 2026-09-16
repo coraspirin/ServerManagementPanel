@@ -18,6 +18,9 @@ import { currentWeather } from "@/lib/home/weather";
 import { getSystemProvider } from "@/lib/providers";
 import { getString } from "@/lib/settings";
 import { isMockMode } from "@/lib/env";
+import { formatUptime } from "@/lib/i18n/format";
+import { Rich } from "@/lib/i18n/rich";
+import { getActiveDictionary, getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -26,14 +29,6 @@ function formatBytes(bytes: number): string {
   return `${gb.toFixed(1)} GB`;
 }
 
-function formatUptime(seconds: number): string {
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  if (days > 0) return `${days} gün ${hours} saat`;
-  if (hours > 0) return `${hours} saat ${minutes} dk`;
-  return `${minutes} dk`;
-}
 
 /** Kart adreslerindeki {host} yer tutucusu için (M2.5). */
 async function browserHost(): Promise<string> {
@@ -43,6 +38,7 @@ async function browserHost(): Promise<string> {
 
 export default async function OverviewPage() {
   const session = await requireSession();
+  const t = getT();
 
   // `panel.dashboard` yetkisi olmayan (varsayılanda 'izleyici' rolü) sade bir
   // sayfa görür. Rol ADINA bakmak yerine yetkiye bakmak, M3.1'de özel rol
@@ -80,14 +76,17 @@ export default async function OverviewPage() {
 
   const system = await getSystemProvider().info();
   const facts: Array<{ label: string; value: string }> = [
-    { label: "Sunucu adı", value: system.hostname },
-    { label: "İşletim sistemi", value: system.osName ?? system.platform },
-    { label: "Çekirdek", value: system.release },
-    { label: "Mimari", value: system.arch },
-    { label: "İşlemci", value: system.cpuModel },
-    { label: "Çekirdek sayısı", value: `${system.cpuCount}` },
-    { label: "Toplam bellek", value: formatBytes(system.totalMemBytes) },
-    { label: "Çalışma süresi", value: formatUptime(system.uptimeSeconds) },
+    { label: t("overview.fact.hostname"), value: system.hostname },
+    { label: t("overview.fact.os"), value: system.osName ?? system.platform },
+    { label: t("overview.fact.kernel"), value: system.release },
+    { label: t("overview.fact.arch"), value: system.arch },
+    { label: t("overview.fact.cpu"), value: system.cpuModel },
+    { label: t("overview.fact.cpuCount"), value: `${system.cpuCount}` },
+    { label: t("overview.fact.memory"), value: formatBytes(system.totalMemBytes) },
+    {
+      label: t("overview.fact.uptime"),
+      value: formatUptime(system.uptimeSeconds, getActiveDictionary()),
+    },
   ];
 
   /**
@@ -110,11 +109,11 @@ export default async function OverviewPage() {
     system: (
       <section className="rounded-lg border border-line bg-surface p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="font-semibold">Sistem</h2>
+          <h2 className="font-semibold">{t("overview.system")}</h2>
           <span className="text-xs text-subtle">
             {isMockMode()
-              ? "MOCK_MODE — veriler fixtures/system.json dosyasından"
-              : "Canlı — node:os üzerinden"}
+              ? t("overview.mock")
+              : t("overview.live")}
           </span>
         </div>
 
@@ -142,16 +141,22 @@ export default async function OverviewPage() {
 
 /** Kart ızgarası — ana sayfada salt okunur; yönetim Uygulamalar ekranında. */
 function AppSections({ groups }: { groups: AppGroup[] }) {
+  const t = getT();
   const total = groups.reduce((sum, group) => sum + group.cards.length, 0);
 
   if (total === 0) {
     return (
       <p className="rounded-lg border border-dashed border-line bg-surface px-5 py-8 text-center text-sm text-subtle">
-        Henüz uygulama kartı yok.{" "}
-        <Link href="/apps" className="text-brand hover:underline">
-          Uygulamalar
-        </Link>{" "}
-        ekranından ekleyebilirsin.
+        <Rich
+          text={t("overview.noApps")}
+          values={{
+            link: (
+              <Link href="/apps" className="text-brand hover:underline">
+                {t("overview.appsLink")}
+              </Link>
+            ),
+          }}
+        />
       </p>
     );
   }
@@ -160,7 +165,7 @@ function AppSections({ groups }: { groups: AppGroup[] }) {
     <div className="space-y-5">
       {groups.map((group) => (
         <section key={group.category?.id ?? "diger"}>
-          <h2 className="mb-2 text-sm font-semibold">{group.category?.name ?? "Diğer"}</h2>
+          <h2 className="mb-2 text-sm font-semibold">{group.category?.name ?? t("common.uncategorized")}</h2>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {group.cards
               .filter((card) => card.enabled)

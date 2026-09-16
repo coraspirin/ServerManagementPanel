@@ -1,6 +1,10 @@
 import { HardDrive, Info, Layers, Thermometer } from "lucide-react";
 import { formatBytes } from "@/lib/metrics/catalog";
 import type { HardwareReport } from "@/lib/providers/types";
+import { formatNumber, formatPct, formatRelative } from "@/lib/i18n/format";
+import type { Dictionary } from "@/lib/i18n/locales";
+import { getActiveDictionary, getT } from "@/lib/i18n/server";
+import type { TFunction } from "@/lib/i18n/translate";
 
 /**
  * Donanım sağlığı paneli (M1.4).
@@ -29,12 +33,13 @@ function tempText(celsius: number, warn: number, crit: number): string {
   return "text-ink";
 }
 
-function formatHours(hours: number | null): string {
+function formatHours(hours: number | null, t: TFunction, dict: Dictionary): string {
   if (hours === null) return "—";
   const years = hours / 8760;
+  const count = formatNumber(hours, dict);
   return years >= 1
-    ? `${hours.toLocaleString("tr-TR")} sa (~${years.toFixed(1)} yıl)`
-    : `${hours.toLocaleString("tr-TR")} sa`;
+    ? t("hardware.hoursYears", { hours: count, years: years.toFixed(1) })
+    : t("hardware.hours", { hours: count });
 }
 
 /**
@@ -52,12 +57,9 @@ function isReportStale(report: HardwareReport, staleHours: number): boolean {
   return Date.now() / 1000 - report.reportedAt > staleHours * 3600;
 }
 
-function formatAge(ts: number | null): string {
-  if (ts === null) return "hiç üretilmedi";
-  const minutes = Math.round((Date.now() / 1000 - ts) / 60);
-  if (minutes < 60) return `${minutes} dk önce`;
-  if (minutes < 1440) return `${Math.round(minutes / 60)} saat önce`;
-  return `${Math.round(minutes / 1440)} gün önce`;
+function formatAge(ts: number | null, t: TFunction, dict: Dictionary): string {
+  if (ts === null) return t("hardware.neverReported");
+  return formatRelative(ts * 1000, dict);
 }
 
 export function HardwarePanel({
@@ -73,6 +75,8 @@ export function HardwarePanel({
     report.pools.length === 0;
 
   const reportStale = isReportStale(report, thresholds.reportStaleHours);
+  const t = getT();
+  const dict = getActiveDictionary();
 
   return (
     <div className="space-y-4">
@@ -92,7 +96,7 @@ export function HardwarePanel({
           {report.temperatures.length > 0 && (
             <section className="rounded-lg border border-line bg-surface p-5">
               <h2 className="flex items-center gap-1.5 font-semibold">
-                <Thermometer className="size-4" /> Sıcaklıklar
+                <Thermometer className="size-4" /> {t("hardware.temperatures")}
               </h2>
               <div className="mt-4 space-y-3">
                 {report.temperatures.map((reading) => {
@@ -120,8 +124,8 @@ export function HardwarePanel({
                         />
                       </div>
                       <p className="mt-0.5 text-[10px] text-subtle">
-                        uyarı {warn} °C · kritik {crit} °C
-                        {reading.highC !== null && " (sensörün kendi eşikleri)"}
+                        {t("hardware.thresholds", { warn, crit })}
+                        {reading.highC !== null && t("hardware.sensorOwn")}
                       </p>
                     </div>
                   );
@@ -133,7 +137,7 @@ export function HardwarePanel({
           {report.pools.length > 0 && (
             <section className="rounded-lg border border-line bg-surface p-5">
               <h2 className="flex items-center gap-1.5 font-semibold">
-                <Layers className="size-4" /> Depolama havuzları
+                <Layers className="size-4" /> {t("hardware.pools")}
               </h2>
               <div className="mt-4 space-y-3">
                 {report.pools.map((pool) => (
@@ -169,11 +173,11 @@ export function HardwarePanel({
             <section className="rounded-lg border border-line bg-surface p-5 xl:col-span-2">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h2 className="flex items-center gap-1.5 font-semibold">
-                  <HardDrive className="size-4" /> Disk sağlığı (S.M.A.R.T)
+                  <HardDrive className="size-4" /> {t("hardware.disks")}
                 </h2>
                 <span className={`text-xs ${reportStale ? "text-warn" : "text-subtle"}`}>
-                  rapor: {formatAge(report.reportedAt)}
-                  {reportStale && " — güncellenmiyor"}
+                  {t("hardware.report", { when: formatAge(report.reportedAt, t, dict) })}
+                  {reportStale && t("hardware.notUpdating")}
                 </span>
               </div>
 
@@ -181,13 +185,13 @@ export function HardwarePanel({
                 <table className="rtable w-full min-w-[46rem] text-sm">
                   <thead>
                     <tr className="border-b border-line text-left text-xs text-subtle">
-                      <th className="pb-2 pr-4 font-medium">Aygıt</th>
-                      <th className="pb-2 pr-4 font-medium">Durum</th>
-                      <th className="pb-2 pr-4 font-medium">Sıcaklık</th>
-                      <th className="pb-2 pr-4 font-medium">Çalışma süresi</th>
-                      <th className="pb-2 pr-4 font-medium">Yeniden atanan</th>
-                      <th className="pb-2 pr-4 font-medium">Bekleyen</th>
-                      <th className="pb-2 font-medium">Aşınma</th>
+                      <th className="pb-2 pr-4 font-medium">{t("hardware.col.device")}</th>
+                      <th className="pb-2 pr-4 font-medium">{t("hardware.col.status")}</th>
+                      <th className="pb-2 pr-4 font-medium">{t("hardware.col.temperature")}</th>
+                      <th className="pb-2 pr-4 font-medium">{t("hardware.col.powerOn")}</th>
+                      <th className="pb-2 pr-4 font-medium">{t("hardware.col.reallocated")}</th>
+                      <th className="pb-2 pr-4 font-medium">{t("hardware.col.pending")}</th>
+                      <th className="pb-2 font-medium">{t("hardware.col.wear")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
@@ -205,7 +209,7 @@ export function HardwarePanel({
                               </div>
                             )}
                           </td>
-                          <td data-label="Durum" className="py-2 pr-4">
+                          <td data-label={t("hardware.col.status")} className="py-2 pr-4">
                             <span
                               className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
                                 disk.health === "PASSED"
@@ -218,18 +222,20 @@ export function HardwarePanel({
                               {disk.health}
                             </span>
                           </td>
-                          <td data-label="Sıcaklık" className="py-2 pr-4 text-xs">
+                          <td data-label={t("hardware.col.temperature")} className="py-2 pr-4 text-xs">
                             {disk.temperatureC === null ? "—" : `${disk.temperatureC} °C`}
                           </td>
-                          <td data-label="Çalışma süresi" className="py-2 pr-4 text-xs">{formatHours(disk.powerOnHours)}</td>
-                          <td data-label="Yeniden atanan" className={`py-2 pr-4 text-xs ${bad ? "text-warn" : ""}`}>
+                          <td data-label={t("hardware.col.powerOn")} className="py-2 pr-4 text-xs">
+                            {formatHours(disk.powerOnHours, t, dict)}
+                          </td>
+                          <td data-label={t("hardware.col.reallocated")} className={`py-2 pr-4 text-xs ${bad ? "text-warn" : ""}`}>
                             {disk.reallocatedSectors ?? "—"}
                           </td>
-                          <td data-label="Bekleyen" className={`py-2 pr-4 text-xs ${bad ? "text-warn" : ""}`}>
+                          <td data-label={t("hardware.col.pending")} className={`py-2 pr-4 text-xs ${bad ? "text-warn" : ""}`}>
                             {disk.pendingSectors ?? "—"}
                           </td>
-                          <td data-label="Aşınma" className="py-2 text-xs">
-                            {disk.percentageUsed === null ? "—" : `%${disk.percentageUsed}`}
+                          <td data-label={t("hardware.col.wear")} className="py-2 text-xs">
+                            {disk.percentageUsed === null ? "—" : formatPct(disk.percentageUsed, dict, 0)}
                           </td>
                         </tr>
                       );
@@ -239,9 +245,7 @@ export function HardwarePanel({
               </div>
 
               <p className="mt-3 text-[11px] text-subtle">
-                &quot;Yeniden atanan&quot; ve &quot;bekleyen&quot; sektör sayacı sıfırdan
-                büyükse disk henüz arızalı değildir ama bozulmaya başlamıştır — yedeği
-                kontrol etmenin tam zamanı.
+                {t("hardware.note")}
               </p>
             </section>
           )}

@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { channelStatuses, sendTest } from "@/lib/notify";
@@ -18,11 +19,11 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as { channel?: unknown };
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   if (typeof body.channel !== "string") {
-    return Response.json({ error: "kanal gerekli" }, { status: 400 });
+    return Response.json({ error: serverT("api.notify.channelRequired") }, { status: 400 });
   }
 
   const result = await sendTest(body.channel);
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
     username: guard.session.user.username,
     action: "notify.test",
     targetId: body.channel,
-    detail: result.ok ? "gönderildi" : (result.error ?? "hata"),
+    detail: result.ok ? serverT("api.notify.sent") : (result.error ?? serverT("api.notify.error")),
     result: result.ok ? "ok" : "error",
   });
 

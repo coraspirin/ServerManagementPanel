@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardV1 } from "@/lib/apiv1/guard";
 import { apiError, apiOk } from "@/lib/apiv1/respond";
 import { serializeContainer } from "@/lib/apiv1/serialize";
@@ -29,7 +30,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const found = overview.containers.find(
     (container) => container.id === id || container.name === id || container.id.startsWith(id),
   );
-  if (!found) return apiError("not_found", "container bulunamadı");
+  if (!found) return apiError("not_found", serverT("api.notFound.container"));
 
   return apiOk({ measuredAt: overview.statsAt, container: serializeContainer(found) });
 }

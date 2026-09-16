@@ -1,6 +1,8 @@
 import "server-only";
 
 import { SEVERITY_LABEL, type Severity } from "@/lib/alerts/types";
+import { intlOf } from "@/lib/i18n/locales";
+import { currentDictionary, serverT } from "@/lib/i18n/runtime";
 import { getBool, getNumber, getString } from "@/lib/settings";
 import type { NotifyChannel, NotifyMessage } from "./types";
 
@@ -44,7 +46,9 @@ function toAscii(text: string): string {
 }
 
 function plainText(message: NotifyMessage): string {
-  const level = SEVERITY_LABEL[message.severity].toLocaleUpperCase("tr");
+  const level = serverT(SEVERITY_LABEL[message.severity]).toLocaleUpperCase(
+    intlOf(currentDictionary()),
+  );
   return `${subject(message)}\n\n${message.detail}\n\n[${level}]`;
 }
 
@@ -87,7 +91,7 @@ function normalizeBaseUrl(raw: string): string {
 /** Ayar boşsa hangi alanın eksik olduğunu söyleyen yardımcı. */
 function missing(pairs: [string, string][]): string | null {
   const empty = pairs.filter(([, value]) => value.trim() === "").map(([label]) => label);
-  return empty.length > 0 ? `eksik ayar: ${empty.join(", ")}` : null;
+  return empty.length > 0 ? serverT("notify.missing.prefix", { names: empty.join(", ") }) : null;
 }
 
 // --- Telegram --------------------------------------------------------------
@@ -120,9 +124,9 @@ const homeAssistant: NotifyChannel = {
   label: "Home Assistant",
   problem() {
     return missing([
-      ["sunucu adresi", getString("notify.ha.url")],
+      [serverT("notify.missing.serverUrl"), getString("notify.ha.url")],
       ["token", getString("notify.ha.token")],
-      ["bildirim servisi", getString("notify.ha.service")],
+      [serverT("notify.missing.haService"), getString("notify.ha.service")],
     ]);
   },
   async send(message) {
@@ -132,7 +136,7 @@ const homeAssistant: NotifyChannel = {
     const service = getString("notify.ha.service").trim();
     const [domain, ...rest] = service.split(".");
     const name = rest.join(".");
-    if (!name) throw new Error(`servis adı 'alan.servis' biçiminde olmalı: ${service}`);
+    if (!name) throw new Error(serverT("notify.haServiceFormat", { service }));
 
     await postJson(
       `${base}/api/services/${domain}/${name}`,
@@ -156,8 +160,8 @@ const ntfy: NotifyChannel = {
   label: "ntfy",
   problem() {
     return missing([
-      ["sunucu adresi", getString("notify.ntfy.url")],
-      ["konu", getString("notify.ntfy.topic")],
+      [serverT("notify.missing.serverUrl"), getString("notify.ntfy.url")],
+      [serverT("notify.missing.topic"), getString("notify.ntfy.topic")],
     ]);
   },
   async send(message) {
@@ -169,7 +173,7 @@ const ntfy: NotifyChannel = {
       headers: {
         // ntfy başlıkları ASCII ister; Türkçe harfler karşılıklarına çevrilir,
         // tam metin gövdede zaten var.
-        Title: toAscii(message.title) || "Sunucu Paneli",
+        Title: toAscii(message.title) || toAscii(serverT("common.appName")),
         Priority: NTFY_PRIORITY[message.severity],
         ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
@@ -194,7 +198,7 @@ const discord: NotifyChannel = {
   key: "discord",
   label: "Discord",
   problem() {
-    return missing([["webhook adresi", getString("notify.discord.webhook")]]);
+    return missing([[serverT("notify.missing.webhook"), getString("notify.discord.webhook")]]);
   },
   async send(message) {
     await postJson(getString("notify.discord.webhook"), {
@@ -217,9 +221,9 @@ const email: NotifyChannel = {
   label: "E-posta",
   problem() {
     return missing([
-      ["SMTP sunucusu", getString("notify.email.smtp_host")],
-      ["gönderen", getString("notify.email.from")],
-      ["alıcı", getString("notify.email.to")],
+      [serverT("notify.missing.smtpHost"), getString("notify.email.smtp_host")],
+      [serverT("notify.email.from"), getString("notify.email.from")],
+      [serverT("notify.email.to"), getString("notify.email.to")],
     ]);
   },
   async send(message) {

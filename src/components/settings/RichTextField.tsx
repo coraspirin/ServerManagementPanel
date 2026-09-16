@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { Bold, Italic, Link2, List, ListOrdered, Pencil, Underline } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { isRichTextEmpty, richTextToPlain, sanitizeRichText } from "@/lib/richtext";
+import { useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 /**
  * Biçimlendirilmiş metin alanı (M3.45).
@@ -44,13 +46,15 @@ export function RichTextField({
   value,
   disabled,
   onCommit,
-  title = "Metni düzenle",
+  title: titleProp,
 }: {
   value: string;
   disabled: boolean;
   onCommit: (value: string) => void;
   title?: string;
 }) {
+  const t = useT();
+  const title = titleProp ?? t("richText.edit");
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -66,27 +70,32 @@ export function RichTextField({
   const preview = richTextToPlain(value);
 
   const commands: Command[] = [
-    { id: "bold", label: "Kalın", icon: Bold, run: () => exec("bold") },
-    { id: "italic", label: "İtalik", icon: Italic, run: () => exec("italic") },
-    { id: "underline", label: "Altı çizili", icon: Underline, run: () => exec("underline") },
+    { id: "bold", label: t("richText.bold"), icon: Bold, run: () => exec("bold") },
+    { id: "italic", label: t("richText.italic"), icon: Italic, run: () => exec("italic") },
+    {
+      id: "underline",
+      label: t("richText.underline"),
+      icon: Underline,
+      run: () => exec("underline"),
+    },
     {
       id: "ul",
-      label: "Madde listesi",
+      label: t("richText.bulletList"),
       icon: List,
       run: () => exec("insertUnorderedList"),
     },
     {
       id: "ol",
-      label: "Numaralı liste",
+      label: t("richText.numberedList"),
       icon: ListOrdered,
       run: () => exec("insertOrderedList"),
     },
     {
       id: "link",
-      label: "Bağlantı",
+      label: t("richText.link"),
       icon: Link2,
       run: () => {
-        const href = prompt("Bağlantı adresi (https://…)");
+        const href = prompt(t("richText.linkPrompt"));
         if (href) exec("createLink", href);
       },
     },
@@ -101,7 +110,7 @@ export function RichTextField({
         {preview ? (
           <span className="line-clamp-2 break-words">{preview}</span>
         ) : (
-          <span className="text-subtle">duyuru yok</span>
+          <span className="text-subtle">{t("richText.empty")}</span>
         )}
       </div>
 
@@ -151,9 +160,10 @@ export function RichTextField({
           />
 
           <p className="text-xs text-subtle">
-            Kalın, italik, altı çizili, listeler ve bağlantı desteklenir; kalan biçimlendirme
-            kaydederken düşer. Buraya yazdığın metni <strong>oturum açmamış herkes</strong>{" "}
-            görür.
+            <Rich
+              text={t("richText.help")}
+              values={{ strong: <strong>{t("richText.everyone")}</strong> }}
+            />
           </p>
 
           <div className="flex justify-end gap-2">
@@ -162,7 +172,7 @@ export function RichTextField({
               onClick={() => setOpen(false)}
               className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
             >
-              Vazgeç
+              {t("common.actions.cancel")}
             </button>
             <button
               type="button"
@@ -176,7 +186,7 @@ export function RichTextField({
               }}
               className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
             >
-              Kaydet
+              {t("common.actions.save")}
             </button>
           </div>
         </div>

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { Dependency } from "@/lib/docker/graph";
 import type { Runbook } from "@/lib/docker/runbooks";
 import type { ContainerDetail } from "@/lib/providers/types";
+import { useT } from "@/lib/i18n/client";
 
 export type DetailPayload = {
   detail: ContainerDetail;
@@ -30,6 +31,7 @@ export function useContainerDetail(containerId: string | null) {
    * ediyordu. Kimliği veriyle beraber saklayınca sıfırlama gereksizleşiyor:
    * eski container'ın verisi eşleşmediği için zaten görünmüyor.
    */
+  const t = useT();
   const [result, setResult] = useState<{
     id: string;
     data: DetailPayload | null;
@@ -50,17 +52,17 @@ export function useContainerDetail(containerId: string | null) {
         setResult(
           response.ok
             ? { id: containerId, data: payload as DetailPayload, error: null }
-            : { id: containerId, data: null, error: payload.error ?? "Detay alınamadı." },
+            : { id: containerId, data: null, error: payload.error ?? t("docker.detail.loadFailed") },
         );
       } catch {
         if (!controller.signal.aborted) {
-          setResult({ id: containerId, data: null, error: "Sunucuya ulaşılamadı." });
+          setResult({ id: containerId, data: null, error: t("common.errors.network") });
         }
       }
     })();
 
     return () => controller.abort();
-  }, [containerId]);
+  }, [containerId, t]);
 
   const taze = result !== null && result.id === containerId;
   return { data: taze ? result.data : null, error: taze ? result.error : null };

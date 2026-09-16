@@ -27,6 +27,11 @@ import {
   type ContainerSpec,
 } from "./spec.ts";
 import type { ServiceConfig } from "../compose/service.ts";
+import { createT } from "../i18n/translate.ts";
+import { localeDictionary } from "../../locales/index.ts";
+
+/** Mesajlar Türkçe kaynak dilden: testler metnin kendisini doğruluyor. */
+const t = createT(localeDictionary("tr"));
 
 function spec(over: Partial<ContainerSpec> = {}): ContainerSpec {
   return { ...emptySpec(), name: "test", image: "nginx:alpine", ...over };
@@ -47,24 +52,25 @@ function servis(over: Partial<ServiceConfig> = {}): ServiceConfig {
 
 describe("specProblem", () => {
   it("geçerli tanımda sorun bulmaz", () => {
-    assert.equal(specProblem(spec()), null);
+    assert.equal(specProblem(spec(), t), null);
   });
 
   it("adı ve image'ı zorunlu tutar", () => {
-    assert.match(specProblem(spec({ name: "" })) ?? "", /adı gerekli/);
-    assert.match(specProblem(spec({ image: "" })) ?? "", /Image gerekli/);
+    assert.match(specProblem(spec({ name: "" }), t) ?? "", /adı gerekli/);
+    assert.match(specProblem(spec({ image: "" }), t) ?? "", /Image gerekli/);
   });
 
   it("Docker'ın kabul etmediği adı reddeder", () => {
     // Docker adın harf ya da rakamla başlamasını istiyor; "-web" create
     // çağrısında anlaşılmaz bir 400 döndürürdü.
-    assert.notEqual(specProblem(spec({ name: "-web" })), null);
-    assert.equal(specProblem(spec({ name: "web_1.eski-2" })), null);
+    assert.notEqual(specProblem(spec({ name: "-web" }), t), null);
+    assert.equal(specProblem(spec({ name: "web_1.eski-2" }), t), null);
   });
 
   it("aralık dışı portu reddeder", () => {
     const problem = specProblem(
       spec({ ports: [{ hostPort: "", hostIp: "", containerPort: "70000", protocol: "tcp" }] }),
+      t,
     );
     assert.match(problem ?? "", /Geçersiz container portu/);
   });
@@ -73,6 +79,7 @@ describe("specProblem", () => {
     assert.equal(
       specProblem(
         spec({ ports: [{ hostPort: "", hostIp: "", containerPort: "80", protocol: "tcp" }] }),
+        t,
       ),
       null,
     );
@@ -81,13 +88,14 @@ describe("specProblem", () => {
   it("container içindeki yolun mutlak olmasını ister", () => {
     const problem = specProblem(
       spec({ volumes: [{ source: "veri", target: "data", readOnly: false }] }),
+      t,
     );
     assert.match(problem ?? "", /mutlak olmalı/);
   });
 
   it("ortam değişkeni adında boşluk ve eşittir kabul etmez", () => {
-    assert.notEqual(specProblem(spec({ env: [{ key: "A B", value: "1" }] })), null);
-    assert.notEqual(specProblem(spec({ env: [{ key: "A=B", value: "1" }] })), null);
+    assert.notEqual(specProblem(spec({ env: [{ key: "A B", value: "1" }] }), t), null);
+    assert.notEqual(specProblem(spec({ env: [{ key: "A=B", value: "1" }] }), t), null);
   });
 });
 
@@ -181,6 +189,7 @@ describe("specFromService", () => {
         environment: [{ key: "TZ", value: "Europe/Istanbul" }],
         restart: "unless-stopped",
       }),
+      t,
     );
 
     assert.equal(out.name, "uygulama");
@@ -199,6 +208,7 @@ describe("specFromService", () => {
           { published: null, target: 0, protocol: "tcp", hostIp: "", form: "short", raw: "${PORT}:80" },
         ],
       }),
+      t,
     );
     assert.deepEqual(out.ports, []);
     assert.equal(warnings.length, 1);
@@ -206,24 +216,24 @@ describe("specFromService", () => {
   });
 
   it("compose'un sayılı restart biçimindeki sayıyı düşürür", () => {
-    const { spec: out } = specFromService(servis({ restart: "on-failure:3" }));
+    const { spec: out } = specFromService(servis({ restart: "on-failure:3" }), t);
     assert.equal(out.restart, "on-failure");
   });
 
   it("ANONİM volume'ü düşürür ve uyarır", () => {
     // "- /data" kaynağı bilinmeyen bir volume; Engine'e Bind olarak verilemez.
-    const { spec: out, warnings } = specFromService(servis({ volumes: ["/data"] }));
+    const { spec: out, warnings } = specFromService(servis({ volumes: ["/data"] }), t);
     assert.deepEqual(out.volumes, []);
     assert.equal(warnings.length, 1);
   });
 
   it("salt-okunur bind'i çözer", () => {
-    const { spec: out } = specFromService(servis({ volumes: ["/srv/veri:/data:ro"] }));
+    const { spec: out } = specFromService(servis({ volumes: ["/srv/veri:/data:ro"] }), t);
     assert.deepEqual(out.volumes, [{ source: "/srv/veri", target: "/data", readOnly: true }]);
   });
 
   it("image'ı olmayan serviste uyarır — compose onu build ediyor olabilir", () => {
-    const { warnings } = specFromService(servis({ image: "" }));
+    const { warnings } = specFromService(servis({ image: "" }), t);
     assert.equal(warnings.length, 1);
   });
 });

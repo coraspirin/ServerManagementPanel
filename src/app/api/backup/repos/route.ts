@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { checkRepo, initRepo } from "@/lib/backup/restic";
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const action = String(body.action ?? "create");
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
       return Response.json(
         {
           error:
-            "Depo parolası çözülemedi. MASTER_KEY değişmiş olabilir — parolayı yeniden gir.",
+            serverT("api.backup.repoPasswordReenter"),
         },
         { status: 400 },
       );
@@ -101,7 +102,7 @@ export async function PATCH(request: Request) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const id = Number(body.id ?? 0);
@@ -110,7 +111,7 @@ export async function PATCH(request: Request) {
   if (problem) return Response.json({ error: problem }, { status: 400 });
 
   if (!updateRepo(id, input)) {
-    return Response.json({ error: "Depo bulunamadı." }, { status: 404 });
+    return Response.json({ error: serverT("api.notFound.repo") }, { status: 404 });
   }
 
   audit({
@@ -119,7 +120,7 @@ export async function PATCH(request: Request) {
     action: "backup.repo.update",
     targetType: "backup_repo",
     targetId: String(id),
-    detail: input.password.length > 0 ? `${input.name} · parola değişti` : input.name,
+    detail: input.password.length > 0 ? `${input.name} · ${serverT("api.backup.passwordChanged")}` : input.name,
     result: "ok",
   });
 
@@ -139,7 +140,7 @@ export async function DELETE(request: Request) {
     action: "backup.repo.delete",
     targetType: "backup_repo",
     targetId: String(id),
-    detail: outcome.ok ? "kayıt silindi (diskteki depoya dokunulmadı)" : (outcome.error ?? ""),
+    detail: outcome.ok ? serverT("api.backup.repoDeleted") : (outcome.error ?? ""),
     result: outcome.ok ? "ok" : "error",
   });
 

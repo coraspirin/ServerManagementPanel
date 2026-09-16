@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardV1 } from "@/lib/apiv1/guard";
 import { apiError, apiOk } from "@/lib/apiv1/respond";
 import { serializeHardware } from "@/lib/apiv1/serialize";
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
   } catch (error) {
     return apiError(
       "upstream_error",
-      error instanceof Error ? error.message : "donanım raporu okunamadı",
+      error instanceof Error ? error.message : serverT("api.v1.hardwareUnreadable"),
     );
   }
 }

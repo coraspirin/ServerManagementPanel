@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { callHelper, helperConfigured, type HelperAction } from "@/lib/host/helper";
 import { auditAction, completeIdempotent, type IdempotencyContext } from "./action";
@@ -22,7 +23,7 @@ import { apiError, apiOk } from "./respond";
  */
 function isReplayRejection(error: string): boolean {
   const lower = error.toLocaleLowerCase("tr");
-  return lower.includes("tekrar") || lower.includes("replay") || lower.includes("daha önce");
+  return lower.includes("tekrar") || lower.includes("replay") || lower.includes("daha önce"); // i18n-ignore — host-helper metni
 }
 
 export async function runHelperAction(options: {
@@ -40,7 +41,7 @@ export async function runHelperAction(options: {
     // da istek hatası değil — ve mesaj ne yapılacağını söylüyor.
     return apiError(
       "upstream_error",
-      "host-helper kurulu değil. Sunucuda `sudo host-helper/install.sh` çalıştırıp HELPER_SECRET'i .env'e ekle.",
+      serverT("apiv1.helperMissing"),
       { status: 503 },
     );
   }
@@ -56,7 +57,7 @@ export async function runHelperAction(options: {
   );
 
   if (!response.ok) {
-    const error = response.error ?? "host-helper isteği reddetti";
+    const error = response.error ?? serverT("apiv1.helperRejected");
 
     if (options.idempotency.mode === "on" && isReplayRejection(error)) {
       // Belirsizlik DEĞİL, kesinlik: helper aynı id'yi daha önce gördüyse ilk
@@ -64,7 +65,7 @@ export async function runHelperAction(options: {
       // kaybolmuş olsa bile garanti burada duruyor.
       return apiError(
         "conflict",
-        "bu Idempotency-Key ile gönderilen komut zaten çalıştırıldı",
+        serverT("apiv1.alreadyRun"),
       );
     }
 

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { formatValue, type MetricFormat, type Series } from "@/lib/metrics/catalog";
-import { useDict, useLocale, useT } from "@/lib/i18n/client";
+import { useDict, useFormat, useT } from "@/lib/i18n/client";
 
 /**
  * Bağımlılıksız zaman serisi grafiği (M1.1).
@@ -68,8 +68,8 @@ export function MetricChart({
   names,
 }: Props) {
   const t = useT();
-  const locale = useLocale();
   const dict = useDict();
+  const f = useFormat();
   const [hoverX, setHoverX] = useState<number | null>(null);
 
   const model = useMemo(() => {
@@ -138,7 +138,7 @@ export function MetricChart({
         style={{ height }}
         className="flex items-center justify-center rounded border border-dashed border-line text-xs text-subtle"
       >
-        Bu aralık için henüz veri yok.
+        {t("metricChart.noData")}
       </div>
     );
   }
@@ -212,7 +212,7 @@ export function MetricChart({
             style={{ top: `${ratio * 100}%` }}
             className="pointer-events-none absolute left-1 -translate-y-1/2 bg-surface/80 px-0.5 text-[10px] text-subtle"
           >
-            {formatValue(format, model.max * (1 - ratio), locale, dict)}
+            {formatValue(format, model.max * (1 - ratio), dict)}
           </span>
         ))}
 
@@ -237,7 +237,7 @@ export function MetricChart({
             className="pointer-events-none absolute top-1 z-10 min-w-max rounded border border-line bg-surface px-2 py-1 text-[11px] shadow-sm"
           >
             <div className="text-subtle">
-              {new Date(hovered.ts * 1000).toLocaleString("tr-TR", {
+              {f.dateTime(hovered.ts * 1000, {
                 day: "2-digit",
                 month: "short",
                 hour: "2-digit",
@@ -252,7 +252,7 @@ export function MetricChart({
                 />
                 <span className="text-subtle">{v.name}</span>
                 <span className="ml-auto font-medium">
-                  {v.point ? formatValue(format, v.point.avg, locale, dict) : "—"}
+                  {v.point ? formatValue(format, v.point.avg, dict) : "—"}
                 </span>
               </div>
             ))}
@@ -261,9 +261,9 @@ export function MetricChart({
       </div>
 
       <div className="mt-1 flex justify-between text-[10px] text-subtle">
-        {[0, 0.5, 1].map((t) => (
-          <span key={t}>
-            {new Date((from + (to - from) * t) * 1000).toLocaleString("tr-TR", {
+        {[0, 0.5, 1].map((ratio) => (
+          <span key={ratio}>
+            {f.dateTime((from + (to - from) * ratio) * 1000, {
               day: to - from > 86400 ? "2-digit" : undefined,
               month: to - from > 86400 ? "short" : undefined,
               hour: "2-digit",

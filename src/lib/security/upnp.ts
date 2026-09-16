@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import dgram from "node:dgram";
 
@@ -159,7 +160,7 @@ export async function scanPortForwards(): Promise<UpnpScan> {
       supported: false,
       gateway: null,
       forwards: storedForwards(),
-      message: "UPnP taraması kapalı. Ayarlar → Güvenlik altından açabilirsin.",
+      message: serverT("upnpLib.disabled"),
     };
   }
 
@@ -171,8 +172,7 @@ export async function scanPortForwards(): Promise<UpnpScan> {
       supported: false,
       gateway: null,
       forwards: storedForwards(),
-      message:
-        "Ağda UPnP destekleyen bir yönlendirici bulunamadı. Router'da UPnP kapalı olabilir — bu iyi bir şey, ama o zaman yönlendirmeleri panel göremez.",
+      message: serverT("upnpLib.noGateway"),
     };
   }
 
@@ -192,7 +192,7 @@ export async function scanPortForwards(): Promise<UpnpScan> {
       supported: false,
       gateway,
       forwards: storedForwards(),
-      message: "UPnP cihazı bulundu ama WAN bağlantı servisi okunamadı.",
+      message: serverT("upnpLib.noWan"),
     };
   }
 
@@ -236,9 +236,9 @@ export async function scanPortForwards(): Promise<UpnpScan> {
     forwards: storedForwards(),
     message:
       found.length === 0
-        ? `${gateway} üzerinde UPnP ile açılmış yönlendirme yok.`
-        : `${gateway} üzerinde ${found.length} yönlendirme` +
-          (fresh > 0 ? ` · ${fresh} tanesi YENİ` : ""),
+        ? serverT("upnpLib.none", { gateway: gateway ?? "" })
+        : serverT("upnpLib.found", { gateway: gateway ?? "", count: found.length }) +
+          (fresh > 0 ? serverT("upnpLib.fresh", { count: fresh }) : ""),
   };
 }
 
@@ -284,10 +284,8 @@ async function reconcile(
       alertKey: "security.upnp",
       source: "system",
       severity: "warning",
-      title: "Router'da yeni port yönlendirmesi",
-      detail:
-        `${brandNew.join("\n")}\n` +
-        "Bunu sen açmadıysan bir uygulama UPnP ile kendiliğinden açtırmış olabilir.",
+      title: serverT("upnpLib.newTitle"),
+      detail: serverT("upnpLib.newDetail", { list: brandNew.join("\n") }),
     });
   }
 

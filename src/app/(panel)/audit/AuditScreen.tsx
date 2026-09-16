@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Download, Filter, RotateCw, Search } from "lucide-react";
 import type { AuditPage, AuditRecord } from "@/lib/auth/audit";
+import { useFormat, useT } from "@/lib/i18n/client";
+import type { MessageKey } from "@/lib/i18n/translate";
 
 /**
  * M3.1 — denetim kaydı görüntüleyici.
@@ -14,6 +16,12 @@ import type { AuditPage, AuditRecord } from "@/lib/auth/audit";
  */
 
 const PAGE_SIZE = 100;
+
+const RESULT_LABEL: Record<string, MessageKey> = {
+  ok: "audit.result.ok",
+  denied: "audit.result.denied",
+  error: "audit.result.error",
+};
 
 const RESULT_STYLE: Record<string, string> = {
   ok: "bg-ok/10 text-ok",
@@ -47,6 +55,8 @@ function toQuery(filters: Filters, offset: number): string {
 }
 
 export function AuditScreen({ initial }: { initial: AuditPage }) {
+  const t = useT();
+  const f = useFormat();
   const [page, setPage] = useState(initial);
   const [filters, setFilters] = useState<Filters>(EMPTY);
   const [offset, setOffset] = useState(0);
@@ -93,7 +103,7 @@ export function AuditScreen({ initial }: { initial: AuditPage }) {
               onKeyDown={(e) => {
                 if (e.key === "Enter") apply({});
               }}
-              placeholder="İşlem, detay, hedef, IP…"
+              placeholder={t("audit.search")}
               className="w-full rounded-md border border-line bg-canvas py-1.5 pl-9 pr-3 text-sm outline-none focus:border-brand"
             />
           </div>
@@ -103,7 +113,7 @@ export function AuditScreen({ initial }: { initial: AuditPage }) {
             onChange={(e) => apply({ username: e.target.value })}
             className={selectClass}
           >
-            <option value="">Tüm kullanıcılar</option>
+            <option value="">{t("audit.allUsers")}</option>
             {page.usernames.map((name) => (
               <option key={name} value={name}>
                 {name}
@@ -116,7 +126,7 @@ export function AuditScreen({ initial }: { initial: AuditPage }) {
             onChange={(e) => apply({ action: e.target.value })}
             className={selectClass}
           >
-            <option value="">Tüm işlemler</option>
+            <option value="">{t("audit.allActions")}</option>
             {page.actions.map((action) => (
               <option key={action} value={action}>
                 {action}
@@ -129,17 +139,17 @@ export function AuditScreen({ initial }: { initial: AuditPage }) {
             onChange={(e) => apply({ result: e.target.value })}
             className={selectClass}
           >
-            <option value="">Tüm sonuçlar</option>
-            <option value="ok">başarılı</option>
-            <option value="denied">reddedildi</option>
-            <option value="error">hata</option>
+            <option value="">{t("audit.allResults")}</option>
+            <option value="ok">{t("audit.result.ok")}</option>
+            <option value="denied">{t("audit.result.denied")}</option>
+            <option value="error">{t("audit.result.error")}</option>
           </select>
 
           <button
             type="button"
             onClick={() => apply({})}
             disabled={busy}
-            title="Yenile"
+            title={t("common.actions.refresh")}
             className="rounded-md border border-line p-1.5 text-subtle transition-colors hover:text-ink disabled:opacity-50"
           >
             <RotateCw className={`size-4 ${busy ? "animate-spin" : ""}`} />
@@ -149,7 +159,7 @@ export function AuditScreen({ initial }: { initial: AuditPage }) {
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-subtle">
           <Filter className="size-3.5" aria-hidden />
           <label className="flex items-center gap-1">
-            başlangıç
+            {t("audit.since")}
             <input
               type="datetime-local"
               value={filters.since}
@@ -158,7 +168,7 @@ export function AuditScreen({ initial }: { initial: AuditPage }) {
             />
           </label>
           <label className="flex items-center gap-1">
-            bitiş
+            {t("audit.until")}
             <input
               type="datetime-local"
               value={filters.until}
@@ -175,7 +185,7 @@ export function AuditScreen({ initial }: { initial: AuditPage }) {
               }}
               className="text-brand hover:underline"
             >
-              filtreleri temizle
+              {t("audit.clearFilters")}
             </button>
           )}
           <a
@@ -183,7 +193,7 @@ export function AuditScreen({ initial }: { initial: AuditPage }) {
             download
             className="ml-auto flex items-center gap-1 text-brand hover:underline"
           >
-            <Download className="size-3.5" /> CSV indir
+            <Download className="size-3.5" /> {t("audit.downloadCsv")}
           </a>
         </div>
       </section>
@@ -192,19 +202,19 @@ export function AuditScreen({ initial }: { initial: AuditPage }) {
         <table className="rtable w-full min-w-[52rem] text-sm">
           <thead className="border-b border-line text-left text-xs text-subtle">
             <tr>
-              <th className="px-4 py-2.5 font-medium">Zaman</th>
-              <th className="px-4 py-2.5 font-medium">Kullanıcı</th>
-              <th className="px-4 py-2.5 font-medium">İşlem</th>
-              <th className="px-4 py-2.5 font-medium">Hedef</th>
-              <th className="px-4 py-2.5 font-medium">Sonuç</th>
-              <th className="px-4 py-2.5 font-medium">Detay</th>
+              <th className="px-4 py-2.5 font-medium">{t("audit.col.time")}</th>
+              <th className="px-4 py-2.5 font-medium">{t("audit.col.user")}</th>
+              <th className="px-4 py-2.5 font-medium">{t("audit.col.action")}</th>
+              <th className="px-4 py-2.5 font-medium">{t("audit.col.target")}</th>
+              <th className="px-4 py-2.5 font-medium">{t("audit.col.result")}</th>
+              <th className="px-4 py-2.5 font-medium">{t("audit.col.detail")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
             {page.records.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-10 text-center text-subtle">
-                  Bu filtreyle eşleşen kayıt yok.
+                  {t("audit.empty")}
                 </td>
               </tr>
             )}
@@ -222,7 +232,7 @@ export function AuditScreen({ initial }: { initial: AuditPage }) {
 
       <div className="flex items-center justify-between text-xs text-subtle">
         <span>
-          {page.total.toLocaleString("tr-TR")} kayıttan {from}–{offset + shown} arası
+          {t("audit.range", { total: f.number(page.total), from, to: offset + shown })}
         </span>
         <div className="flex gap-2">
           <button
@@ -231,7 +241,7 @@ export function AuditScreen({ initial }: { initial: AuditPage }) {
             onClick={() => void load(filters, Math.max(0, offset - PAGE_SIZE))}
             className="rounded-md border border-line px-3 py-1.5 transition-colors hover:border-brand disabled:opacity-40"
           >
-            Önceki
+            {t("database.previous")}
           </button>
           <button
             type="button"
@@ -239,7 +249,7 @@ export function AuditScreen({ initial }: { initial: AuditPage }) {
             onClick={() => void load(filters, offset + PAGE_SIZE)}
             className="rounded-md border border-line px-3 py-1.5 transition-colors hover:border-brand disabled:opacity-40"
           >
-            Sonraki
+            {t("database.next")}
           </button>
         </div>
       </div>
@@ -256,35 +266,37 @@ function Row({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const t = useT();
+  const f = useFormat();
   return (
     <tr onClick={onToggle} className="cursor-pointer hover:bg-line/30">
       <td
-        data-label="Zaman"
+        data-label={t("audit.col.time")}
         className="whitespace-nowrap px-4 py-2 text-xs tabular-nums text-subtle"
       >
-        {new Date(record.ts * 1000).toLocaleString("tr-TR")}
+        {f.dateTime(record.ts * 1000)}
       </td>
-      <td data-label="Kullanıcı" className="px-4 py-2">
+      <td data-label={t("audit.col.user")} className="px-4 py-2">
         <span className="font-mono text-xs">{record.username || "—"}</span>
         {record.ip && <div className="font-mono text-[11px] text-subtle">{record.ip}</div>}
       </td>
-      <td data-label="İşlem" className="px-4 py-2 font-mono text-xs">
+      <td data-label={t("audit.col.action")} className="px-4 py-2 font-mono text-xs">
         {record.action}
       </td>
-      <td data-label="Hedef" className="px-4 py-2 text-xs text-subtle">
+      <td data-label={t("audit.col.target")} className="px-4 py-2 text-xs text-subtle">
         {record.targetType ? `${record.targetType}:${record.targetId}` : "—"}
       </td>
-      <td data-label="Sonuç" className="px-4 py-2">
+      <td data-label={t("audit.col.result")} className="px-4 py-2">
         <span
           className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
             RESULT_STYLE[record.result] ?? "bg-line text-subtle"
           }`}
         >
-          {record.result}
+          {RESULT_LABEL[record.result] ? t(RESULT_LABEL[record.result]) : record.result}
         </span>
       </td>
       <td
-        data-label="Detay"
+        data-label={t("audit.col.detail")}
         className={`px-4 py-2 text-xs ${expanded ? "" : "max-w-md truncate"}`}
       >
         {record.detail || "—"}

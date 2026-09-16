@@ -9,6 +9,9 @@ import {
   type GraphNetwork,
   type GraphNode,
 } from "@/lib/docker/netgraph";
+import { useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
+import type { MessageKey } from "@/lib/i18n/translate";
 
 /**
  * Ağ haritası (M3.25).
@@ -34,6 +37,7 @@ export function NetworkGraph({
   containers: GraphContainer[];
   onSelect?: (name: string) => void;
 }) {
+  const t = useT();
   const [vurgu, setVurgu] = useState<string | null>(null);
 
   const graph = useMemo(
@@ -50,20 +54,24 @@ export function NetworkGraph({
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
           <span>
             <strong>
-              {yalnizlar.length} container hiçbir ağa bağlı değil:{" "}
-              {yalnizlar.map((node) => node.name).join(", ")}
+              {t("docker.graph.isolated", {
+                count: yalnizlar.length,
+                names: yalnizlar.map((node) => node.name).join(", "),
+              })}
             </strong>
-            . Ne başka container&apos;lara ulaşabilirler, ne de yayınlanmış portları
-            çalışır. Genellikle port çakışması yüzünden yarıda kalmış bir{" "}
-            <code className="font-mono">compose up</code>&apos;ın izidir.
+            <Rich
+              text={t("docker.graph.isolatedDetail")}
+              values={{ cmd: <code className="font-mono">compose up</code> }}
+            />
           </span>
         </div>
       )}
 
       <p className="text-xs text-subtle">
-        Aynı kutudaki container&apos;lar birbirinin <strong>adını çözebilir</strong>; farklı
-        kutulardakiler çözemez. Bir container&apos;ın üstüne gelince bulunduğu tüm ağlar
-        vurgulanır.
+        <Rich
+          text={t("docker.graph.intro")}
+          values={{ strong: <strong>{t("docker.graph.introStrong")}</strong> }}
+        />
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -90,7 +98,7 @@ export function NetworkGraph({
 
               {network.members.length === 0 ? (
                 <p className="text-xs text-subtle">
-                  Boş — bu ağı kimse kullanmıyor, silinebilir.
+                  {t("docker.graph.emptyNetwork")}
                 </p>
               ) : (
                 <ul className="flex flex-wrap gap-1">
@@ -112,7 +120,7 @@ export function NetworkGraph({
 
       {graph.loose.length > 0 && (
         <section className="rounded-lg border border-line bg-surface px-3 py-2.5">
-          <h3 className="mb-2 text-sm font-semibold">Ağ kutusuna girmeyenler</h3>
+          <h3 className="mb-2 text-sm font-semibold">{t("docker.graph.loose")}</h3>
           <ul className="flex flex-wrap gap-1">
             {graph.loose.map((node) => (
               <Dugum
@@ -125,10 +133,14 @@ export function NetworkGraph({
             ))}
           </ul>
           <p className="mt-2 text-[11px] text-subtle">
-            <strong>host</strong>: container host&apos;un ağ yığınını doğrudan kullanıyor,
-            izole değil. <strong>paylaşan</strong>: ağ yığını başka bir container&apos;a ait
-            (ör. VPN container&apos;ı). <strong>ağsız</strong>: hiçbir ağda değil — bu bir
-            arıza.
+            <Rich
+              text={t("docker.graph.legend")}
+              values={{
+                host: <strong>{t("docker.graph.kind.host")}</strong>,
+                shared: <strong>{t("docker.graph.kind.paylasan")}</strong>,
+                isolated: <strong>{t("docker.graph.kind.yalniz")}</strong>,
+              }}
+            />
           </p>
         </section>
       )}
@@ -136,11 +148,11 @@ export function NetworkGraph({
   );
 }
 
-const KIND_STYLE: Record<GraphNode["kind"], { label: string; className: string }> = {
-  bagli: { label: "", className: "border-line" },
-  host: { label: "host", className: "border-warn/50 text-warn" },
-  paylasan: { label: "paylaşan", className: "border-warn/50 text-warn" },
-  yalniz: { label: "ağsız", className: "border-danger/50 text-danger" },
+const KIND_STYLE: Record<GraphNode["kind"], { label: MessageKey | null; className: string }> = {
+  bagli: { label: null, className: "border-line" },
+  host: { label: "docker.graph.kind.host", className: "border-warn/50 text-warn" },
+  paylasan: { label: "docker.graph.kind.paylasan", className: "border-warn/50 text-warn" },
+  yalniz: { label: "docker.graph.kind.yalniz", className: "border-danger/50 text-danger" },
 };
 
 function Dugum({
@@ -154,6 +166,7 @@ function Dugum({
   onHover: (name: string | null) => void;
   onSelect?: (name: string) => void;
 }) {
+  const t = useT();
   const stil = KIND_STYLE[node.kind];
   const duruyor = node.state !== "running";
 
@@ -168,8 +181,8 @@ function Dugum({
         onClick={() => onSelect?.(node.name)}
         title={
           node.networks.length > 0
-            ? `Ağlar: ${node.networks.join(", ")}`
-            : "Hiçbir ağa bağlı değil"
+            ? t("docker.graph.networks", { list: node.networks.join(", ") })
+            : t("docker.graph.noNetwork")
         }
         className={`flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[11px] transition-colors ${
           stil.className
@@ -181,8 +194,8 @@ function Dugum({
         {node.kind === "paylasan" && <Link2 className="size-3" aria-hidden />}
         {node.kind === "yalniz" && <AlertTriangle className="size-3" aria-hidden />}
         {node.name}
-        {stil.label && <span className="text-[9px] opacity-80">{stil.label}</span>}
-        {duruyor && <span className="text-[9px] opacity-80">durmuş</span>}
+        {stil.label && <span className="text-[9px] opacity-80">{t(stil.label)}</span>}
+        {duruyor && <span className="text-[9px] opacity-80">{t("docker.graph.stopped")}</span>}
       </button>
     </li>
   );

@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { getApp, widgetConfig } from "@/lib/apps/store";
@@ -31,8 +32,8 @@ export async function GET(request: Request, { params }: Context) {
   if (!guard.ok) return guard.response;
 
   const card = getApp(Number((await params).id));
-  if (!card) return Response.json({ error: "kart bulunamadı" }, { status: 404 });
-  if (!card.widgetType) return Response.json({ error: "kartta widget yok" }, { status: 400 });
+  if (!card) return Response.json({ error: serverT("api.notFound.card") }, { status: 404 });
+  if (!card.widgetType) return Response.json({ error: serverT("api.apps.noWidget") }, { status: 400 });
 
   const config = widgetConfig(card.id);
   if (config === null) {
@@ -40,7 +41,7 @@ export async function GET(request: Request, { params }: Context) {
       state: {
         status: "error",
         message:
-          "Widget yapılandırması okunamıyor: MASTER_KEY, kaydedildiğindekinden farklı. Ayarları yeniden gir.",
+          serverT("api.apps.widgetKeyMismatch"),
         updatedAt: null,
       },
     });
@@ -58,26 +59,26 @@ export async function POST(request: Request, { params }: Context) {
   if (!guard.ok) return guard.response;
 
   const card = getApp(Number((await params).id));
-  if (!card) return Response.json({ error: "kart bulunamadı" }, { status: 404 });
+  if (!card) return Response.json({ error: serverT("api.notFound.card") }, { status: 404 });
 
   const provider = findWidget(card.widgetType);
-  if (!provider) return Response.json({ error: "kartta widget yok" }, { status: 400 });
+  if (!provider) return Response.json({ error: serverT("api.apps.noWidget") }, { status: 400 });
 
   let body: { action?: unknown };
   try {
     body = (await request.json()) as typeof body;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const action = String(body.action ?? "");
   if (!provider.def.actions.some((entry) => entry.key === action)) {
-    return Response.json({ error: "bilinmeyen aksiyon" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidAction") }, { status: 400 });
   }
 
   const config = widgetConfig(card.id);
   if (config === null) {
-    return Response.json({ error: "widget yapılandırması okunamıyor" }, { status: 400 });
+    return Response.json({ error: serverT("api.apps.widgetUnreadable") }, { status: 400 });
   }
 
   try {

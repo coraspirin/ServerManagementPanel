@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import type { WidgetPlacement } from "@/lib/dashboard/catalog";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * M3.13 — gösterge paneli düzeni.
@@ -43,6 +44,7 @@ function readCsrfToken(): string {
 }
 
 export function DashboardGrid({ layout, widgets }: Props) {
+  const t = useT();
   const [editing, setEditing] = useState(false);
   const [order, setOrder] = useState(layout);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -64,13 +66,13 @@ export function DashboardGrid({ layout, widgets }: Props) {
         layout?: WidgetPlacement[];
       };
       if (!response.ok || payload.ok === false) {
-        setError(payload.error ?? "Düzen kaydedilemedi.");
+        setError(payload.error ?? t("home.dashboard.saveFailed"));
         return false;
       }
       if (payload.layout) setOrder(payload.layout);
       return true;
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
       return false;
     } finally {
       setBusy(false);
@@ -116,13 +118,13 @@ export function DashboardGrid({ layout, widgets }: Props) {
             onClick={() => setEditing(true)}
             className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-xs text-subtle transition-colors hover:text-ink"
           >
-            <LayoutGrid className="size-3.5" /> Düzeni düzenle
+            <LayoutGrid className="size-3.5" /> {t("home.dashboard.edit")}
           </button>
         </div>
 
         {shown.length === 0 ? (
           <p className="rounded-lg border border-dashed border-line px-5 py-8 text-center text-sm text-subtle">
-            Bütün bölümleri gizlemişsin. &ldquo;Düzeni düzenle&rdquo; ile geri açabilirsin.
+            {t("home.dashboard.allHidden")}
           </p>
         ) : (
           <Rendered order={shown} widgets={widgets} />
@@ -143,11 +145,10 @@ export function DashboardGrid({ layout, widgets }: Props) {
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
             <LayoutGrid className="size-4 text-brand" aria-hidden />
-            Düzeni düzenle
+            {t("home.dashboard.edit")}
           </h2>
           <span className="text-xs text-subtle">
-            Tut ve sürükleyerek sırala, göz simgesiyle gizle. Düzen yalnızca senin hesabına
-            kaydedilir.
+            {t("home.dashboard.help")}
           </span>
 
           <div className="ml-auto flex gap-2">
@@ -155,12 +156,12 @@ export function DashboardGrid({ layout, widgets }: Props) {
               type="button"
               disabled={busy}
               onClick={async () => {
-                if (!confirm("Düzen varsayılana döndürülsün mü?")) return;
+                if (!confirm(t("home.dashboard.confirmReset"))) return;
                 if (await send({ action: "reset" })) setEditing(false);
               }}
               className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-xs text-subtle transition-colors hover:text-ink disabled:opacity-50"
             >
-              <RotateCcw className="size-3.5" /> Varsayılana dön
+              <RotateCcw className="size-3.5" /> {t("home.dashboard.reset")}
             </button>
             <button
               type="button"
@@ -171,7 +172,7 @@ export function DashboardGrid({ layout, widgets }: Props) {
               }}
               className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-xs text-subtle transition-colors hover:text-ink disabled:opacity-50"
             >
-              <X className="size-3.5" /> Vazgeç
+              <X className="size-3.5" /> {t("common.actions.cancel")}
             </button>
             <button
               type="button"
@@ -185,7 +186,8 @@ export function DashboardGrid({ layout, widgets }: Props) {
               }}
               className="flex items-center gap-1.5 rounded-md bg-brand px-2.5 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              <Check className="size-3.5" /> {busy ? "Kaydediliyor…" : "Kaydet"}
+              <Check className="size-3.5" />{" "}
+              {busy ? t("common.states.saving") : t("common.actions.save")}
             </button>
           </div>
         </div>
@@ -217,7 +219,7 @@ export function DashboardGrid({ layout, widgets }: Props) {
               </div>
               <button
                 type="button"
-                aria-label={`${entry.label} yukarı taşı`}
+                aria-label={t("home.dashboard.moveUp", { name: entry.label })}
                 disabled={index === 0}
                 onClick={() => nudge(entry.key, -1)}
                 className="flex shrink-0 items-center justify-center rounded border border-line p-1.5 text-subtle transition-colors hover:text-ink disabled:opacity-30"
@@ -226,7 +228,7 @@ export function DashboardGrid({ layout, widgets }: Props) {
               </button>
               <button
                 type="button"
-                aria-label={`${entry.label} aşağı taşı`}
+                aria-label={t("home.dashboard.moveDown", { name: entry.label })}
                 disabled={index === order.length - 1}
                 onClick={() => nudge(entry.key, 1)}
                 className="flex shrink-0 items-center justify-center rounded border border-line p-1.5 text-subtle transition-colors hover:text-ink disabled:opacity-30"
@@ -235,7 +237,9 @@ export function DashboardGrid({ layout, widgets }: Props) {
               </button>
               <button
                 type="button"
-                aria-label={entry.visible ? `${entry.label} gizle` : `${entry.label} göster`}
+                aria-label={t(entry.visible ? "home.dashboard.hide" : "home.dashboard.show", {
+                  name: entry.label,
+                })}
                 onClick={() =>
                   setOrder(
                     order.map((item) =>

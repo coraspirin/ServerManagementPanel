@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { applyFix, checkCompose, type Finding } from "@/lib/compose/checks";
 import {
@@ -125,8 +126,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return Response.json(
       {
         error:
-          `${location.service} servisi ${location.file} içinde bulunamadı. Dosya, container ` +
-          "oluşturulduktan sonra değişmiş olabilir.",
+          serverT("api.docker.serviceMissing", { service: location.service, file: location.file }),
       },
       { status: 409 },
     );
@@ -141,7 +141,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     location,
     service,
     // `source`: bulgulara satır numarası yazılabilmesi için ham metin (M3.34).
-    findings: checkCompose(doc, { ...context, source: file.text }),
+    findings: checkCompose(doc, { ...context, source: file.text }, serverT),
     dockerPublished: context.published,
     availableNetworks: context.availableNetworks,
     networkMode: networkMode(doc, location.service),
@@ -176,7 +176,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     body = (await request.json()) as EditBody;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const actor = { username: guard.session.user.username, userId: guard.session.user.id };
@@ -221,7 +221,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     updated = readService(doc, location.service);
   } catch (mutationError) {
     return Response.json(
-      { error: mutationError instanceof Error ? mutationError.message : "düzenleme başarısız" },
+      { error: mutationError instanceof Error ? mutationError.message : serverT("api.docker.editFailed") },
       { status: 400 },
     );
   }
@@ -232,7 +232,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Satır numaraları DÜZENLENMİŞ metne göre: kullanıcı önizlemede
     // gördüğü dosyada o satırı arayacak, eski dosyada değil.
     source: text,
-  });
+  }, serverT);
 
   // Önizleme: hiçbir şey yazılmıyor, kullanıcı diff'i görüp onaylıyor.
   if (body.preview) {

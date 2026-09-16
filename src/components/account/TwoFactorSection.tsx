@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Copy, KeyRound, ShieldCheck, ShieldOff, Smartphone } from "lucide-react";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
+import { useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 /**
  * M3.1 — kendi hesabının iki adımlı doğrulaması.
@@ -38,6 +40,7 @@ export function TwoFactorSection({
   enabled: boolean;
   recoveryCodesLeft: number;
 }) {
+  const t = useT();
   const [enabled, setEnabled] = useState(initialEnabled);
   const [left, setLeft] = useState(initialLeft);
   const [stage, setStage] = useState<Stage>({ name: "idle" });
@@ -52,7 +55,7 @@ export function TwoFactorSection({
     const { response, data } = await send("POST");
     setBusy(false);
     if (!response.ok) {
-      setError(String(data.error ?? "Başlatılamadı."));
+      setError(String(data.error ?? t("account.twoFactor.startFailed")));
       return;
     }
     setStage({ name: "enrolling", secret: String(data.secret), qrSvg: String(data.qrSvg) });
@@ -64,7 +67,7 @@ export function TwoFactorSection({
     const { response, data } = await send("PUT", { code });
     setBusy(false);
     if (!response.ok) {
-      setError(String(data.error ?? "Doğrulanamadı."));
+      setError(String(data.error ?? t("auth.twoFactor.failed")));
       return;
     }
     setEnabled(true);
@@ -80,7 +83,7 @@ export function TwoFactorSection({
     const { response, data } = await send("DELETE", { password });
     setBusy(false);
     if (!response.ok) {
-      setError(String(data.error ?? "Kapatılamadı."));
+      setError(String(data.error ?? t("account.twoFactor.disableFailed")));
       return;
     }
     setEnabled(false);
@@ -95,7 +98,7 @@ export function TwoFactorSection({
     const { response, data } = await send("PATCH", { password });
     setBusy(false);
     if (!response.ok) {
-      setError(String(data.error ?? "Yenilenemedi."));
+      setError(String(data.error ?? t("account.twoFactor.regenerateFailed")));
       return;
     }
     setPassword("");
@@ -112,30 +115,27 @@ export function TwoFactorSection({
         ) : (
           <ShieldOff className="size-4 text-subtle" aria-hidden />
         )}
-        İki adımlı doğrulama
+        {t("auth.twoFactor.title")}
         <span className={`text-xs font-normal ${enabled ? "text-ok" : "text-subtle"}`}>
-          {enabled ? "açık" : "kapalı"}
+          {enabled ? t("account.twoFactor.on") : t("account.twoFactor.off")}
         </span>
       </h2>
 
       <p className="mt-1 text-xs leading-snug text-subtle">
-        Açıkken giriş için parolaya ek olarak telefonundaki 6 haneli kod istenir. Parolan bir
-        yerden sızarsa hesap yine de girilemez.
+        {t("account.twoFactor.intro")}
       </p>
 
       {enabled && left === 0 && stage.name === "idle" && (
         <p className="mt-3 rounded-md bg-warn/10 px-3 py-2 text-xs text-warn">
-          Kullanılmamış kurtarma kodun kalmadı. Telefonunu kaybedersen hesabına yalnızca başka
-          bir yönetici 2FA&apos;yı sıfırlayarak erişebilir.
+          {t("account.twoFactor.noCodesLeft")}
         </p>
       )}
 
       {stage.name === "codes" && (
         <div className="mt-4 rounded-md border border-brand/40 bg-brand/5 p-4">
-          <p className="text-sm font-medium">Kurtarma kodların</p>
+          <p className="text-sm font-medium">{t("account.twoFactor.codesTitle")}</p>
           <p className="mt-1 text-xs text-subtle">
-            Bunlar bir daha gösterilmeyecek — telefonunu kaybedersen tek giriş yolun. Her kod bir
-            kez kullanılır. Yazdır ya da şifre kasana koy.
+            {t("account.twoFactor.codesIntro")}
           </p>
           <ul className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-sm sm:grid-cols-3">
             {stage.codes.map((entry) => (
@@ -148,14 +148,14 @@ export function TwoFactorSection({
               onClick={() => void navigator.clipboard?.writeText(stage.codes.join("\n"))}
               className="flex items-center gap-1.5 rounded-md border border-line bg-surface px-3 py-1.5 text-sm transition-colors hover:border-brand"
             >
-              <Copy className="size-4" /> Kopyala
+              <Copy className="size-4" /> {t("common.actions.copy")}
             </button>
             <button
               type="button"
               onClick={() => setStage({ name: "idle" })}
               className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
             >
-              Kaydettim
+              {t("account.saved")}
             </button>
           </div>
         </div>
@@ -165,8 +165,7 @@ export function TwoFactorSection({
         <div className="mt-4 space-y-3">
           <ol className="space-y-3 text-sm">
             <li>
-              <span className="font-medium">1.</span> Doğrulayıcı uygulamanda (Google
-              Authenticator, Aegis, 1Password…) QR kodu okut:
+              <span className="font-medium">1.</span> {t("account.twoFactor.step1")}
               <div
                 className="mt-2 inline-block rounded-md border border-line bg-white p-2"
                 // Sunucuda üretilmiş, kullanıcı girdisi içermeyen SVG.
@@ -174,13 +173,13 @@ export function TwoFactorSection({
               />
             </li>
             <li>
-              <span className="font-medium">2.</span> QR okunmuyorsa sırrı elle gir:
+              <span className="font-medium">2.</span> {t("account.twoFactor.step2")}
               <code className="ml-1 select-all break-all rounded bg-canvas px-1.5 py-0.5 font-mono text-xs">
                 {stage.secret}
               </code>
             </li>
             <li>
-              <span className="font-medium">3.</span> Uygulamanın gösterdiği kodu yaz:
+              <span className="font-medium">3.</span> {t("account.twoFactor.step3")}
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <input
                   inputMode="numeric"
@@ -196,14 +195,14 @@ export function TwoFactorSection({
                   disabled={busy || code.length < 6}
                   className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
-                  Doğrula ve aç
+                  {t("account.twoFactor.verifyEnable")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setStage({ name: "idle" })}
                   className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
                 >
-                  Vazgeç
+                  {t("common.actions.cancel")}
                 </button>
               </div>
             </li>
@@ -220,12 +219,15 @@ export function TwoFactorSection({
               disabled={busy}
               className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              <Smartphone className="size-4" /> 2FA&apos;yı aç
+              <Smartphone className="size-4" /> {t("account.twoFactor.enable")}
             </button>
           ) : (
             <div className="space-y-3">
               <p className="text-xs text-subtle">
-                Kullanılmamış kurtarma kodu: <strong>{left}</strong>
+                <Rich
+                  text={t("account.twoFactor.codesLeft")}
+                  values={{ count: <strong>{left}</strong> }}
+                />
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <input
@@ -233,7 +235,7 @@ export function TwoFactorSection({
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Parolanı doğrula"
+                  placeholder={t("account.twoFactor.confirmPassword")}
                   className="w-full max-w-52 rounded-md border border-line bg-canvas px-3 py-1.5 text-sm outline-none focus:border-brand"
                 />
                 <button
@@ -242,7 +244,7 @@ export function TwoFactorSection({
                   disabled={busy || !password}
                   className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
                 >
-                  <KeyRound className="size-4" /> Kurtarma kodlarını yenile
+                  <KeyRound className="size-4" /> {t("account.twoFactor.regenerate")}
                 </button>
                 <button
                   type="button"
@@ -250,7 +252,7 @@ export function TwoFactorSection({
                   disabled={busy || !password}
                   className="rounded-md border border-line px-3 py-1.5 text-sm text-danger transition-colors hover:border-danger disabled:opacity-50"
                 >
-                  2FA&apos;yı kapat
+                  {t("account.twoFactor.disable")}
                 </button>
               </div>
             </div>

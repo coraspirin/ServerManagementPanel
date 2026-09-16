@@ -7,6 +7,7 @@ import { randomBytes } from "node:crypto";
 
 import { dataDir } from "@/lib/db/client";
 import { panelDataVolume } from "@/lib/host/self";
+import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 import { getString } from "@/lib/settings";
 import { elevatedList, isPermissionError } from "./elevated";
@@ -69,7 +70,7 @@ async function runInParent(
   if (!(await parentExists(parentHostPath))) {
     return {
       ok: false,
-      message: `Hedef klasör bulunamadı: ${parentHostPath}`,
+      message: serverT("fileWrite.parentMissing", { path: parentHostPath }),
     };
   }
 
@@ -84,7 +85,10 @@ async function runInParent(
 
   return {
     ok: result.exitCode === 0,
-    message: result.exitCode === 0 ? "Tamam." : result.output.slice(0, 500) || "Komut başarısız.",
+    message:
+      result.exitCode === 0
+        ? serverT("docker.installer.ok")
+        : result.output.slice(0, 500) || serverT("fileWrite.commandFailed"),
   };
 }
 
@@ -92,7 +96,7 @@ async function runInParent(
 function resolveTarget(rawPath: string): { parent: string; name: string } | { error: string } {
   const check = checkPath(rawPath);
   if (!check.ok) return { error: check.error };
-  if (check.hostPath === "/") return { error: "Kök dizin üzerinde işlem yapılamaz." };
+  if (check.hostPath === "/") return { error: serverT("fileWrite.rootForbidden") };
 
   const parent = path.posix.dirname(check.hostPath);
   const parentCheck = checkPath(parent);
@@ -123,11 +127,11 @@ export async function renameEntry(rawPath: string, newName: string): Promise<Wri
   if ("error" in target) return { ok: false, message: target.error };
 
   const clean = newName.trim();
-  if (clean.length === 0) return { ok: false, message: "Yeni ad boş olamaz." };
+  if (clean.length === 0) return { ok: false, message: serverT("fileWrite.nameEmpty") };
   // Yeni ad bir YOL değil, bir AD. `/` ya da `..` içeren bir "ad", dosyayı
   // izinli kökün dışına taşımanın yolu olurdu.
   if (clean.includes("/") || clean === "." || clean === "..") {
-    return { ok: false, message: "Yeni ad '/' içeremez." };
+    return { ok: false, message: serverT("fileWrite.nameSlash") };
   }
 
   return runInParent(target.parent, [
@@ -143,7 +147,7 @@ export async function changeMode(rawPath: string, mode: string): Promise<WriteOu
 
   const clean = mode.trim();
   if (!/^[0-7]{3,4}$/.test(clean)) {
-    return { ok: false, message: "İzin sekizlik olmalı (ör. 644 ya da 0755)." };
+    return { ok: false, message: serverT("fileWrite.modeOctal") };
   }
 
   return runInParent(target.parent, ["chmod", clean, path.posix.join(WORK, target.name)]);
@@ -164,11 +168,11 @@ export async function removeFilesIn(
 ): Promise<WriteOutcome> {
   const check = checkPath(parentHostPath);
   if (!check.ok) return { ok: false, message: check.error };
-  if (names.length === 0) return { ok: true, message: "Silinecek dosya yok." };
+  if (names.length === 0) return { ok: true, message: serverT("fileWrite.nothingToDelete") };
 
   const clean = names.filter((name) => !name.includes("/") && name !== "." && name !== "..");
   if (clean.length !== names.length) {
-    return { ok: false, message: "Dosya adlarından biri geçersiz." };
+    return { ok: false, message: serverT("fileWrite.invalidName") };
   }
 
   // `rm -f --` : sonrasındaki her şey dosya adı, bayrak değil. "-rf" adlı bir
@@ -199,8 +203,7 @@ export async function writeFile(
   if (!volume) {
     return {
       ok: false,
-      message:
-        "Panel veri volume'ü bulunamadı; dosya yazma bu kurulumda kullanılamıyor.",
+      message: serverT("fileWrite.noPanelVolume"),
     };
   }
 

@@ -5,11 +5,11 @@ import { getDb } from "@/lib/db/client";
 import { detectRestartLoops } from "@/lib/docker/collect";
 import { formatBytes } from "@/lib/metrics/catalog";
 import { formatPct as formatPctLocale } from "@/lib/i18n/format";
-import { currentLocale, serverT } from "@/lib/i18n/runtime";
+import { currentDictionary, serverT } from "@/lib/i18n/runtime";
 
 /** Alarm metinleri o anki arayüz dilinde yazılır. */
 const formatPct = (value: number, digits = 1) =>
-  formatPctLocale(value, currentLocale(), digits);
+  formatPctLocale(value, currentDictionary(), digits);
 import { latestSnapshot } from "@/lib/metrics/collect";
 import { diskForecasts, isActionable } from "@/lib/metrics/forecast";
 import { listMonitors } from "@/lib/monitors/store";

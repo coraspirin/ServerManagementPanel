@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { HostAccounts, HostGroup, HostUser } from "@/lib/host/users";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * Host kullanıcısı seçicileri (M3.45).
@@ -22,6 +23,7 @@ const selectClass =
 let cached: HostAccounts | null = null;
 
 export function useHostAccounts(): HostAccounts | null {
+  const t = useT();
   const [data, setData] = useState<HostAccounts | null>(cached);
 
   useEffect(() => {
@@ -35,20 +37,20 @@ export function useHostAccounts(): HostAccounts | null {
           signal: controller.signal,
         });
         if (!response.ok) {
-          setData({ users: [], groups: [], error: "Kullanıcı listesi alınamadı." });
+          setData({ users: [], groups: [], error: t("hostUser.listFailed") });
           return;
         }
         cached = (await response.json()) as HostAccounts;
         setData(cached);
       } catch (error) {
         if ((error as Error)?.name !== "AbortError") {
-          setData({ users: [], groups: [], error: "Sunucuya ulaşılamadı." });
+          setData({ users: [], groups: [], error: t("common.errors.network") });
         }
       }
     })();
 
     return () => controller.abort();
-  }, []);
+  }, [t]);
 
   return data;
 }
@@ -70,6 +72,7 @@ export function HostUserSelect({
   onChange: (value: string) => void;
   className?: string;
 }) {
+  const t = useT();
   const accounts = useHostAccounts();
 
   if (!accounts || accounts.users.length === 0) {
@@ -78,7 +81,7 @@ export function HostUserSelect({
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={accounts ? "root" : "yükleniyor…"}
+        placeholder={accounts ? "root" : t("common.states.loadingInline")}
         className={`${selectClass} font-mono ${className}`}
       />
     );
@@ -96,7 +99,9 @@ export function HostUserSelect({
       onChange={(e) => onChange(e.target.value)}
       className={`${selectClass} font-mono ${className}`}
     >
-      {!known && value !== "" && <option value={value}>{value} (host&apos;ta yok)</option>}
+      {!known && value !== "" && (
+        <option value={value}>{t("hostUser.notOnHost", { name: value })}</option>
+      )}
       {accounts.users.map((user) => (
         <option key={user.name} value={user.name}>
           {label(user)}
@@ -121,6 +126,7 @@ export function OwnerSelect({
   disabled: boolean;
   onCommit: (value: string) => void;
 }) {
+  const t = useT();
   const accounts = useHostAccounts();
   const { uid, gid } = ownerParts(value);
 
@@ -130,7 +136,7 @@ export function OwnerSelect({
         value={value}
         disabled={disabled}
         onChange={(e) => onCommit(e.target.value)}
-        placeholder={accounts ? "0:0" : "yükleniyor…"}
+        placeholder={accounts ? "0:0" : t("common.states.loadingInline")}
         className={`${selectClass} font-mono sm:w-40`}
       />
     );
@@ -142,7 +148,7 @@ export function OwnerSelect({
   return (
     <div className="w-full space-y-1 sm:w-64">
       <label className="block">
-        <span className="text-[11px] text-subtle">Kullanıcı</span>
+        <span className="text-[11px] text-subtle">{t("hostUser.user")}</span>
         <select
           value={uid}
           disabled={disabled}
@@ -155,7 +161,9 @@ export function OwnerSelect({
           }}
           className={`${selectClass} font-mono`}
         >
-          {!knownUid && <option value={uid}>uid {uid} (host&apos;ta yok)</option>}
+          {!knownUid && (
+            <option value={uid}>{t("hostUser.notOnHost", { name: `uid ${uid}` })}</option>
+          )}
           {accounts.users.map((user) => (
             <option key={user.uid} value={user.uid}>
               {label(user)}
@@ -165,14 +173,16 @@ export function OwnerSelect({
       </label>
 
       <label className="block">
-        <span className="text-[11px] text-subtle">Grup</span>
+        <span className="text-[11px] text-subtle">{t("hostUser.group")}</span>
         <select
           value={gid}
           disabled={disabled}
           onChange={(e) => onCommit(`${uid}:${e.target.value}`)}
           className={`${selectClass} font-mono`}
         >
-          {!knownGid && <option value={gid}>gid {gid} (host&apos;ta yok)</option>}
+          {!knownGid && (
+            <option value={gid}>{t("hostUser.notOnHost", { name: `gid ${gid}` })}</option>
+          )}
           {accounts.groups.map((group) => (
             <option key={group.gid} value={group.gid}>
               {group.name} · {group.gid}

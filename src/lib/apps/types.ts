@@ -1,3 +1,5 @@
+import type { MessageKey } from "../i18n/translate.ts";
+
 /**
  * M2.1 — App Launcher paylaşılan tipleri.
  *
@@ -139,7 +141,8 @@ export type AppGroup = {
   cards: AppCardView[];
 };
 
-export type StatusStyle = { dot: string; label: string };
+/** `label` bir dil anahtarı — bileşen `t()` ile çevirir (modül istemcide de çalışıyor). */
+export type StatusStyle = { dot: string; label: MessageKey };
 
 /**
  * Durum noktasının rengi ve etiketi.
@@ -153,10 +156,10 @@ export function statusStyle(card: {
   inMaintenance: boolean;
 }): StatusStyle | null {
   if (card.status === null) return null;
-  if (card.inMaintenance) return { dot: "bg-brand", label: "bakımda" };
-  if (card.status === "up") return { dot: "bg-ok", label: "çalışıyor" };
-  if (card.status === "down") return { dot: "bg-danger", label: "çevrimdışı" };
-  return { dot: "bg-line", label: "henüz kontrol edilmedi" };
+  if (card.inMaintenance) return { dot: "bg-brand", label: "appStatus.maintenance" };
+  if (card.status === "up") return { dot: "bg-ok", label: "appStatus.up" };
+  if (card.status === "down") return { dot: "bg-danger", label: "appStatus.down" };
+  return { dot: "bg-line", label: "appStatus.unknown" };
 }
 
 /**

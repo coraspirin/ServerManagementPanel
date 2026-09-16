@@ -3,6 +3,7 @@ import "server-only";
 import path from "node:path";
 
 import { callHelper, helperConfigured } from "@/lib/host/helper";
+import { serverT } from "@/lib/i18n/runtime";
 // Tek yön: preflight → install. `allowLinesFor` install.ts'te duruyor çünkü
 // hata metinlerini üreten `explainHelper` de aynı satırlara ihtiyaç duyuyor ve
 // ters yönde bir import ESM döngüsü açardı (bu projede daha önce yaşandı:
@@ -53,9 +54,7 @@ export async function composePreflight(actor: {
     return {
       status: "unknown",
       directory: root,
-      detail:
-        "host-helper yapılandırılmamış (HELPER_SECRET boş). Compose komutları " +
-        "host'ta çalışmak zorunda olduğu için kurulum bu hâliyle çalışmaz.",
+      detail: serverT("preflight.helperMissing"),
       allowLines: "",
     };
   }
@@ -72,35 +71,27 @@ export async function composePreflight(actor: {
     return {
       status: "ok",
       directory: root,
-      detail: `Host, ${root} altında compose çalıştırmaya izin veriyor.`,
+      detail: serverT("preflight.ok", { root }),
       allowLines: "",
     };
   }
 
   const error = probe.error ?? "";
 
-  if (error.includes("desene uymuyor")) {
+  if (error.includes("desene uymuyor")) { // i18n-ignore — host-helper protokol metni
     return {
       status: "blocked",
       directory: root,
-      detail:
-        `Host, "${root}" dizininde compose çalıştırmaya İZİN VERMİYOR. Kur düğmesi ` +
-        "compose dosyasını yazar ama uygulamayı başlatamaz. İzin listesi host " +
-        "tarafında ve panel onu değiştiremez (bilinçli bir sınır). İki çözüm var: " +
-        "yığın kök dizinini izinli bir yola çevir (Ayarlar → Dosyalar → Yığın kök " +
-        "dizini) ya da host'ta root olarak aşağıdaki satırları ekle.",
+      detail: serverT("preflight.blocked", { root }),
       allowLines: allowLinesFor(root),
     };
   }
 
-  if (error.includes("izinli değil") || error.includes("bilinmeyen eylem")) {
+  if (error.includes("izinli değil") || error.includes("bilinmeyen eylem")) { // i18n-ignore
     return {
       status: "unknown",
       directory: root,
-      detail:
-        "Bu ADIM SINANAMADI: host'ta `compose.config` kapalı olduğu için dizin " +
-        "deseni sorulamadı. Kurulum yine de çalışabilir — `compose.up` ayrı bir " +
-        "satırdır. Sınamayı açmak istersen izin listesine `compose.config` ekle.",
+      detail: serverT("preflight.untested"),
       allowLines: allowLinesFor(root),
     };
   }
@@ -108,7 +99,7 @@ export async function composePreflight(actor: {
   return {
     status: "unknown",
     directory: root,
-    detail: `Ön kontrol yapılamadı: ${error || "host-helper yanıt vermedi"}`,
+    detail: serverT("preflight.failed", { error: error || serverT("preflight.noResponse") }),
     allowLines: "",
   };
 }

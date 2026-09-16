@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import type { DockerOverview } from "@/lib/docker/types";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * Docker container adı seçicileri (M3.45).
@@ -45,7 +46,7 @@ export function useContainerNames(): { names: string[] | null; failed: boolean }
         const payload = (await response.json()) as DockerOverview;
         cached = payload.containers
           .map((container) => container.name)
-          .sort((a, b) => a.localeCompare(b, "tr"));
+          .sort((a, b) => a.localeCompare(b));
         setNames(cached);
       } catch (error) {
         if ((error as Error)?.name !== "AbortError") setFailed(true);
@@ -70,6 +71,7 @@ export function ContainerSelect({
   onCommit: (value: string) => void;
   allowEmpty?: boolean;
 }) {
+  const t = useT();
   const { names, failed } = useContainerNames();
 
   if (failed || (names && names.length === 0)) {
@@ -84,7 +86,9 @@ export function ContainerSelect({
   }
 
   if (!names) {
-    return <span className={`${inputClass} text-subtle sm:w-56`}>yükleniyor…</span>;
+    return (
+      <span className={`${inputClass} text-subtle sm:w-56`}>{t("common.states.loadingInline")}</span>
+    );
   }
 
   // Kayıtlı ad listede yoksa seçenek olarak eklenir: container durdurulmuş
@@ -99,8 +103,10 @@ export function ContainerSelect({
       onChange={(e) => onCommit(e.target.value)}
       className={`${inputClass} font-mono sm:w-56`}
     >
-      {allowEmpty && <option value="">— seçilmedi —</option>}
-      {!known && value !== "" && <option value={value}>{value} (listede yok)</option>}
+      {allowEmpty && <option value="">{t("containerSelect.notSelected")}</option>}
+      {!known && value !== "" && (
+        <option value={value}>{t("appForm.notInList", { name: value })}</option>
+      )}
       {names.map((name) => (
         <option key={name} value={name}>
           {name}
@@ -131,6 +137,7 @@ export function ContainerMultiSelect({
   /** Hiçbiri seçilmediğinde ne olduğunu anlatan cümle. */
   emptyMeans?: string;
 }) {
+  const t = useT();
   const { names, failed } = useContainerNames();
 
   const selected = value
@@ -144,14 +151,16 @@ export function ContainerMultiSelect({
         value={value}
         disabled={disabled}
         onChange={(e) => onCommit(e.target.value)}
-        placeholder="virgülle ayrılmış adlar"
+        placeholder={t("containerSelect.commaSeparated")}
         className={`${inputClass} font-mono sm:w-72`}
       />
     );
   }
 
   if (!names) {
-    return <span className={`${inputClass} text-subtle sm:w-72`}>yükleniyor…</span>;
+    return (
+      <span className={`${inputClass} text-subtle sm:w-72`}>{t("common.states.loadingInline")}</span>
+    );
   }
 
   // Listede olmayan seçili adlar korunuyor ve gösteriliyor: durmuş bir
@@ -170,7 +179,7 @@ export function ContainerMultiSelect({
     <div className="w-full space-y-1.5 sm:w-72">
       <div className="max-h-52 overflow-y-auto rounded-md border border-line bg-canvas">
         {rows.length === 0 ? (
-          <p className="px-3 py-3 text-xs text-subtle">Container bulunamadı.</p>
+          <p className="px-3 py-3 text-xs text-subtle">{t("containerSelect.none")}</p>
         ) : (
           <ul className="divide-y divide-line">
             {rows.map((name) => {
@@ -194,7 +203,9 @@ export function ContainerMultiSelect({
                     </span>
                     <span className="truncate font-mono text-xs">{name}</span>
                     {!names.includes(name) && (
-                      <span className="ml-auto shrink-0 text-[10px] text-subtle">listede yok</span>
+                      <span className="ml-auto shrink-0 text-[10px] text-subtle">
+                        {t("containerSelect.notInList")}
+                      </span>
                     )}
                   </button>
                 </li>
@@ -206,8 +217,8 @@ export function ContainerMultiSelect({
 
       <p className="text-[11px] text-subtle">
         {selected.length === 0
-          ? (emptyMeans ?? "Hiçbiri seçili değil.")
-          : `${selected.length} seçili`}
+          ? (emptyMeans ?? t("containerSelect.noneSelected"))
+          : t("containerSelect.selected", { count: selected.length })}
         {selected.length > 0 && (
           <button
             type="button"
@@ -215,7 +226,7 @@ export function ContainerMultiSelect({
             onClick={() => onCommit("")}
             className="ml-2 underline transition-colors hover:text-ink disabled:opacity-50"
           >
-            temizle
+            {t("docker.composeImport.clear")}
           </button>
         )}
       </p>

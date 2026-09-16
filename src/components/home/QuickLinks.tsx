@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Bookmark as BookmarkIcon, Search } from "lucide-react";
 import type { AppGroup } from "@/lib/apps/types";
 import type { BookmarkGroup } from "@/lib/home/bookmarks";
+import { useFormat, useT } from "@/lib/i18n/client";
 
 /**
  * M2.7 — ana sayfadaki arama + kısayollar.
@@ -27,6 +28,8 @@ export function QuickLinks({
   /** Ev halkı/kiosk görünümünde arama kutusu gizlenir. */
   compact?: boolean;
 }) {
+  const t = useT();
+  const f = useFormat();
   const [query, setQuery] = useState("");
 
   const entries = useMemo<Entry[]>(
@@ -55,10 +58,10 @@ export function QuickLinks({
     [apps, bookmarks],
   );
 
-  const needle = query.trim().toLocaleLowerCase("tr");
+  const needle = f.lower(query.trim());
   const results = needle
     ? entries.filter((entry) =>
-        `${entry.title} ${entry.subtitle} ${entry.href}`.toLocaleLowerCase("tr").includes(needle),
+        f.lower(`${entry.title} ${entry.subtitle} ${entry.href}`).includes(needle),
       )
     : [];
 
@@ -81,8 +84,8 @@ export function QuickLinks({
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Servis ya da bağlantı ara — Enter ilkini açar"
-              aria-label="Servis ya da bağlantı ara"
+              placeholder={t("home.quicklinks.search")}
+              aria-label={t("home.quicklinks.searchAria")}
               className="w-full rounded-lg border border-line bg-surface py-2.5 pl-9 pr-3 text-sm outline-none focus:border-brand"
             />
           </label>
@@ -92,7 +95,7 @@ export function QuickLinks({
       {needle ? (
         results.length === 0 ? (
           <p className="rounded-lg border border-dashed border-line bg-surface px-5 py-6 text-center text-sm text-subtle">
-            &quot;{query}&quot; ile eşleşen bir şey yok.
+            {t("home.quicklinks.noMatch", { query })}
           </p>
         ) : (
           <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
@@ -126,6 +129,7 @@ export function QuickLinks({
 }
 
 function BookmarkSections({ groups }: { groups: BookmarkGroup[] }) {
+  const t = useT();
   if (groups.length === 0) return null;
 
   return (
@@ -133,7 +137,7 @@ function BookmarkSections({ groups }: { groups: BookmarkGroup[] }) {
       {groups.map((group) => (
         <section key={group.name || "diger"}>
           <h3 className="mb-2 text-xs font-semibold text-subtle">
-            {group.name || "Bağlantılar"}
+            {group.name || t("home.bookmarks.title")}
           </h3>
           <div className="flex flex-wrap gap-2">
             {group.items.map((item) => (

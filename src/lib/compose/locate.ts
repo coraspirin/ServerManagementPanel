@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import path from "node:path";
 
@@ -41,7 +42,9 @@ export async function locateCompose(containerId: string): Promise<LocateResult> 
   try {
     raw = (await getDockerProvider().inspectRaw(containerId)) as typeof raw;
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Container okunamadı." };
+    return {
+      error: error instanceof Error ? error.message : serverT("composeLocate.containerUnreadable"),
+    };
   }
 
   const labels = raw?.Config?.Labels ?? {};
@@ -49,7 +52,7 @@ export async function locateCompose(containerId: string): Promise<LocateResult> 
   const service = labels["com.docker.compose.service"] ?? "";
 
   if (!project) {
-    return { error: "Bu container bir compose yığınına ait değil." };
+    return { error: serverT("composeLocate.notCompose") };
   }
 
   const workingDir = labels["com.docker.compose.project.working_dir"] ?? "";
@@ -62,15 +65,12 @@ export async function locateCompose(containerId: string): Promise<LocateResult> 
 
   if (configFiles.length === 0) {
     return {
-      error:
-        `${project} yığınının compose dosyası etiketlerde yazmıyor. Bu container büyük ` +
-        "ihtimalle compose dışında bir yolla oluşturulmuş; panel hangi dosyayı " +
-        "düzenleyeceğini bilemez.",
+      error: serverT("composeLocate.noConfigFiles", { project }),
     };
   }
 
   if (!workingDir) {
-    return { error: `${project} yığınının proje dizini etiketlerde yazmıyor.` };
+    return { error: serverT("composeLocate.noWorkingDir", { project }) };
   }
 
   return {

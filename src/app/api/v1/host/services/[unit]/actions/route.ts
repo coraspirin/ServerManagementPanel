@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { beginIdempotent } from "@/lib/apiv1/action";
 import { guardV1 } from "@/lib/apiv1/guard";
 import { runHelperAction } from "@/lib/apiv1/host";
@@ -34,7 +35,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ uni
 
   const unit = decodeURIComponent((await params).unit);
   if (!/^[A-Za-z0-9_.@:-]{1,128}$/.test(unit)) {
-    return apiError("invalid_request", "geçersiz birim adı");
+    return apiError("invalid_request", serverT("api.v1.invalidUnit"));
   }
 
   const body = await readJsonBody<{ action?: unknown }>(
@@ -48,7 +49,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ uni
   if (!action) {
     return apiError(
       "invalid_request",
-      `geçersiz eylem. Geçerli değerler: ${Object.keys(ACTIONS).join(", ")}`,
+      serverT("api.v1.invalidValue", { field: serverT("api.v1.field.action"), values: Object.keys(ACTIONS).join(", ") }),
     );
   }
 

@@ -14,6 +14,8 @@ import type {
   ResourceKind,
 } from "@/lib/providers/types";
 import { ImagePanel } from "./ImagePanel";
+import { useFormat, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 import { ImageDetail, VolumeDetail } from "./ResourceDetail";
 
 export type ResourcesPayload = {
@@ -40,6 +42,7 @@ function readCsrfToken(): string {
  * olmalı — kullanıcı kararı kendisi doğrulayabilsin.
  */
 export function useResources(enabled: boolean) {
+  const t = useT();
   const [data, setData] = useState<ResourcesPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   /*
@@ -61,9 +64,9 @@ export function useResources(enabled: boolean) {
       setData(payload);
       setError(null);
     } else {
-      setError(payload.error ?? "Kaynaklar alınamadı.");
+      setError(payload.error ?? t("docker.resources.loadFailed"));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -77,12 +80,12 @@ export function useResources(enabled: boolean) {
         });
         apply(await response.json(), response.ok);
       } catch (fetchError) {
-        if ((fetchError as Error)?.name !== "AbortError") setError("Sunucuya ulaşılamadı.");
+        if ((fetchError as Error)?.name !== "AbortError") setError(t("common.errors.network"));
       }
     })();
 
     return () => controller.abort();
-  }, [enabled, token, apply]);
+  }, [enabled, token, apply, t]);
 
   return { data, error, setData, refresh };
 }
@@ -110,6 +113,8 @@ export function ResourcePanel({
   /** Yığın adına tıklanınca Stack sekmesine geçip o yığını süzer. */
   onOpenStack: (project: string) => void;
 }) {
+  const t = useT();
+  const f = useFormat();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [imageDetail, setImageDetail] = useState<DockerImage | null>(null);
@@ -132,10 +137,10 @@ export function ResourcePanel({
     try {
       const response = await fetch("/api/docker/resources?detail=sizes", { cache: "no-store" });
       const payload = await response.json();
-      if (!response.ok) setError(payload.error ?? "Boyutlar hesaplanamadı.");
+      if (!response.ok) setError(payload.error ?? t("docker.resources.sizesFailed"));
       else setSizes(payload.volumeBytes as Record<string, number>);
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     } finally {
       setSizesBusy(false);
     }
@@ -143,8 +148,8 @@ export function ResourcePanel({
 
   async function remove(id: string, label: string, danger: boolean) {
     const message = danger
-      ? `"${label}" SİLİNECEK ve içindeki veri geri getirilemez.\n\nDevam edilsin mi?`
-      : `"${label}" silinsin mi?`;
+      ? t("docker.resources.confirmRemoveData", { label })
+      : t("docker.resources.confirmRemove", { label });
     if (!confirm(message)) return;
 
     setBusy(id);
@@ -156,10 +161,10 @@ export function ResourcePanel({
         body: JSON.stringify({ kind, id }),
       });
       const payload = await response.json();
-      if (!response.ok) setError(payload.error ?? "Silinemedi.");
+      if (!response.ok) setError(payload.error ?? t("docker.resources.removeFailed"));
       else onChanged(payload as ResourcesPayload);
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     } finally {
       setBusy(null);
     }
@@ -188,7 +193,7 @@ export function ResourcePanel({
           usedBy: network.attached,
           removable: !network.builtin && network.attached.length === 0,
           danger: false,
-          note: network.builtin ? "Docker'ın kendi ağı — silinemez" : null,
+          note: network.builtin ? t("docker.network.builtin") : null,
           createdAt: null as number | null,
           stack: null as string | null,
           detail: null as null | (() => void),
@@ -221,7 +226,7 @@ export function ResourcePanel({
               className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-xs text-subtle transition-colors hover:border-brand hover:text-brand"
             >
               <Plus className="size-3.5" />
-              Yeni volume
+              {t("docker.resources.newVolume")}
             </button>
           )}
 
@@ -232,12 +237,9 @@ export function ResourcePanel({
             className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-xs text-subtle transition-colors hover:text-brand disabled:opacity-50"
           >
             <Ruler className="size-3.5" />
-            {sizesBusy ? "hesaplanıyor…" : "Boyutları hesapla"}
+            {sizesBusy ? t("docker.resources.calculating") : t("docker.resources.calculateSizes")}
           </button>
-          <span className="text-[11px] text-subtle">
-            Docker her volume&apos;ü diskte yürüyerek ölçer; büyük volume&apos;larda
-            saniyeler sürebilir.
-          </span>
+          <span className="text-[11px] text-subtle">{t("docker.resources.sizesHint")}</span>
         </div>
       )}
 
@@ -246,12 +248,20 @@ export function ResourcePanel({
         <table className="rtable w-full min-w-[44rem] text-sm">
           <thead>
             <tr className="border-b border-line text-left text-xs text-subtle">
-              <th className="px-4 py-2.5 font-medium">Ad</th>
-              {kind === "volume" && <th className="px-4 py-2.5 font-medium">Boyut</th>}
-              {kind === "volume" && <th className="px-4 py-2.5 font-medium">Oluşturulma</th>}
-              {kind === "volume" && <th className="px-4 py-2.5 font-medium">Yığın</th>}
-              <th className="px-4 py-2.5 font-medium">Kullanan</th>
-              <th className="px-4 py-2.5 text-right font-medium">İşlem</th>
+              <th className="px-4 py-2.5 font-medium">{t("docker.resources.name")}</th>
+              {kind === "volume" && (
+                <th className="px-4 py-2.5 font-medium">{t("docker.resources.size")}</th>
+              )}
+              {kind === "volume" && (
+                <th className="px-4 py-2.5 font-medium">{t("docker.resources.created")}</th>
+              )}
+              {kind === "volume" && (
+                <th className="px-4 py-2.5 font-medium">{t("docker.resources.stack")}</th>
+              )}
+              <th className="px-4 py-2.5 font-medium">{t("docker.resources.usedBy")}</th>
+              <th className="px-4 py-2.5 text-right font-medium">
+                {t("docker.resources.actions")}
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -266,24 +276,33 @@ export function ResourcePanel({
                 </td>
 
                 {kind === "volume" && (
-                  <td data-label="Boyut" className="px-4 py-3 text-xs">{row.size}</td>
+                  <td data-label={t("docker.resources.size")} className="px-4 py-3 text-xs">
+                    {row.size}
+                  </td>
                 )}
 
                 {kind === "volume" && (
-                  <td data-label="Oluşturulma" className="px-4 py-3 text-xs text-subtle">
+                  <td
+                    data-label={t("docker.resources.created")}
+                    className="px-4 py-3 text-xs text-subtle"
+                  >
                     {row.createdAt
-                      ? new Date(row.createdAt * 1000).toLocaleDateString("tr-TR")
+                      ? f.date(row.createdAt * 1000, {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                        })
                       : "—"}
                   </td>
                 )}
 
                 {kind === "volume" && (
-                  <td data-label="Yığın" className="px-4 py-3 text-xs">
+                  <td data-label={t("docker.resources.stack")} className="px-4 py-3 text-xs">
                     {row.stack ? (
                       <button
                         type="button"
                         onClick={() => onOpenStack(row.stack!)}
-                        title={`${row.stack} yığınını Stack sekmesinde göster`}
+                        title={t("docker.resources.showStack", { stack: row.stack })}
                         className="text-subtle underline decoration-dotted transition-colors hover:text-brand"
                       >
                         {row.stack}
@@ -294,10 +313,10 @@ export function ResourcePanel({
                   </td>
                 )}
 
-                <td data-label="Kullanan" className="px-4 py-3 text-xs">
+                <td data-label={t("docker.resources.usedBy")} className="px-4 py-3 text-xs">
                   {row.usedBy.length === 0 ? (
                     <span className="rounded bg-warn/15 px-1.5 py-0.5 text-[10px] font-medium text-warn">
-                      kullanılmıyor
+                      {t("docker.resources.unused")}
                     </span>
                   ) : (
                     <span className="flex flex-wrap gap-x-1.5 gap-y-0.5">
@@ -306,7 +325,7 @@ export function ResourcePanel({
                           key={name}
                           type="button"
                           onClick={() => onOpenContainer(name)}
-                          title={`${name} detayını aç`}
+                          title={t("docker.resources.openDetail", { name })}
                           className="underline decoration-dotted transition-colors hover:text-brand"
                         >
                           {name}
@@ -321,8 +340,8 @@ export function ResourcePanel({
                     {row.detail && (
                       <button
                         type="button"
-                        title="Detay"
-                        aria-label={`${row.label} detayı`}
+                        title={t("docker.resources.detail")}
+                        aria-label={t("docker.resources.detailAria", { label: row.label })}
                         onClick={row.detail}
                         className="rounded border border-line p-1.5 text-subtle transition-colors hover:text-brand"
                       >
@@ -345,12 +364,14 @@ export function ResourcePanel({
                         type="button"
                         title={
                           row.removable
-                            ? "Sil"
+                            ? t("docker.resources.delete")
                             : row.usedBy.length > 0
-                              ? `Silinemez — kullanan: ${row.usedBy.join(", ")}. Önce o container'ları durdurup kaldırman gerekiyor.`
-                              : "Silinemez"
+                              ? t("docker.resources.cannotDeleteUsed", {
+                                  list: row.usedBy.join(", "),
+                                })
+                              : t("docker.resources.cannotDelete")
                         }
-                        aria-label={`${row.label} sil`}
+                        aria-label={t("docker.resources.deleteAria", { label: row.label })}
                         disabled={busy === row.id || !row.removable}
                         onClick={() => void remove(row.id, row.label, row.danger)}
                         className="rounded border border-line p-1.5 text-subtle transition-colors hover:border-danger hover:text-danger disabled:opacity-40"
@@ -369,16 +390,13 @@ export function ResourcePanel({
 
       {kind !== "image" && rows.length === 0 && (
         <p className="rounded-lg border border-dashed border-line bg-surface px-5 py-8 text-center text-sm text-subtle">
-          Kayıt yok.
+          {t("docker.resources.empty")}
         </p>
       )}
 
       {kind === "volume" && (
         <p className="text-[11px] text-warn">
-          Volume silmek VERİ SİLER. &quot;Kullanılmıyor&quot; damgası durmuş
-          container&apos;ları da hesaba katar — yani geçici olarak durdurulmuş bir
-          servisin volume&apos;u burada güvenli görünmez, gerçekten sahipsizdir. Yine de
-          silmeden önce yedeğin olduğundan emin ol.
+          {t("docker.resources.volumeWarning")}
         </p>
       )}
 
@@ -416,12 +434,13 @@ export function ResourcePanel({
 
 /** Kullanılmayan kaynakların özeti — temizlik sekmesinin başında durur. */
 export function UnusedSummary({ unused }: { unused: UnusedReport }) {
+  const t = useT();
   const total = unused.images.length + unused.volumes.length + unused.networks.length;
 
   if (total === 0) {
     return (
       <div className="rounded-lg border border-line bg-surface px-5 py-4 text-sm text-ok">
-        Kullanılmayan image, volume veya ağ yok — ortalık temiz.
+        {t("docker.resources.unusedNone")}
       </div>
     );
   }
@@ -429,20 +448,26 @@ export function UnusedSummary({ unused }: { unused: UnusedReport }) {
   return (
     <div className="rounded-lg border border-line bg-surface">
       <div className="border-b border-line px-5 py-3">
-        <h2 className="font-semibold">Kullanılmayan kaynaklar</h2>
+        <h2 className="font-semibold">{t("docker.resources.unusedTitle")}</h2>
         <p className="mt-0.5 text-xs text-subtle">
-          Hiçbir container&apos;ın (durmuşlar dahil) referans vermediği kaynaklar.
-          Image&apos;lar silinirse ~{formatBytes(unused.reclaimableBytes)} yer açılır.
+          {t("docker.resources.unusedIntro", { size: formatBytes(unused.reclaimableBytes) })}
         </p>
       </div>
 
       <dl className="divide-y divide-line text-sm">
         <UnusedRow
-          label="Image"
+          label={t("docker.resources.unusedImage")}
           items={unused.images.map((image) => `${image.label} (${formatBytes(image.sizeBytes)})`)}
         />
-        <UnusedRow label="Volume" items={unused.volumes.map((volume) => volume.name)} danger />
-        <UnusedRow label="Ağ" items={unused.networks.map((network) => network.name)} />
+        <UnusedRow
+          label={t("docker.resources.unusedVolume")}
+          items={unused.volumes.map((volume) => volume.name)}
+          danger
+        />
+        <UnusedRow
+          label={t("docker.resources.unusedNetwork")}
+          items={unused.networks.map((network) => network.name)}
+        />
       </dl>
     </div>
   );
@@ -487,7 +512,8 @@ function VolumeDialog({
   onCreated: (payload: unknown) => void;
   onClose: () => void;
 }) {
-  const [name, setName] = useState("uygulama-verisi");
+  const t = useT();
+  const [name, setName] = useState(() => t("docker.resources.defaultVolumeName"));
   const [driver, setDriver] = useState("local");
   const [options, setOptions] = useState("");
   const [labels, setLabels] = useState("");
@@ -531,19 +557,19 @@ function VolumeDialog({
       });
       const payload = await response.json();
       if (response.ok) onCreated(payload);
-      else setError(payload.error ?? "Volume oluşturulamadı.");
+      else setError(payload.error ?? t("docker.resources.createVolumeFailed"));
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Modal open title="Yeni volume" onClose={onClose}>
+    <Modal open title={t("docker.resources.newVolume")} onClose={onClose}>
       <div className="space-y-3">
         <label className="block text-sm">
-          <span className="text-subtle">Volume adı</span>
+          <span className="text-subtle">{t("docker.resources.volumeName")}</span>
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -552,7 +578,7 @@ function VolumeDialog({
         </label>
 
         <label className="block text-sm">
-          <span className="text-subtle">Sürücü</span>
+          <span className="text-subtle">{t("docker.resources.driver")}</span>
           <input
             value={driver}
             onChange={(event) => setDriver(event.target.value)}
@@ -562,26 +588,25 @@ function VolumeDialog({
         </label>
 
         <label className="block text-sm">
-          <span className="text-subtle">
-            Sürücü seçenekleri — satır başına `anahtar=değer`
-          </span>
+          <span className="text-subtle">{t("docker.resources.driverOptions")}</span>
           <textarea
             value={options}
             onChange={(event) => setOptions(event.target.value)}
             rows={3}
             spellCheck={false}
-            placeholder={"type=nfs\no=addr=192.168.1.10,rw\ndevice=:/yol/paylasim"}
+            placeholder={t("docker.resources.driverOptionsPlaceholder")}
             className="mt-1 w-full rounded-md border border-line bg-canvas px-3 py-1.5 font-mono text-xs outline-none focus:border-brand"
           />
           <span className="mt-1 block text-[11px] text-subtle">
-            Boş bırakılırsa volume Docker&apos;ın kendi dizininde
-            (<span className="font-mono">/var/lib/docker/volumes</span>) oluşur — çoğu
-            durumda istenen budur.
+            <Rich
+              text={t("docker.resources.driverOptionsHelp")}
+              values={{ path: <span className="font-mono">/var/lib/docker/volumes</span> }}
+            />
           </span>
         </label>
 
         <label className="block text-sm">
-          <span className="text-subtle">Etiketler — satır başına `anahtar=değer`</span>
+          <span className="text-subtle">{t("docker.network.labelsField")}</span>
           <textarea
             value={labels}
             onChange={(event) => setLabels(event.target.value)}
@@ -599,16 +624,16 @@ function VolumeDialog({
             onClick={onClose}
             className="rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand"
           >
-            Vazgeç
+            {t("common.actions.cancel")}
           </button>
           <button
             type="button"
             disabled={!gecerli || busy}
-            title={gecerli ? undefined : "Ad harf ya da rakamla başlamalı (2-64 karakter)."}
+            title={gecerli ? undefined : t("docker.resources.invalidVolumeName")}
             onClick={() => void gonder()}
             className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {busy ? "Oluşturuluyor…" : "Oluştur"}
+            {busy ? t("docker.create.creating") : t("common.actions.create")}
           </button>
         </div>
       </div>

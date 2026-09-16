@@ -1,4 +1,5 @@
 import { guardApi } from "@/lib/auth/api";
+import { serverT } from "@/lib/i18n/runtime";
 import { audit } from "@/lib/auth/audit";
 import { installComposeStack } from "@/lib/appstore/install";
 import { generateCompose, type EnvMode } from "@/lib/compose/generate";
@@ -37,12 +38,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     raw = await provider.inspectRaw(id);
   } catch (error) {
     return Response.json(
-      { error: error instanceof Error ? error.message : "Container okunamadı." },
+      { error: error instanceof Error ? error.message : serverT("api.docker.containerUnreadable") },
       { status: 500 },
     );
   }
 
-  if (!raw) return Response.json({ error: "Container bulunamadı." }, { status: 404 });
+  if (!raw) return Response.json({ error: serverT("api.notFound.container") }, { status: 404 });
 
   /*
     İmajın yapılandırması gürültü ayıklamanın ÖN KOŞULU: hangi env ve komutun
@@ -66,7 +67,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   */
   const { doc } = parseCompose(result.yaml);
   const findings = doc
-    ? checkCompose(doc, { ...EMPTY_CONTEXT, source: result.yaml })
+    ? checkCompose(doc, { ...EMPTY_CONTEXT, source: result.yaml }, serverT)
     : [];
 
   return Response.json({ ...result, findings });
@@ -91,7 +92,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     action: "docker.compose_generate",
     targetType: "container",
     targetId: id,
-    detail: `yığın: ${String(body.name ?? "")} — ${outcome.message}`,
+    detail: serverT("api.docker.stackDetail", { name: String(body.name ?? ""), message: outcome.message }),
     result: outcome.ok ? "ok" : "error",
   });
 

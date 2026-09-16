@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { dockerOverview } from "@/lib/docker/view";
@@ -32,7 +33,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     await getDockerProvider().removeContainer(id, false);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "bilinmeyen hata";
+    const message = error instanceof Error ? error.message : serverT("api.unknownError");
     audit({
       userId: guard.session.user.id,
       username: guard.session.user.username,

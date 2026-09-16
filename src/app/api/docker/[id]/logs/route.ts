@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { getDockerProvider } from "@/lib/providers";
 import { getNumber } from "@/lib/settings";
@@ -50,7 +51,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       } catch (error) {
         if (!controllerSignal.aborted) {
           send("hata", {
-            message: error instanceof Error ? error.message : "log akışı kesildi",
+            message: error instanceof Error ? error.message : serverT("api.docker.logStreamLost"),
           });
         }
       } finally {

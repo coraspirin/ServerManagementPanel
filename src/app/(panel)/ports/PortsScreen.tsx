@@ -23,6 +23,8 @@ import {
 } from "@/lib/security/portmap";
 import type { CachedPortScan } from "@/lib/security/ports";
 import { fold } from "@/lib/text";
+import { useFormat, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 /**
  * M3.17 — port haritası.
@@ -38,17 +40,10 @@ import { fold } from "@/lib/text";
  */
 
 /** Önbellek yaşı — tazeliği gizlenen veri yanlış veriden tehlikelidir (M1.10). */
-function age(updatedAt: number | null): string {
-  if (updatedAt === null) return "hiç taranmadı";
-
-  const seconds = Math.max(0, Math.floor(Date.now() / 1000) - updatedAt);
-  if (seconds < 60) return "az önce";
-  if (seconds < 3600) return `${Math.floor(seconds / 60)} dk önce`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)} sa önce`;
-  return `${Math.floor(seconds / 86400)} gün önce`;
-}
 
 export function PortsScreen({ initial }: { initial: CachedPortScan }) {
+  const t = useT();
+  const f = useFormat();
   const [scan, setScan] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,19 +59,19 @@ export function PortsScreen({ initial }: { initial: CachedPortScan }) {
       if (!response.ok) throw new Error("istek reddedildi");
       setScan((await response.json()) as CachedPortScan);
     } catch {
-      setError("Port taraması başarısız.");
+      setError(t("ports.scanFailed"));
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [t]);
 
   const reserved = useMemo(
     () => reservedPorts(scan.ports, scan.containers),
     [scan.ports, scan.containers],
   );
   const conflicts = useMemo(
-    () => portConflicts(scan.ports, scan.containers),
-    [scan.ports, scan.containers],
+    () => portConflicts(scan.ports, scan.containers, t),
+    [scan.ports, scan.containers, t],
   );
   const published = useMemo(() => dockerPublishedPorts(scan.containers), [scan.containers]);
   const suggestions = useMemo(() => freePorts(reserved, from, to, 10), [reserved, from, to]);
@@ -104,17 +99,23 @@ export function PortsScreen({ initial }: { initial: CachedPortScan }) {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
             <Waypoints className="size-4 text-subtle" aria-hidden />
-            Boş port bul
+            {t("ports.findFree")}
           </h2>
           <span className="text-xs text-subtle">
-            Veri {age(scan.updatedAt)} · {scan.ports.length} soket
+            {t("ports.dataAge", {
+              age:
+                scan.updatedAt === null
+                  ? t("ports.neverScanned")
+                  : f.relative(scan.updatedAt * 1000),
+              count: scan.ports.length,
+            })}
           </span>
         </div>
 
         <div className="space-y-3 px-5 py-4">
           <div className="flex flex-wrap items-end gap-3">
             <label className="text-xs text-subtle">
-              Aralık başı
+              {t("ports.rangeStart")}
               <input
                 type="number"
                 value={from}
@@ -123,7 +124,7 @@ export function PortsScreen({ initial }: { initial: CachedPortScan }) {
               />
             </label>
             <label className="text-xs text-subtle">
-              Aralık sonu
+              {t("ports.rangeEnd")}
               <input
                 type="number"
                 value={to}
@@ -138,17 +139,16 @@ export function PortsScreen({ initial }: { initial: CachedPortScan }) {
               className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
             >
               <RotateCw className={`size-4 ${busy ? "animate-spin" : ""}`} />
-              {scan.updatedAt === null ? "Tara" : "Yenile"}
+              {scan.updatedAt === null ? t("ports.scan") : t("common.actions.refresh")}
             </button>
           </div>
 
           {scan.updatedAt === null ? (
             <p className="text-sm text-subtle">
-              Henüz tarama yapılmadı. Tarama, host ağ ve PID ad alanına bağlanan geçici bir
-              container açar; birkaç saniye sürer.
+              {t("ports.notScanned")}
             </p>
           ) : suggestions.length === 0 ? (
-            <p className="text-sm text-warn">Bu aralıkta boş port yok.</p>
+            <p className="text-sm text-warn">{t("ports.noFree")}</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {suggestions.map((port) => (
@@ -163,9 +163,10 @@ export function PortsScreen({ initial }: { initial: CachedPortScan }) {
           )}
 
           <p className="text-xs text-subtle">
-            Meşgul sayılanlar: şu an dinlenen soketler <strong>ve durmuş container&apos;ların
-            yayınladığı portlar</strong>. Durmuş bir container&apos;ın portu bugün boş görünür ama
-            o container başlatıldığında çakışır.
+            <Rich
+              text={t("ports.busyNote")}
+              values={{ strong: <strong>{t("ports.busyNoteStrong")}</strong> }}
+            />
           </p>
         </div>
       </section>
@@ -175,7 +176,7 @@ export function PortsScreen({ initial }: { initial: CachedPortScan }) {
         <section className="rounded-lg border border-warn/40 bg-warn/5">
           <h2 className="flex items-center gap-2 border-b border-warn/30 px-5 py-3 text-sm font-semibold text-warn">
             <AlertTriangle className="size-4" aria-hidden />
-            Port çakışmaları ({conflicts.length})
+            {t("ports.conflicts", { count: conflicts.length })}
           </h2>
           <ul className="space-y-1.5 px-5 py-3 text-sm">
             {conflicts.map((conflict, index) => (
@@ -193,9 +194,9 @@ export function PortsScreen({ initial }: { initial: CachedPortScan }) {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
             <Server className="size-4 text-subtle" aria-hidden />
-            Portu kim tutuyor
+            {t("ports.owners")}
             <span className="font-normal text-subtle">
-              {rows.length} soket · {exposed.length} tanesi her arayüzde
+              {t("ports.ownersMeta", { count: rows.length, exposed: exposed.length })}
             </span>
           </h2>
           <label className="flex items-center gap-1.5 rounded-md border border-line px-2 py-1">
@@ -203,7 +204,7 @@ export function PortsScreen({ initial }: { initial: CachedPortScan }) {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="port, container, servis…"
+              placeholder={t("ports.search")}
               className="w-44 bg-transparent text-sm outline-none"
             />
           </label>
@@ -213,19 +214,19 @@ export function PortsScreen({ initial }: { initial: CachedPortScan }) {
           <p className="px-5 py-6 text-sm text-danger">{scan.error}</p>
         ) : rows.length === 0 ? (
           <p className="px-5 py-8 text-center text-sm text-subtle">
-            {scan.updatedAt === null ? "Taramak için yukarıdaki düğmeyi kullan." : "Eşleşen port yok."}
+            {scan.updatedAt === null ? t("ports.useButton") : t("ports.noMatch")}
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="rtable w-full min-w-[46rem] text-sm">
               <thead className="border-b border-line text-left text-xs text-subtle">
                 <tr>
-                  <th className="px-5 py-2 font-medium">Port</th>
-                  <th className="px-4 py-2 font-medium">Protokol</th>
-                  <th className="px-4 py-2 font-medium">Adres</th>
-                  <th className="px-4 py-2 font-medium">Sahip</th>
-                  <th className="px-4 py-2 font-medium">Süreç</th>
-                  <th className="px-4 py-2 font-medium">Kapsam</th>
+                  <th className="px-5 py-2 font-medium">{t("proxy.form.port")}</th>
+                  <th className="px-4 py-2 font-medium">{t("ports.col.protocol")}</th>
+                  <th className="px-4 py-2 font-medium">{t("ports.col.address")}</th>
+                  <th className="px-4 py-2 font-medium">{t("ports.col.owner")}</th>
+                  <th className="px-4 py-2 font-medium">{t("ports.col.process")}</th>
+                  <th className="px-4 py-2 font-medium">{t("ports.col.scope")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -246,6 +247,7 @@ export function PortsScreen({ initial }: { initial: CachedPortScan }) {
 }
 
 function OwnerCell({ owner, dockerPublished }: { owner: PortOwner; dockerPublished: boolean }) {
+  const t = useT();
   if (owner.kind === "container") {
     return (
       <span className="flex flex-wrap items-center gap-1.5">
@@ -259,9 +261,9 @@ function OwnerCell({ owner, dockerPublished }: { owner: PortOwner; dockerPublish
         {dockerPublished && (
           <span
             className="rounded border border-warn/40 px-1 text-[10px] text-warn"
-            title="Docker yayınlı port: ufw kuralları bu porta İŞLEMEZ."
+            title={t("ports.publishedTitle")}
           >
-            yayınlı
+            {t("ports.published")}
           </span>
         )}
       </span>
@@ -287,31 +289,32 @@ function PortRow({
   port: ListeningPort;
   dockerPublished: boolean;
 }) {
+  const t = useT();
   return (
     <tr className="hover:bg-line/30">
-      <td data-label="Port" className="px-5 py-1.5 font-mono text-xs tabular-nums">
+      <td data-label={t("proxy.form.port")} className="px-5 py-1.5 font-mono text-xs tabular-nums">
         {port.port}
       </td>
-      <td data-label="Protokol" className="px-4 py-1.5 text-xs text-subtle">{port.protocol}</td>
-      <td data-label="Adres" className="px-4 py-1.5 font-mono text-xs">{port.address}</td>
-      <td data-label="Sahip" className="px-4 py-1.5 text-xs">
+      <td data-label={t("ports.col.protocol")} className="px-4 py-1.5 text-xs text-subtle">{port.protocol}</td>
+      <td data-label={t("ports.col.address")} className="px-4 py-1.5 font-mono text-xs">{port.address}</td>
+      <td data-label={t("ports.col.owner")} className="px-4 py-1.5 text-xs">
         <OwnerCell owner={port.owner} dockerPublished={dockerPublished} />
       </td>
-      <td data-label="Süreç" className="px-4 py-1.5 text-xs text-subtle">
+      <td data-label={t("ports.col.process")} className="px-4 py-1.5 text-xs text-subtle">
         {port.process || "—"}
         {port.pid !== null && <span className="ml-1">({port.pid})</span>}
       </td>
-      <td data-label="Kapsam" className="px-4 py-1.5">
+      <td data-label={t("ports.col.scope")} className="px-4 py-1.5">
         {port.wildcard ? (
           <span className="flex items-center gap-1 text-xs text-warn">
-            <Globe className="size-3" aria-hidden /> her arayüz
+            <Globe className="size-3" aria-hidden /> {t("ports.allInterfaces")}
           </span>
         ) : port.loopback ? (
           <span className="flex items-center gap-1 text-xs text-ok">
-            <Lock className="size-3" aria-hidden /> yalnızca yerel
+            <Lock className="size-3" aria-hidden /> {t("ports.localOnly")}
           </span>
         ) : (
-          <span className="text-xs text-subtle">tek arayüz</span>
+          <span className="text-xs text-subtle">{t("ports.singleInterface")}</span>
         )}
       </td>
     </tr>

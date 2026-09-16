@@ -1,3 +1,5 @@
+import { getT } from "@/lib/i18n/server";
+
 /**
  * Panel sayfaları arası geçiş iskeleti (M3.45).
  *
@@ -17,9 +19,10 @@
  * TIKLANABİLİR olmayı sürdürüyor — geçiş yarıda kesilebiliyor.
  */
 export default function PanelLoading() {
+  const t = getT();
   return (
     <div className="space-y-4" aria-busy="true" aria-live="polite">
-      <span className="sr-only">Sayfa yükleniyor…</span>
+      <span className="sr-only">{t("panelLoading")}</span>
 
       {/* Ölçüler panelin tipik ekranından: başlık şeridi, araç çubuğu ve
           bir liste. Kesin olması gerekmiyor, YERİ tutması gerekiyor —

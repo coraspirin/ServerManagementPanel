@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import {
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const input = parseInput(body);
@@ -69,7 +70,7 @@ export async function PATCH(request: Request) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const id = Number(body.id ?? 0);
@@ -78,7 +79,7 @@ export async function PATCH(request: Request) {
   if (problem) return Response.json({ error: problem }, { status: 400 });
 
   if (!updatePattern(id, input)) {
-    return Response.json({ error: "Kural bulunamadı." }, { status: 404 });
+    return Response.json({ error: serverT("api.notFound.rule") }, { status: 404 });
   }
 
   audit({
@@ -87,7 +88,7 @@ export async function PATCH(request: Request) {
     action: "logs.pattern.update",
     targetType: "log_pattern",
     targetId: String(id),
-    detail: `${input.name} — ${input.enabled ? "açık" : "kapalı"}`,
+    detail: `${input.name} — ${serverT(input.enabled ? "api.on" : "api.off")}`,
     result: "ok",
   });
 
@@ -100,7 +101,7 @@ export async function DELETE(request: Request) {
 
   const id = Number(new URL(request.url).searchParams.get("id") ?? 0);
   if (!deletePattern(id)) {
-    return Response.json({ error: "Kural bulunamadı." }, { status: 404 });
+    return Response.json({ error: serverT("api.notFound.rule") }, { status: 404 });
   }
 
   audit({

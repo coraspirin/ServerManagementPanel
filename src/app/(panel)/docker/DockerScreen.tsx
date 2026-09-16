@@ -15,12 +15,15 @@ import { NetworkPanel } from "@/components/docker/NetworkPanel";
 import { BulkBar } from "@/components/docker/BulkBar";
 import { StackPanel } from "@/components/docker/StackPanel";
 import { TabToolbar, type PruneOption } from "@/components/docker/TabToolbar";
-import { ACTION_LABEL, ContainerRow, type RowHandlers } from "@/components/docker/ContainerRow";
+import { ContainerRow, type RowHandlers } from "@/components/docker/ContainerRow";
 import { ColumnPicker, useColumns, type ColumnDef } from "@/components/docker/ColumnPicker";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import { fold } from "@/lib/text";
 import type { ContainerView, DockerOverview } from "@/lib/docker/types";
 import type { ContainerAction, ResourceKind } from "@/lib/providers/types";
+import { useFormat, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
+import type { MessageKey } from "@/lib/i18n/translate";
 
 type Tab = "containers" | "stack" | ResourceKind | "cleanup";
 
@@ -31,13 +34,13 @@ type Tab = "containers" | "stack" | ResourceKind | "cleanup";
  * değil — ve Türkçe kesme işaretiyle çoğullanan yabancı sözcükler sekme
  * çubuğunda yer harcamaktan başka bir şey yapmıyordu.
  */
-const TABS: { id: Tab; label: string }[] = [
-  { id: "containers", label: "Container" },
-  { id: "stack", label: "Stack" },
-  { id: "image", label: "Image" },
-  { id: "volume", label: "Volume" },
-  { id: "network", label: "Ağ" },
-  { id: "cleanup", label: "Temizlik" },
+const TABS: { id: Tab; labelKey: MessageKey }[] = [
+  { id: "containers", labelKey: "docker.tabs.containers" },
+  { id: "stack", labelKey: "docker.tabs.stack" },
+  { id: "image", labelKey: "docker.tabs.image" },
+  { id: "volume", labelKey: "docker.tabs.volume" },
+  { id: "network", labelKey: "docker.tabs.network" },
+  { id: "cleanup", labelKey: "docker.tabs.cleanup" },
 ];
 
 /**
@@ -57,18 +60,22 @@ type SortKey = "name" | "state" | "cpu" | "memory" | "restarts";
  */
 type TableColumn = ColumnDef & { head: string; sort?: SortKey };
 
-const COLUMNS: TableColumn[] = [
-  { id: "image", label: "Image", head: "Image" },
-  { id: "state", label: "Durum", head: "Durum", sort: "state" },
-  { id: "uptime", label: "Çalışma süresi", head: "Çalışma", fixed: false },
-  { id: "cpu", label: "CPU", head: "CPU", sort: "cpu" },
-  { id: "memory", label: "Bellek", head: "Bellek", sort: "memory" },
-  { id: "net", label: "Ağ G/Ç", head: "Ağ G/Ç", fixed: false },
-  { id: "disk", label: "Disk G/Ç", head: "Disk G/Ç", fixed: false },
-  { id: "ip", label: "IP", head: "IP", fixed: false },
-  { id: "ports", label: "Portlar", head: "Portlar" },
-  { id: "restarts", label: "Yeniden başlatma", head: "Restart", sort: "restarts" },
-  { id: "stack", label: "Yığın", head: "Yığın", fixed: false },
+/**
+ * Sütunların yapısı. Seçicideki adı `docker.columns.<id>.label`, tablo başlığı
+ * `docker.columns.<id>.head` — ikisi de dil dosyasında.
+ */
+const COLUMN_DEFS: { id: string; fixed?: boolean; sort?: SortKey }[] = [
+  { id: "image" },
+  { id: "state", sort: "state" },
+  { id: "uptime", fixed: false },
+  { id: "cpu", sort: "cpu" },
+  { id: "memory", sort: "memory" },
+  { id: "net", fixed: false },
+  { id: "disk", fixed: false },
+  { id: "ip", fixed: false },
+  { id: "ports" },
+  { id: "restarts", sort: "restarts" },
+  { id: "stack", fixed: false },
 ];
 
 function readCsrfToken(): string {
@@ -111,6 +118,8 @@ export function DockerScreen({
   /** `host.service` — yığın compose komutları bu izne bağlı (M3.37). */
   canService: boolean;
 }) {
+  const t = useT();
+  const f = useFormat();
   const [data, setData] = useState(initial);
   const [tab, setTab] = useState<Tab>(() => normalizeTab(initialTab));
   const [showStopped, setShowStopped] = useState(showStoppedDefault);
@@ -182,6 +191,17 @@ export function DockerScreen({
     toggleSelect: secimiDegistir,
   };
 
+  // Sütun adları dile bağlı; dizi yalnızca dil değişince yeniden kuruluyor —
+  // `useColumns` diziyi bağımlılık olarak kullanıyor.
+  const COLUMNS = useMemo<TableColumn[]>(
+    () =>
+      COLUMN_DEFS.map((column) => ({
+        ...column,
+        label: t(`docker.columns.${column.id}.label` as MessageKey),
+        head: t(`docker.columns.${column.id}.head` as MessageKey),
+      })),
+    [t],
+  );
   const { visible, toggle, reset } = useColumns(COLUMNS);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
     key: "name",
@@ -194,10 +214,14 @@ export function DockerScreen({
     );
 
   async function runAction(container: ContainerView, action: ContainerAction) {
-    if (
-      NEEDS_CONFIRM.includes(action) &&
-      !confirm(`"${container.name}" ${ACTION_LABEL[action].toLocaleLowerCase("tr")}ılsın mı?`)
-    ) {
+    // Onay cümlesi eylem başına AYRI anahtar: eskiden eylem adına ek
+    // yapıştırılıyordu ve "Durdur" → "durdurılsın mı?" gibi bozuk Türkçe
+    // çıkıyordu; başka dillerde bu yöntem hiç işlemezdi.
+    const onay =
+      action === "stop"
+        ? t("docker.screen.confirmStop", { name: container.name })
+        : t("docker.screen.confirmRestart", { name: container.name });
+    if (NEEDS_CONFIRM.includes(action) && !confirm(onay)) {
       return;
     }
 
@@ -210,10 +234,10 @@ export function DockerScreen({
         body: JSON.stringify({ action }),
       });
       const payload = (await response.json()) as DockerOverview & { error?: string };
-      if (!response.ok) setActionError(payload.error ?? "İşlem başarısız.");
+      if (!response.ok) setActionError(payload.error ?? t("common.errors.actionFailed"));
       else setData(payload);
     } catch {
-      setActionError("Sunucuya ulaşılamadı.");
+      setActionError(t("common.errors.network"));
     } finally {
       setBusyId(null);
     }
@@ -228,15 +252,7 @@ export function DockerScreen({
    * değil.
    */
   async function removeContainer(container: ContainerView) {
-    if (
-      !confirm(
-        `"${container.name}" SİLİNSİN mi?
-
-` +
-          "Container kaydı kaldırılır; volume'lardaki veri ve image etkilenmez. " +
-          "Bu işlem geri alınamaz.",
-      )
-    ) {
+    if (!confirm(t("docker.screen.confirmRemove", { name: container.name }))) {
       return;
     }
 
@@ -248,10 +264,10 @@ export function DockerScreen({
         headers: { "content-type": "application/json", [CSRF_HEADER]: readCsrfToken() },
       });
       const payload = (await response.json()) as DockerOverview & { error?: string };
-      if (!response.ok) setActionError(payload.error ?? "Container silinemedi.");
+      if (!response.ok) setActionError(payload.error ?? t("docker.screen.removeFailed"));
       else setData(payload);
     } catch {
-      setActionError("Sunucuya ulaşılamadı.");
+      setActionError(t("common.errors.network"));
     } finally {
       setBusyId(null);
     }
@@ -314,12 +330,12 @@ export function DockerScreen({
         case "restarts":
           return ((a.restartCount ?? -1) - (b.restartCount ?? -1)) * yon;
         case "state":
-          return a.state.localeCompare(b.state, "tr") * yon;
+          return f.compare(a.state, b.state) * yon;
         default:
-          return a.name.localeCompare(b.name, "tr") * yon;
+          return f.compare(a.name, b.name) * yon;
       }
     });
-  }, [filtered, sort]);
+  }, [filtered, sort, f]);
 
   /**
    * Toplu işleme girebilecek satırlar: YALNIZCA süzülmüş ve kilitsiz olanlar.
@@ -356,27 +372,27 @@ export function DockerScreen({
   */
   const pruneOption: PruneOption | undefined =
     tab === "image"
-      ? { scope: "images-unused", label: "Kullanılmayan image'lar silinsin.", danger: false }
+      ? { scope: "images-unused", label: t("docker.screen.pruneImages"), danger: false }
       : tab === "volume"
         ? {
             scope: "volumes",
-            label: "Hiçbir container'ın kullanmadığı volume'ler silinsin.",
+            label: t("docker.screen.pruneVolumes"),
             danger: true,
           }
         : tab === "network"
-          ? { scope: "networks", label: "Kullanılmayan ağlar silinsin.", danger: false }
+          ? { scope: "networks", label: t("docker.screen.pruneNetworks"), danger: false }
           : undefined;
 
   const aramaIpucu =
     tab === "stack"
-      ? "Yığın ara…"
+      ? t("docker.screen.search.stack")
       : tab === "image"
-        ? "Image ara…"
+        ? t("docker.screen.search.image")
         : tab === "volume"
-          ? "Volume ara…"
+          ? t("docker.screen.search.volume")
           : tab === "network"
-            ? "Ağ ara…"
-            : "Container ara…";
+            ? t("docker.screen.search.network")
+            : t("docker.screen.search.containers");
 
   /** Yenile: kaynak listeleri kendi uçlarından, Stack kendi jetonundan tazelenir. */
   const yenile = () => {
@@ -392,10 +408,13 @@ export function DockerScreen({
       <div className="rounded-lg border border-danger/40 bg-surface px-5 py-4">
         <p className="text-sm text-danger">{data.error}</p>
         <p className="mt-2 text-xs text-subtle">
-          Panel container&apos;ı <code className="font-mono">/var/run/docker.sock</code>{" "}
-          soketine erişebiliyor mu? Root olmayan kullanıcıyla çalıştığı için host&apos;un
-          docker grubuna eklenmiş olması gerekir —{" "}
-          <code className="font-mono">DOCKER_GID</code> ayarı (bkz. DEPLOY.md).
+          <Rich
+            text={t("docker.screen.socketHint")}
+            values={{
+              sock: <code className="font-mono">/var/run/docker.sock</code>,
+              gid: <code className="font-mono">DOCKER_GID</code>,
+            }}
+          />
         </p>
       </div>
     );
@@ -407,15 +426,19 @@ export function DockerScreen({
         <div className="flex gap-2 rounded-lg border border-danger/40 bg-surface px-5 py-4">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden />
           <div className="text-sm">
-            <p className="font-medium text-danger">Sürekli yeniden başlayan container var</p>
+            <p className="font-medium text-danger">{t("docker.screen.loopsTitle")}</p>
             <p className="mt-0.5 text-xs text-subtle">
-              {loops
-                .map(
-                  (c) =>
-                    `${c.name}: son ${c.restartLoopWindowMinutes} dk içinde ${c.restartsInWindow} kez`,
-                )
-                .join(" · ")}
-              . Listede &quot;çalışıyor&quot; görünseler bile hizmet vermiyor olabilirler.
+              {t("docker.screen.loopsNote", {
+                list: loops
+                  .map((c) =>
+                    t("docker.screen.loopItem", {
+                      name: c.name,
+                      minutes: c.restartLoopWindowMinutes ?? 0,
+                      count: c.restartsInWindow ?? 0,
+                    }),
+                  )
+                  .join(" · "),
+              })}
             </p>
           </div>
         </div>
@@ -435,7 +458,7 @@ export function DockerScreen({
             onClick={() => setEkleSonucu(null)}
             className="shrink-0 text-xs text-subtle underline transition-colors hover:text-ink"
           >
-            kapat
+            {t("docker.screen.dismiss")}
           </button>
         </div>
       )}
@@ -453,7 +476,7 @@ export function DockerScreen({
                 : "border-transparent text-subtle hover:text-ink"
             }`}
           >
-            {entry.label}
+            {t(entry.labelKey)}
           </button>
         ))}
       </div>
@@ -481,7 +504,7 @@ export function DockerScreen({
                   className="inline-flex items-center gap-1 rounded-md border border-brand bg-brand/10 px-2 py-1.5 text-xs font-medium text-brand transition-colors hover:bg-brand/20"
                 >
                   <Plus className="size-3.5" aria-hidden />
-                  Konteyner Ekle
+                  {t("docker.screen.addContainer")}
                 </button>
               )}
               <label className="flex items-center gap-1.5 text-xs text-subtle">
@@ -491,7 +514,7 @@ export function DockerScreen({
                   onChange={(e) => setShowStopped(e.target.checked)}
                   className="size-3.5 accent-[var(--brand)]"
                 />
-                durmuşları göster
+                {t("docker.screen.showStopped")}
               </label>
               <ColumnPicker
                 columns={COLUMNS}
@@ -500,7 +523,7 @@ export function DockerScreen({
                 onReset={reset}
               />
               <span className="ml-auto text-xs font-medium">
-                {running} / {data.containers.length} çalışıyor
+                {t("docker.screen.runningCount", { running, total: data.containers.length })}
               </span>
             </>
           )}
@@ -514,7 +537,7 @@ export function DockerScreen({
       )}
 
       {tab !== "containers" && tab !== "stack" && !resources.data && !resources.error && (
-        <p className="text-sm text-subtle">yükleniyor…</p>
+        <p className="text-sm text-subtle">{t("common.states.loadingInline")}</p>
       )}
 
       {tab === "network" && resources.data && (
@@ -530,7 +553,7 @@ export function DockerScreen({
                   : "border-line text-subtle hover:text-ink"
               }`}
             >
-              {entry === "harita" ? "Harita" : "Liste"}
+              {entry === "harita" ? t("docker.screen.viewMap") : t("docker.screen.viewList")}
             </button>
           ))}
         </div>
@@ -612,7 +635,7 @@ export function DockerScreen({
 
       {filtered.length === 0 ? (
         <p className="rounded-lg border border-dashed border-line bg-surface px-5 py-8 text-center text-sm text-subtle">
-          Eşleşen container yok.
+          {t("docker.screen.noMatch")}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-line bg-surface">
@@ -636,13 +659,13 @@ export function DockerScreen({
                         }
                       }}
                       onChange={hepsiniSec}
-                      aria-label="Görünen container'ların hepsini seç"
-                      title="Yalnızca listede görünenleri seçer"
+                      aria-label={t("docker.screen.selectAllAria")}
+                      title={t("docker.screen.selectAllTitle")}
                       className="size-3.5 accent-[var(--brand)]"
                     />
                   </th>
                 )}
-                <SortHeader label="Container" active={sort} id="name" onSort={sirala} />
+                <SortHeader label={t("docker.screen.colContainer")} active={sort} id="name" onSort={sirala} />
 
                 {/*
                   Başlıklar COLUMNS'tan ÜRETİLİYOR, tek tek yazılmıyor.
@@ -675,7 +698,7 @@ export function DockerScreen({
                 )}
 
                 <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium">
-                  İşlemler
+                  {t("docker.screen.colActions")}
                 </th>
               </tr>
             </thead>
@@ -700,9 +723,7 @@ export function DockerScreen({
       )}
 
       <p className="text-[11px] text-subtle">
-        Kaynak kullanımı ayarlardaki aralıkta ölçülür ve metrik hattına yazılır; tablo
-        canlı Docker çağrısı yapmaz. Her başlat/durdur/yeniden başlat işlemi
-        audit&apos;e düşer.
+        {t("docker.screen.footer")}
       </p>
         </>
       )}

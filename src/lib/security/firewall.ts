@@ -1,6 +1,7 @@
 import "server-only";
 
 import { callHelper, helperConfigured } from "@/lib/host/helper";
+import { serverT } from "@/lib/i18n/runtime";
 import {
   parseUfwStatus,
   parseUfwVerbose,
@@ -48,11 +49,13 @@ const ACTIONS_LINE =
   "ufw.status\\nufw.status_verbose\\nufw.allow\\nufw.deny\\nufw.delete\\n" +
   "ufw.enable\\nufw.disable\\nufw.default\\nufw.logging\\nufw.app_list\\n";
 
-const ALLOW_HINT =
-  "host'ta root olarak:\n" + `printf '${ACTIONS_LINE}' >> /etc/panel-helper/allow.conf`;
+// Fonksiyon, sabit değil: metin istek anındaki dilde üretilmeli.
+const allowHint = () =>
+  `${serverT("firewallLib.asRoot")}\n` +
+  `printf '${ACTIONS_LINE}' >> /etc/panel-helper/allow.conf`;
 
-const UPGRADE_HINT =
-  "host'ta root olarak (helper'ın kendisi güncellenmeli, sonra izin listesi):\n" +
+const upgradeHint = () =>
+  `${serverT("firewallLib.upgradeFirst")}\n` +
   "cd /home/coraspirin/docker/server-panel && install -m 755 host-helper/panel-helper.py /usr/local/lib/panel-helper/panel-helper.py && systemctl restart panel-helper\n" +
   `printf '${ACTIONS_LINE}' >> /etc/panel-helper/allow.conf`;
 
@@ -65,18 +68,16 @@ const UPGRADE_HINT =
  * komuta yönlendirirdi.
  */
 function classify(error: string): { message: string; hint: string } | null {
-  if (error.includes("bilinmeyen eylem")) {
+  if (error.includes("bilinmeyen eylem")) { // i18n-ignore
     return {
-      message:
-        "Host'taki helper bu eylemi tanımıyor — panel güncellendi ama helper eski sürümde kaldı.",
-      hint: UPGRADE_HINT,
+      message: serverT("firewallLib.helperOutdated"),
+      hint: upgradeHint(),
     };
   }
-  if (error.includes("izinli değil")) {
+  if (error.includes("izinli değil")) { // i18n-ignore — host-helper protokol metni
     return {
-      message:
-        "host-helper izin listesinde ufw eylemleri yok. Bu, kural OLMADIĞI anlamına GELMEZ — panel yalnızca göremiyor.",
-      hint: ALLOW_HINT,
+      message: serverT("firewallLib.notAllowed"),
+      hint: allowHint(),
     };
   }
   return null;
@@ -90,7 +91,7 @@ export async function firewallState(): Promise<FirewallState> {
       rules: [],
       defaults: null,
       logging: null,
-      message: "host-helper kurulmamış; güvenlik duvarı panelden okunamıyor.",
+      message: serverT("firewallLib.noHelper"),
       setupHint: null,
     };
   }
@@ -105,7 +106,7 @@ export async function firewallState(): Promise<FirewallState> {
       rules: [],
       defaults: null,
       logging: null,
-      message: classified?.message ?? response.error ?? "ufw okunamadı",
+      message: classified?.message ?? response.error ?? serverT("firewallLib.readFailed"),
       setupHint: classified?.hint ?? null,
     };
   }
@@ -127,8 +128,8 @@ export async function firewallState(): Promise<FirewallState> {
     defaults: extra.defaults,
     logging: extra.logging,
     message: parsed.active
-      ? `Güvenlik duvarı etkin — ${parsed.rules.length} kural.`
-      : "Güvenlik duvarı KAPALI. Kurallar tanımlı olsa bile uygulanmıyor.",
+      ? serverT("firewallLib.active", { count: parsed.rules.length })
+      : serverT("firewallLib.inactive"),
     setupHint: null,
   };
 }
@@ -158,7 +159,11 @@ export async function addRule(
     actor,
   );
 
-  return outcome(response, "Kural eklendi.", "Kural eklenemedi.");
+  return outcome(
+    response,
+    serverT("firewallLib.ruleAdded"),
+    serverT("firewallLib.ruleAddFailed"),
+  );
 }
 
 export async function deleteRule(
@@ -166,7 +171,11 @@ export async function deleteRule(
   actor: { username: string; userId: number },
 ): Promise<RuleOutcome> {
   const response = await callHelper("ufw.delete", { number: String(number) }, actor);
-  return outcome(response, "Kural silindi.", "Kural silinemedi.");
+  return outcome(
+    response,
+    serverT("firewallLib.ruleDeleted"),
+    serverT("firewallLib.ruleDeleteFailed"),
+  );
 }
 
 export async function setEnabled(
@@ -176,8 +185,8 @@ export async function setEnabled(
   const response = await callHelper(enabled ? "ufw.enable" : "ufw.disable", {}, actor);
   return outcome(
     response,
-    enabled ? "Güvenlik duvarı etkinleştirildi." : "Güvenlik duvarı kapatıldı.",
-    "İşlem yapılamadı.",
+    enabled ? serverT("firewallLib.enabled") : serverT("firewallLib.disabled"),
+    serverT("firewallLib.actionFailed"),
   );
 }
 
@@ -187,5 +196,9 @@ export async function setDefaultPolicy(
   actor: { username: string; userId: number },
 ): Promise<RuleOutcome> {
   const response = await callHelper("ufw.default", { policy, direction }, actor);
-  return outcome(response, "Varsayılan politika değişti.", "Politika değiştirilemedi.");
+  return outcome(
+    response,
+    serverT("firewallLib.policyChanged"),
+    serverT("firewallLib.policyFailed"),
+  );
 }

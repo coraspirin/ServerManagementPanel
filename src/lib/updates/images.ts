@@ -1,5 +1,6 @@
 import { updatable } from "@/lib/docker/labels";
 import { panelContainerName } from "@/lib/host/self";
+import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 import { getBool, getString } from "@/lib/settings";
 import { suggestUpgrade, type Bump } from "./version";
@@ -155,16 +156,16 @@ async function withRegistryAuth(
   if (response.status === 401) {
     const challenge = response.headers.get("www-authenticate");
     const tokenUrl = challenge ? tokenUrlFrom(challenge) : null;
-    if (!tokenUrl) throw new Error("kayıt defteri kimlik doğrulama adresi okunamadı");
+    if (!tokenUrl) throw new Error(serverT("imageUpdates.authUrl"));
 
     const tokenResponse = await fetch(tokenUrl, {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    if (!tokenResponse.ok) throw new Error("token alınamadı (özel image olabilir)");
+    if (!tokenResponse.ok) throw new Error(serverT("imageUpdates.tokenPrivate"));
 
     const payload = (await tokenResponse.json()) as { token?: string; access_token?: string };
     const token = payload.token ?? payload.access_token;
-    if (!token) throw new Error("token alınamadı");
+    if (!token) throw new Error(serverT("imageUpdates.token"));
 
     headers.authorization = `Bearer ${token}`;
     response = await send();
@@ -185,7 +186,7 @@ async function remoteTags(ref: Ref): Promise<string[]> {
   const url = `https://${ref.registry}/v2/${ref.repository}/tags/list?n=${TAG_PAGE_SIZE}`;
   const response = await withRegistryAuth(url, "GET", "application/json");
 
-  if (!response.ok) throw new Error(`etiket listesi alınamadı (${response.status})`);
+  if (!response.ok) throw new Error(serverT("imageUpdates.tags", { status: response.status }));
 
   const payload = (await response.json()) as { tags?: string[] | null };
   return payload.tags ?? [];
@@ -195,7 +196,7 @@ async function remoteDigest(ref: Ref): Promise<string> {
   const url = `https://${ref.registry}/v2/${ref.repository}/manifests/${encodeURIComponent(ref.tag)}`;
   const response = await withRegistryAuth(url, "HEAD", MANIFEST_ACCEPT);
 
-  if (response.status === 404) throw new Error("etiket kayıt defterinde bulunamadı");
+  if (response.status === 404) throw new Error(serverT("imageUpdates.tagMissing"));
   if (response.status === 401 || response.status === 403) {
     // Docker Hub var olmayan bir depo için 404 değil 401 döner. Bu yüzden
     // "yetkin yok" ile "böyle bir depo yok" ayırt edilemiyor — ikisini birden
@@ -203,12 +204,12 @@ async function remoteDigest(ref: Ref): Promise<string> {
     // iyi. Yerel derlenmiş image'lar (kendi Dockerfile'ın) hep buraya düşer:
     // Docker onlara da bir digest atadığı için "kayıt defterinde yok"
     // olduklarını önceden anlamanın yolu yok.
-    throw new Error("kayıt defterinde yok ya da özel depo — yerel derlenmiş olabilir");
+    throw new Error(serverT("imageUpdates.notInRegistry"));
   }
-  if (!response.ok) throw new Error(`kayıt defteri ${response.status}`);
+  if (!response.ok) throw new Error(serverT("imageUpdates.registryStatus", { status: response.status }));
 
   const digest = response.headers.get("docker-content-digest");
-  if (!digest) throw new Error("kayıt defteri özet başlığı döndürmedi");
+  if (!digest) throw new Error(serverT("imageUpdates.noDigest"));
   return digest;
 }
 
@@ -250,9 +251,7 @@ function updateEligibility(
   if (name === panelContainerName()) {
     return {
       updatable: false,
-      skipReason:
-        "panelin kendi container'ı — otomatik güncelleme paneli kendi ortasında " +
-        "durdurur; elle güncelle",
+      skipReason: serverT("imageUpdates.skipSelf"),
     };
   }
 
@@ -260,7 +259,7 @@ function updateEligibility(
   if (caddy && name === caddy) {
     return {
       updatable: false,
-      skipReason: "reverse proxy — panele giden yolu kesebilir; elle güncelle",
+      skipReason: serverT("imageUpdates.skipProxy"),
     };
   }
 
@@ -309,7 +308,7 @@ export async function checkImageUpdates(): Promise<ImageUpdate[]> {
         localDigest: null,
         remoteDigest: null,
         updateAvailable: null,
-        note: "referans bir etikete işaret etmiyor (digest ile sabitlenmiş)",
+        note: serverT("imageUpdates.digestPinned"),
         newerTag: null,
         ...eligibility,
       });
@@ -324,7 +323,7 @@ export async function checkImageUpdates(): Promise<ImageUpdate[]> {
         localDigest: null,
         remoteDigest: null,
         updateAvailable: null,
-        note: "yerel derlenmiş image — kayıt defterinde karşılığı yok",
+        note: serverT("imageUpdates.localBuild"),
         newerTag: null,
         ...eligibility,
       });

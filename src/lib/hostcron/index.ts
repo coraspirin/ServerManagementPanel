@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { audit } from "@/lib/auth/audit";
 import { elevatedList, elevatedRead } from "@/lib/files/elevated";
@@ -161,7 +162,7 @@ export async function readCron(): Promise<CronState> {
         const text = await readFile(`/var/spool/cron/crontabs/${file.name}`);
         if (!text) continue;
         entries.push(
-          ...parseCronFile(text, `kullanıcı: ${file.name}`, false, false),
+          ...parseCronFile(text, serverT("hostcronLib.userSource", { name: file.name }), false, false),
         );
       }
     }
@@ -170,7 +171,7 @@ export async function readCron(): Promise<CronState> {
   } catch (error) {
     return {
       entries: [],
-      error: error instanceof Error ? error.message : "cron okunamadı",
+      error: error instanceof Error ? error.message : serverT("hostcronLib.readFailed"),
     };
   }
 }
@@ -190,23 +191,23 @@ const USER_RE = /^[a-z_][a-z0-9_-]{0,31}$/;
 export function validateCron(input: CronInput): string | null {
   if (!NAME_RE.test(input.name)) {
     // cron.d nokta ve alt çizgi içeren dosya adlarını çalıştırmaz.
-    return "Görev adı küçük harf, rakam ve tire içerebilir (nokta ve alt çizgi cron tarafından yok sayılır).";
+    return serverT("hostcronLib.nameFormat");
   }
-  if (!USER_RE.test(input.user)) return "Geçersiz kullanıcı adı.";
+  if (!USER_RE.test(input.user)) return serverT("hostcronLib.invalidUser");
 
   const fields = input.schedule.trim().split(/\s+/);
   const isSpecial = fields.length === 1 && SPECIALS.has(fields[0]);
   if (!isSpecial) {
-    if (fields.length !== 5) return "Zamanlama 5 alan olmalı (ör. 0 3 * * *) ya da @daily gibi bir kısayol.";
+    if (fields.length !== 5) return serverT("hostcronLib.scheduleFields");
     if (!fields.every((field) => /^[\d*,/-]+$/.test(field))) {
-      return "Zamanlama alanları yalnızca rakam, * , - / içerebilir.";
+      return serverT("hostcronLib.scheduleChars");
     }
   }
 
   const command = input.command.trim();
-  if (command.length === 0) return "Komut boş olamaz.";
+  if (command.length === 0) return serverT("hostcronLib.commandEmpty");
   // Yeni satır, dosyaya ikinci bir görev satırı sokmanın yolu olurdu.
-  if (/[\n\r]/.test(command)) return "Komut tek satır olmalı.";
+  if (/[\n\r]/.test(command)) return serverT("hostcronLib.commandOneLine");
 
   return null;
 }
@@ -214,8 +215,8 @@ export function validateCron(input: CronInput): string | null {
 /** Panelin yazdığı dosyanın içeriği. Başlık, kimin yazdığını açık ediyor. */
 function renderFile(input: CronInput): string {
   const lines = [
-    "# Bu dosyayı Sunucu Paneli yazdı (M3.9).",
-    "# Elle düzenlenebilir ama panelden kaydedilirse ÜZERİNE YAZILIR.",
+    serverT("hostcronLib.fileHeader1"),
+    serverT("hostcronLib.fileHeader2"),
     "SHELL=/bin/sh",
     "PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin",
     "",
@@ -245,7 +246,7 @@ export async function saveCron(
   if (problem) return { ok: false, message: problem };
 
   const image = await panelImage();
-  if (!image) return { ok: false, message: "Panel imajı belirlenemedi." };
+  if (!image) return { ok: false, message: serverT("stacks.noPanelImage") };
 
   const fileName = `${PANEL_PREFIX}${input.name}`;
 
@@ -280,8 +281,8 @@ export async function saveCron(
   return {
     ok,
     message: ok
-      ? `${fileName} kaydedildi. cron dosyayı bir dakika içinde okur.`
-      : result.output.slice(0, 400) || "Yazılamadı.",
+      ? serverT("hostcronLib.saved", { file: fileName })
+      : result.output.slice(0, 400) || serverT("hostcronLib.writeFailed"),
   };
 }
 
@@ -289,10 +290,10 @@ export async function deleteCron(
   name: string,
   actor: { username: string; userId: number },
 ): Promise<CronOutcome> {
-  if (!NAME_RE.test(name)) return { ok: false, message: "Geçersiz görev adı." };
+  if (!NAME_RE.test(name)) return { ok: false, message: serverT("hostcronLib.invalidName") };
 
   const image = await panelImage();
-  if (!image) return { ok: false, message: "Panel imajı belirlenemedi." };
+  if (!image) return { ok: false, message: serverT("stacks.noPanelImage") };
 
   const fileName = `${PANEL_PREFIX}${name}`;
 
@@ -340,7 +341,7 @@ export function forbiddenCommand(command: string): string | null {
 
   const lower = command.toLowerCase();
   for (const pattern of patterns) {
-    if (lower.includes(pattern)) return `Komut "${pattern}" içeriyor ve ayarlarda yasaklı.`;
+    if (lower.includes(pattern)) return serverT("hostcronLib.forbidden", { pattern });
   }
   return null;
 }

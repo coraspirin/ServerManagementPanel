@@ -9,6 +9,8 @@ import { HostUserSelect } from "@/components/settings/HostUserSelect";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import { describeCron } from "@/lib/cron/friendly";
 import type { CronEntry, CronState } from "@/lib/hostcron";
+import { useDict, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 /**
  * M3.9 — host zamanlanmış görevleri.
@@ -33,6 +35,7 @@ const EMPTY = {
 };
 
 export function HostCronScreen({ initial }: { initial: CronState }) {
+  const t = useT();
   const [state, setState] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,13 +59,13 @@ export function HostCronScreen({ initial }: { initial: CronState }) {
       };
       if (data.entries) setState({ entries: data.entries, error: data.error ?? null });
       if (!response.ok) {
-        setError(data.error ?? data.message ?? "İşlem başarısız.");
+        setError(data.error ?? data.message ?? t("common.errors.actionFailed"));
         return false;
       }
-      setNotice(data.message ?? "Tamam.");
+      setNotice(data.message ?? t("docker.installer.ok"));
       return true;
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
       return false;
     } finally {
       setBusy(false);
@@ -86,12 +89,22 @@ export function HostCronScreen({ initial }: { initial: CronState }) {
     <div className="space-y-4">
       <p className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-brand/5 px-4 py-2.5 text-xs text-subtle">
         <CalendarClock className="size-4 shrink-0 text-brand" aria-hidden />
-        Bunlar <strong>host&apos;un cron görevleri</strong> — panel silinse bile çalışırlar.
-        Panelin kendi arka plan turları için{" "}
-        <Link href="/jobs" className="inline-flex items-center gap-1 text-brand hover:underline">
-          <ListChecks className="size-3.5" /> Panel İşleri
-        </Link>{" "}
-        ekranına bak.
+        <span>
+          <Rich
+            text={t("hostcron.intro")}
+            values={{
+              strong: <strong>{t("hostcron.introStrong")}</strong>,
+              jobs: (
+                <Link
+                  href="/jobs"
+                  className="inline-flex items-center gap-1 text-brand hover:underline"
+                >
+                  <ListChecks className="size-3.5" /> {t("hostcron.panelJobs")}
+                </Link>
+              ),
+            }}
+          />
+        </span>
       </p>
 
       {error && (
@@ -107,7 +120,7 @@ export function HostCronScreen({ initial }: { initial: CronState }) {
       <section className="rounded-lg border border-line bg-surface">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
           <h2 className="text-sm font-semibold">
-            Panelin yönettiği görevler
+            {t("hostcron.managed")}
             <span className="ml-2 font-normal text-subtle">{managed.length}</span>
           </h2>
           <div className="flex gap-2">
@@ -115,7 +128,7 @@ export function HostCronScreen({ initial }: { initial: CronState }) {
               type="button"
               onClick={() => void reload()}
               disabled={busy}
-              title="Yenile"
+              title={t("common.actions.refresh")}
               className="rounded-md border border-line p-1.5 text-subtle transition-colors hover:text-ink disabled:opacity-50"
             >
               <RotateCw className={`size-4 ${busy ? "animate-spin" : ""}`} />
@@ -125,16 +138,17 @@ export function HostCronScreen({ initial }: { initial: CronState }) {
               onClick={() => setDraft({ ...EMPTY })}
               className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
             >
-              <Plus className="size-4" /> Görev ekle
+              <Plus className="size-4" /> {t("hostcron.add")}
             </button>
           </div>
         </div>
 
         {managed.length === 0 ? (
           <p className="px-5 py-8 text-center text-sm text-subtle">
-            Panel henüz bir görev tanımlamadı. Eklenen görevler{" "}
-            <code>/etc/cron.d/panel-*</code> dosyalarına yazılır; sistemin kendi cron
-            dosyalarına dokunulmaz.
+            <Rich
+              text={t("hostcron.managedEmpty")}
+              values={{ path: <code>/etc/cron.d/panel-*</code> }}
+            />
           </p>
         ) : (
           <ul className="divide-y divide-line">
@@ -155,7 +169,7 @@ export function HostCronScreen({ initial }: { initial: CronState }) {
                 }
                 onDelete={() => {
                   const name = entry.source.replace("/etc/cron.d/panel-", "");
-                  if (confirm(`"${name}" görevi silinsin mi?`)) {
+                  if (confirm(t("hostcron.confirmDelete", { name }))) {
                     void send({ action: "delete", name });
                   }
                 }}
@@ -169,19 +183,17 @@ export function HostCronScreen({ initial }: { initial: CronState }) {
         <div className="flex items-center gap-2 border-b border-line px-5 py-3">
           <Lock className="size-4 text-subtle" aria-hidden />
           <h2 className="text-sm font-semibold">
-            Sistemin görevleri
+            {t("hostcron.system")}
             <span className="ml-2 font-normal text-subtle">
-              {readOnly.length} · salt-okunur
+              {t("hostcron.readOnlyCount", { count: readOnly.length })}
             </span>
           </h2>
         </div>
         <p className="border-b border-line px-5 py-2 text-xs text-subtle">
-          Bunlar sistem ve kullanıcı crontab&apos;larından geliyor. Panel bunları
-          değiştirmiyor: yanlışlıkla <code>/etc/crontab</code>&apos;ı bozmak, sunucunun bakım
-          görevlerini sessizce durdurmak olurdu.
+          <Rich text={t("hostcron.systemIntro")} values={{ path: <code>/etc/crontab</code> }} />
         </p>
         {readOnly.length === 0 ? (
-          <p className="px-5 py-6 text-center text-sm text-subtle">Görev bulunamadı.</p>
+          <p className="px-5 py-6 text-center text-sm text-subtle">{t("hostcron.none")}</p>
         ) : (
           <ul className="divide-y divide-line">
             {readOnly.map((entry) => (
@@ -215,6 +227,8 @@ function Row({
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
+  const t = useT();
+  const dict = useDict();
   return (
     <li className="flex flex-wrap items-center gap-3 px-5 py-2.5">
       <div className="min-w-0 flex-1">
@@ -226,16 +240,18 @@ function Row({
             bakacak biri için bir tık uzakta, ekranı kalabalıklaştırmadan.
           */}
           <span className="text-xs font-medium text-brand" title={entry.schedule}>
-            {describeCron(entry.schedule)}
+            {describeCron(entry.schedule, t, dict)}
           </span>
           {!entry.enabled && (
-            <span className="rounded border border-line px-1 text-[10px] text-subtle">kapalı</span>
+            <span className="rounded border border-line px-1 text-[10px] text-subtle">
+              {t("hostcron.disabled")}
+            </span>
           )}
         </div>
         <code className="block truncate font-mono text-xs">{entry.command}</code>
         <span className="text-[11px] text-subtle">
           {entry.source}
-          {entry.user && ` · kullanıcı: ${entry.user}`}
+          {entry.user && t("hostcron.user", { user: entry.user })}
           {entry.comment && ` · ${entry.comment}`}
         </span>
       </div>
@@ -245,7 +261,7 @@ function Row({
           onClick={onEdit}
           className="rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand"
         >
-          Düzenle
+          {t("common.actions.edit")}
         </button>
       )}
       {onDelete && (
@@ -273,30 +289,35 @@ function CronModal({
   onClose: () => void;
   onSubmit: (payload: Record<string, unknown>) => void;
 }) {
+  const t = useT();
   const [form, setForm] = useState(draft);
   const inputClass =
     "mt-1 w-full rounded-md border border-line bg-canvas px-3 py-1.5 text-sm outline-none focus:border-brand";
 
   return (
-    <Modal open={draft !== null} title="Host görevi" onClose={onClose} wide>
+    <Modal open={draft !== null} title={t("hostcron.modalTitle")} onClose={onClose} wide>
       {form && (
         <div className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm">
-              <span className="text-subtle">Görev adı</span>
+              <span className="text-subtle">{t("hostcron.name")}</span>
               <input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="gece-temizlik"
+                placeholder={t("hostcron.namePlaceholder")}
                 className={`${inputClass} font-mono`}
               />
               <span className="mt-1 block text-xs text-subtle">
-                Dosya <code>/etc/cron.d/panel-{form.name || "ad"}</code> olarak yazılır. Nokta ve
-                alt çizgi kullanma — cron o dosyaları yok sayar.
+                <Rich
+                  text={t("hostcron.nameHelp")}
+                  values={{
+                    path: <code>/etc/cron.d/panel-{form.name || t("hostcron.nameFallback")}</code>,
+                  }}
+                />
               </span>
             </label>
             <label className="block text-sm">
-              <span className="text-subtle">Çalıştıran kullanıcı</span>
+              <span className="text-subtle">{t("hostcron.runAs")}</span>
               <div className="mt-1">
                 {/*
                   Host'un /etc/passwd listesinden seçiliyor (M3.45). Elle
@@ -313,7 +334,7 @@ function CronModal({
           </div>
 
           <div className="block text-sm">
-            <span className="text-subtle">Zamanlama</span>
+            <span className="text-subtle">{t("hostcron.schedule")}</span>
             {/*
               Ayarlardaki sıklık seçicisinin aynısı (M3.45). Burada ham cron
               kutusu vardı ve kullanıcı "günde/haftada/ayda/yılda, şu saatte"
@@ -332,7 +353,7 @@ function CronModal({
           </div>
 
           <label className="block text-sm">
-            <span className="text-subtle">Komut</span>
+            <span className="text-subtle">{t("hostcron.command")}</span>
             <input
               value={form.command}
               onChange={(e) => setForm({ ...form, command: e.target.value })}
@@ -340,12 +361,12 @@ function CronModal({
               className={`${inputClass} font-mono`}
             />
             <span className="mt-1 block text-xs text-subtle">
-              Tam yol kullan: cron&apos;un PATH&apos;i kabuğunkinden dardır.
+              {t("hostcron.commandHelp")}
             </span>
           </label>
 
           <label className="block text-sm">
-            <span className="text-subtle">Açıklama</span>
+            <span className="text-subtle">{t("users.roles.description")}</span>
             <input
               value={form.comment}
               onChange={(e) => setForm({ ...form, comment: e.target.value })}
@@ -360,7 +381,7 @@ function CronModal({
               onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
               className="size-4 accent-[var(--brand)]"
             />
-            Etkin (kapalıyken satır yorum olarak yazılır, silinmez)
+            {t("hostcron.enabled")}
           </label>
 
           <div className="flex justify-end gap-2 pt-2">
@@ -369,7 +390,7 @@ function CronModal({
               onClick={onClose}
               className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
             >
-              Vazgeç
+              {t("common.actions.cancel")}
             </button>
             <button
               type="button"
@@ -377,7 +398,7 @@ function CronModal({
               onClick={() => onSubmit({ ...form })}
               className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              Kaydet
+              {t("common.actions.save")}
             </button>
           </div>
         </div>

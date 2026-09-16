@@ -4,6 +4,8 @@ import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 
 import type { ContainerDetail } from "@/lib/providers/types";
+import { useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 import { Row, Section } from "./shared";
 import { useListeningPorts } from "./useDetail";
@@ -17,6 +19,7 @@ import { useListeningPorts } from "./useDetail";
  * fark edilmeyecek bir yerde duruyordu.
  */
 export function NetworkTab({ detail }: { detail: ContainerDetail }) {
+  const t = useT();
   const listening = useListeningPorts(true);
 
   // `network_mode: container:<id>` ağ yığınını başka bir container'a devreder;
@@ -31,31 +34,31 @@ export function NetworkTab({ detail }: { detail: ContainerDetail }) {
         <div className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
           <span>
-            <strong>Bu container hiçbir ağa bağlı değil.</strong> Ne başka container&apos;lara
-            ulaşabilir, ne de yayınlanmış portları çalışır. Genellikle{" "}
-            <code className="font-mono">compose up</code> sırasında port ayrılamadığı için
-            yarım kalmış bir başlatmanın izidir.
+            <strong>{t("docker.networkTab.noNetworkTitle")}</strong>{" "}
+            <Rich
+              text={t("docker.networkTab.noNetwork")}
+              values={{ cmd: <code className="font-mono">compose up</code> }}
+            />
           </span>
         </div>
       )}
 
-      <Section title="Ağ">
+      <Section title={t("docker.networkTab.title")}>
         <dl className="space-y-1.5 text-sm">
-          <Row label="Ağ modu">
+          <Row label={t("docker.networkTab.mode")}>
             <span className="font-mono text-[11px]">{detail.networkMode}</span>
             {host && (
               <span className="ml-2 text-xs text-warn">
-                host ağı — port eşlemesi yok, container host&apos;un portlarını doğrudan
-                kullanır
+                {t("docker.networkTab.hostMode")}
               </span>
             )}
             {paylasilan && (
               <span className="ml-2 text-xs text-warn">
-                ağ yığını başka bir container&apos;a ait
+                {t("docker.networkTab.sharedMode")}
               </span>
             )}
           </Row>
-          <Row label="Ağlar">
+          <Row label={t("docker.networkTab.networks")}>
             {detail.networks.length === 0 ? (
               <span className="text-subtle">—</span>
             ) : (
@@ -79,11 +82,10 @@ export function NetworkTab({ detail }: { detail: ContainerDetail }) {
         </dl>
       </Section>
 
-      <Section title="Portlar">
+      <Section title={t("docker.networkTab.ports")}>
         {detail.ports.length === 0 ? (
           <p className="text-sm text-subtle">
-            Yayınlanmış port yok. Bu container&apos;a yalnızca aynı Docker ağındaki diğer
-            container&apos;lar erişebilir.
+            {t("docker.networkTab.noPorts")}
           </p>
         ) : (
           <>
@@ -104,14 +106,14 @@ export function NetworkTab({ detail }: { detail: ContainerDetail }) {
                     </span>
 
                     {!yayinli && (
-                      <span className="text-xs text-subtle">yalnızca ağ içinde</span>
+                      <span className="text-xs text-subtle">{t("docker.networkTab.internalOnly")}</span>
                     )}
 
                     {yayinli && listening !== null && (
                       <span className={`text-xs ${dinleniyor ? "text-ok" : "text-warn"}`}>
                         {dinleniyor
-                          ? "host'ta dinleniyor"
-                          : "son taramada host'ta dinlenmiyordu"}
+                          ? t("docker.networkTab.listening")
+                          : t("docker.networkTab.notListening")}
                       </span>
                     )}
                   </li>
@@ -120,14 +122,16 @@ export function NetworkTab({ detail }: { detail: ContainerDetail }) {
             </ul>
 
             <p className="mt-3 text-xs text-subtle">
-              Docker yayınlanmış portlarda <strong>ufw&apos;yi atlar</strong> — güvenlik duvarı
-              kuralı bu portları kapatmaz.{" "}
+              <Rich
+                text={t("docker.networkTab.ufwNote")}
+                values={{ strong: <strong>{t("docker.networkTab.ufwBypass")}</strong> }}
+              />{" "}
               <Link href="/firewall" className="underline underline-offset-2">
-                Güvenlik duvarı
+                {t("docker.networkTab.firewall")}
               </Link>{" "}
               ·{" "}
               <Link href="/ports" className="underline underline-offset-2">
-                Port haritası
+                {t("docker.networkTab.portMap")}
               </Link>
             </p>
           </>

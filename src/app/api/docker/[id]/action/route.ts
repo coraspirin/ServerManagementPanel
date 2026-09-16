@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { dockerOverview } from "@/lib/docker/view";
@@ -25,18 +26,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     body = (await request.json()) as { action?: unknown };
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const action = body.action as ContainerAction;
   if (!ALLOWED.includes(action)) {
-    return Response.json({ error: "geçersiz aksiyon" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidAction") }, { status: 400 });
   }
 
   try {
     await getDockerProvider().action(id, action, getNumber("docker.stop_timeout"));
   } catch (error) {
-    const message = error instanceof Error ? error.message : "bilinmeyen hata";
+    const message = error instanceof Error ? error.message : serverT("api.unknownError");
     audit({
       userId: guard.session.user.id,
       username: guard.session.user.username,

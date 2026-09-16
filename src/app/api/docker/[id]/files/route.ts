@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import {
   listContainerPath,
@@ -58,8 +59,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return Response.json(
       {
         error:
-          `Dosya ${Math.round(limit / 1024)} KB sınırını aşıyor ` +
-          `(${result.entry.data.length} bayt). Sınırı Ayarlar → Dosyalar'dan değiştirebilirsin.`,
+          serverT("api.docker.fileTooLarge", { limit: Math.round(limit / 1024), size: result.entry.data.length }),
       },
       { status: 413 },
     );
@@ -103,18 +103,17 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   try {
     body = (await request.json()) as typeof body;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const target = normalizePath(String(body.path ?? ""));
-  if (target === "/") return Response.json({ error: "yol gerekli" }, { status: 400 });
+  if (target === "/") return Response.json({ error: serverT("api.pathRequired") }, { status: 400 });
 
   if (writeBlocked(target)) {
     return Response.json(
       {
         error:
-          `${target} yazmaya kapalı. /proc, /sys ve /dev çekirdeğin sanal dosya ` +
-          "sistemleri; oraya yazmak dosya düzenlemek değil, çalışan çekirdeğe komut vermektir.",
+          serverT("api.docker.writeBlocked", { target }),
       },
       { status: 403 },
     );
@@ -126,7 +125,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   } else if (typeof body.text === "string") {
     data = Buffer.from(body.text, "utf8");
   } else {
-    return Response.json({ error: "içerik gerekli" }, { status: 400 });
+    return Response.json({ error: serverT("api.contentRequired") }, { status: 400 });
   }
 
   const result = await writeContainerFile(

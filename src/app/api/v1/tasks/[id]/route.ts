@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardV1 } from "@/lib/apiv1/guard";
 import { apiError, apiOk } from "@/lib/apiv1/respond";
 import { findTask } from "@/lib/apiv1/tasks";
@@ -25,10 +26,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (!task) {
     return apiError(
       "not_found",
-      "görev kaydı bulunamadı — panel yeniden başlatılmış olabilir. " +
-        "Bu, işlemin iptal edildiği anlamına GELMEZ: imaj çekme host tarafında " +
-        "devam etmiş ve tamamlanmış olabilir. Container'ın güncel durumunu " +
-        "GET /api/v1/containers/{id} ile doğrulayın.",
+      serverT("api.v1.taskMissing", { path: "GET /api/v1/containers/{id}" }),
     );
   }
 

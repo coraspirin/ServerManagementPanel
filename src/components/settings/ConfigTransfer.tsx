@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import { Download, Upload } from "lucide-react";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
+import { useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 /**
  * M2.13 — yapılandırma dışa/içe aktarımı.
@@ -18,6 +20,7 @@ function readCsrfToken(): string {
 }
 
 export function ConfigTransfer() {
+  const t = useT();
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -41,7 +44,7 @@ export function ConfigTransfer() {
 
       if (!response.ok) {
         setFailed(true);
-        setMessage(data.error ?? "İçe aktarım başarısız.");
+        setMessage(data.error ?? t("configTransfer.importFailed"));
         return;
       }
 
@@ -51,13 +54,13 @@ export function ConfigTransfer() {
         .join(" · ");
 
       setMessage(
-        `Uygulandı — ${summary || "değişiklik yok"}.` +
-          (data.skipped?.length ? ` Atlanan: ${data.skipped.length}.` : "") +
-          " Gizli değerler (token/parola) dosyada taşınmaz; onları yeniden girmen gerekir.",
+        t("configTransfer.applied", { summary: summary || t("configTransfer.noChanges") }) +
+          (data.skipped?.length ? t("configTransfer.skipped", { count: data.skipped.length }) : "") +
+          t("configTransfer.secretsNote"),
       );
     } catch {
       setFailed(true);
-      setMessage("Sunucuya ulaşılamadı.");
+      setMessage(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
@@ -65,17 +68,18 @@ export function ConfigTransfer() {
 
   return (
     <section className="rounded-lg border border-line bg-surface p-5">
-      <h2 className="text-sm font-semibold">Yapılandırma aktarımı</h2>
+      <h2 className="text-sm font-semibold">{t("configTransfer.title")}</h2>
       <p className="mt-1 text-xs leading-snug text-subtle">
-        Ayarlar, uygulama kartları, bookmark&apos;lar, monitörler, yayınlanan adresler ve
-        Wake-on-LAN kayıtları tek bir JSON dosyasına yazılır.{" "}
-        <strong>Gizli değerler dışarıda:</strong> şifreli veriler MASTER_KEY&apos;e bağlı ve o
-        anahtar yedeğe girmiyor, dolayısıyla başka bir kurulumda çözülemezdi. Dosya bu yüzden düz
-        metin olarak paylaşılabilir.
+        <Rich
+          text={t("configTransfer.intro")}
+          values={{ strong: <strong>{t("configTransfer.secretsOut")}</strong> }}
+        />
       </p>
       <p className="mt-2 text-xs text-subtle">
-        İçe aktarım <strong>birleştirir</strong>: aynı ada sahip kayıt güncellenir, olmayan
-        eklenir, dosyada olmayan hiçbir şey silinmez.
+        <Rich
+          text={t("configTransfer.merge")}
+          values={{ strong: <strong>{t("configTransfer.mergeWord")}</strong> }}
+        />
       </p>
 
       <div className="mt-3 flex flex-wrap gap-2">
@@ -84,7 +88,7 @@ export function ConfigTransfer() {
           download
           className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand"
         >
-          <Download className="size-4" /> Dışa aktar
+          <Download className="size-4" /> {t("configTransfer.export")}
         </a>
 
         <input
@@ -104,7 +108,8 @@ export function ConfigTransfer() {
           disabled={busy}
           className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
         >
-          <Upload className="size-4" /> {busy ? "Uygulanıyor…" : "İçe aktar"}
+          <Upload className="size-4" />{" "}
+          {busy ? t("configTransfer.applying") : t("configTransfer.import")}
         </button>
       </div>
 

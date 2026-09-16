@@ -5,6 +5,7 @@ import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { dataDir } from "@/lib/db/client";
+import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 import type { PruneScope } from "@/lib/providers/types";
 import { hostRoot } from "./paths";
@@ -115,9 +116,8 @@ export async function scanCleanup(): Promise<{ items: CleanupItem[]; totalBytes:
     if (dangling.length > 0) {
       items.push({
         id: "docker-dangling",
-        label: "Sarkan Docker image'ları",
-        description:
-          "Etiketi kalmamış ara katmanlar. Hiçbir container kullanmıyor; silmek güvenli.",
+        label: serverT("cleanup.item.dockerDangling.label"),
+        description: serverT("cleanup.item.dockerDangling.description"),
         bytes: dangling.reduce((sum, image) => sum + image.sizeBytes, 0),
         count: dangling.length,
         risk: "safe",
@@ -130,9 +130,8 @@ export async function scanCleanup(): Promise<{ items: CleanupItem[]; totalBytes:
     if (unused.length > 0) {
       items.push({
         id: "docker-unused-images",
-        label: "Kullanılmayan image'lar",
-        description:
-          "Hiçbir container'ın kullanmadığı etiketli image'lar. Geri almak yeniden indirmek demek — bağlantı yoksa can sıkıcı olur.",
+        label: serverT("cleanup.item.dockerUnusedImages.label"),
+        description: serverT("cleanup.item.dockerUnusedImages.description"),
         bytes: unused.reduce((sum, image) => sum + image.sizeBytes, 0),
         count: unused.length,
         risk: "caution",
@@ -145,11 +144,15 @@ export async function scanCleanup(): Promise<{ items: CleanupItem[]; totalBytes:
     if (stopped.length > 0) {
       items.push({
         id: "docker-containers",
-        label: "Durmuş container'lar",
-        description: `Çalışmayan ${stopped.length} container: ${stopped
-          .slice(0, 5)
-          .map((container) => container.name)
-          .join(", ")}${stopped.length > 5 ? "…" : ""}`,
+        label: serverT("cleanup.item.dockerContainers.label"),
+        description: serverT("cleanup.item.dockerContainers.description", {
+          count: stopped.length,
+          names:
+            stopped
+              .slice(0, 5)
+              .map((container) => container.name)
+              .join(", ") + (stopped.length > 5 ? "…" : ""),
+        }),
         bytes: 0,
         count: stopped.length,
         risk: "caution",
@@ -162,9 +165,8 @@ export async function scanCleanup(): Promise<{ items: CleanupItem[]; totalBytes:
     if (orphanVolumes.length > 0) {
       items.push({
         id: "docker-volumes",
-        label: "Kullanılmayan volume'lar",
-        description:
-          "DİKKAT: volume'lar VERİ tutar. Bir container geçici olarak durdurulmuşsa volume'ü 'kullanılmıyor' görünür ve silmek o verinin sonu olur.",
+        label: serverT("cleanup.item.dockerVolumes.label"),
+        description: serverT("cleanup.item.dockerVolumes.description"),
         bytes: 0,
         count: orphanVolumes.length,
         risk: "destructive",
@@ -175,8 +177,8 @@ export async function scanCleanup(): Promise<{ items: CleanupItem[]; totalBytes:
 
     items.push({
       id: "docker-build-cache",
-      label: "Docker derleme önbelleği",
-      description: "Image derlerken biriken ara katmanlar. Silmek yalnızca sonraki derlemeyi yavaşlatır.",
+      label: serverT("cleanup.item.dockerBuildCache.label"),
+      description: serverT("cleanup.item.dockerBuildCache.description"),
       bytes: 0,
       count: 0,
       risk: "safe",
@@ -193,8 +195,8 @@ export async function scanCleanup(): Promise<{ items: CleanupItem[]; totalBytes:
   if (apt.bytes > 0) {
     items.push({
       id: "apt-cache",
-      label: "apt paket önbelleği",
-      description: "İndirilmiş .deb dosyaları. Paketler zaten kurulu; bunlar yalnızca kopya.",
+      label: serverT("cleanup.item.aptCache.label"),
+      description: serverT("cleanup.item.aptCache.description"),
       bytes: apt.bytes,
       count: apt.count,
       risk: "safe",
@@ -207,9 +209,8 @@ export async function scanCleanup(): Promise<{ items: CleanupItem[]; totalBytes:
   if (journal.bytes > 0) {
     items.push({
       id: "journald",
-      label: "journald arşivi",
-      description:
-        "Sistem günlükleri. Buradan silmek yerine 'journalctl --vacuum-size' tercih edilmeli — panel bu kalemi yalnızca RAPORLAR, silmez.",
+      label: serverT("cleanup.item.journald.label"),
+      description: serverT("cleanup.item.journald.description"),
       bytes: journal.bytes,
       count: journal.count,
       risk: "destructive",
@@ -222,8 +223,8 @@ export async function scanCleanup(): Promise<{ items: CleanupItem[]; totalBytes:
   if (rotated.bytes > 0) {
     items.push({
       id: "rotated-logs",
-      label: "Döndürülmüş log dosyaları",
-      description: "Sıkıştırılmış eski loglar (.gz, .1, .old). Güncel loglara dokunulmaz.",
+      label: serverT("cleanup.item.rotatedLogs.label"),
+      description: serverT("cleanup.item.rotatedLogs.description"),
       bytes: rotated.bytes,
       count: rotated.count,
       risk: "safe",
@@ -236,9 +237,8 @@ export async function scanCleanup(): Promise<{ items: CleanupItem[]; totalBytes:
   if (migrationBackups.bytes > 0) {
     items.push({
       id: "panel-migration-backups",
-      label: "Panel migration yedekleri",
-      description:
-        "Şema güncellemelerinden önce alınan kopyalar. En yeni 3 tanesi her zaman korunur; bu kalem yalnızca fazlasını gösterir.",
+      label: serverT("cleanup.item.panelMigrationBackups.label"),
+      description: serverT("cleanup.item.panelMigrationBackups.description"),
       bytes: migrationBackups.bytes,
       count: migrationBackups.count,
       risk: "safe",
@@ -317,13 +317,13 @@ export type CleanupResult = { ok: boolean; message: string; reclaimedBytes: numb
 export async function runCleanup(itemId: string): Promise<CleanupResult> {
   const { items } = await scanCleanup();
   const item = items.find((entry) => entry.id === itemId);
-  if (!item) return { ok: false, message: "Bu kalem artık listede yok.", reclaimedBytes: 0 };
+  if (!item) return { ok: false, message: serverT("cleanup.notInList"), reclaimedBytes: 0 };
 
   if (item.kind === "docker" && item.scope) {
     const result = await getDockerProvider().prune(item.scope);
     return {
       ok: true,
-      message: `${result.removed} öğe silindi.`,
+      message: serverT("cleanup.removed", { count: result.removed }),
       reclaimedBytes: result.reclaimedBytes,
     };
   }
@@ -333,7 +333,7 @@ export async function runCleanup(itemId: string): Promise<CleanupResult> {
     for (const file of backups.files) rmSync(file, { force: true });
     return {
       ok: true,
-      message: `${backups.count} eski migration yedeği silindi.`,
+      message: serverT("cleanup.migrationRemoved", { count: backups.count }),
       reclaimedBytes: backups.bytes,
     };
   }
@@ -341,14 +341,13 @@ export async function runCleanup(itemId: string): Promise<CleanupResult> {
   if (itemId === "journald") {
     return {
       ok: false,
-      message:
-        "journald arşivi panelden silinmiyor. Host'ta: sudo journalctl --vacuum-size=200M",
+      message: serverT("cleanup.journaldManual"),
       reclaimedBytes: 0,
     };
   }
 
   if (!item.paths || item.paths.length === 0) {
-    return { ok: false, message: "Silinecek dosya bulunamadı.", reclaimedBytes: 0 };
+    return { ok: false, message: serverT("cleanup.nothingToDelete"), reclaimedBytes: 0 };
   }
 
   /*
@@ -383,8 +382,8 @@ export async function runCleanup(itemId: string): Promise<CleanupResult> {
   return {
     ok: failures.length === 0,
     message:
-      `${removed} dosya silindi.` +
-      (failures.length > 0 ? ` Silinemeyen: ${failures.slice(0, 2).join(" · ")}` : ""),
+      serverT("cleanup.removedFiles", { count: removed }) +
+      (failures.length > 0 ? ` ${serverT("cleanup.failedSome", { names: failures.slice(0, 2).join(" · ") })}` : ""),
     reclaimedBytes: failures.length === 0 ? reclaimed : 0,
   };
 }

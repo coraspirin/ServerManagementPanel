@@ -37,8 +37,8 @@ export const settingGroups: SettingGroupDef[] = [
 /**
  * Bildirim seviyeleri — kanal başına en düşük seviye filtresi (M1.3).
  *
- * Yalnızca DEĞERLER: her seçeneğin ekranda görünen adı sözlükte
- * (`settings.items.<anahtar>.options`).
+ * Yalnızca DEĞERLER: her seçeneğin ekranda görünen adı dil dosyalarında
+ * (`settings.items.<anahtar>.options.<değer>`).
  */
 export const LEVEL_OPTIONS = ["info", "warning", "critical"];
 
@@ -96,9 +96,8 @@ export const settingDefs: SettingDef[] = [
   {
     key: "general.language",
     group: "general",
-    type: "enum",
+    type: "locale",
     default: "tr",
-    options: ["tr", "en"],
   },
   {
     key: "general.theme",

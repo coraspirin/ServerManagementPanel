@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardV1 } from "@/lib/apiv1/guard";
 import { apiError, apiOk } from "@/lib/apiv1/respond";
 import { METRIC_META, RANGES, isRangeId } from "@/lib/metrics/catalog";
@@ -31,20 +32,20 @@ export async function GET(request: Request) {
   if (requested.length === 0) {
     return apiError(
       "invalid_request",
-      `metrics parametresi gerekli. Geçerli metrikler: ${Object.keys(METRIC_META).join(", ")}`,
+      serverT("api.v1.metricsRequired", { values: Object.keys(METRIC_META).join(", ") }),
     );
   }
 
   const unknown = requested.filter((metric) => !(metric in METRIC_META));
   if (unknown.length > 0) {
-    return apiError("invalid_request", `bilinmeyen metrik: ${unknown.join(", ")}`);
+    return apiError("invalid_request", serverT("api.unknownMetric", { names: unknown.join(", ") }));
   }
 
   const range = params.get("range") ?? "24h";
   if (!isRangeId(range)) {
     return apiError(
       "invalid_request",
-      `geçersiz aralık. Geçerli değerler: ${RANGES.map((entry) => entry.id).join(", ")}`,
+      serverT("api.v1.invalidValue", { field: serverT("api.v1.field.range"), values: RANGES.map((entry) => entry.id).join(", ") }),
     );
   }
 

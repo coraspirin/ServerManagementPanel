@@ -5,6 +5,7 @@ import { Bookmark as BookmarkIcon, Pencil, Plus, Trash2 } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import type { Bookmark, BookmarkGroup } from "@/lib/home/bookmarks";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * M2.7 — bookmark yönetimi.
@@ -27,6 +28,7 @@ const inputClass =
   "w-full rounded-md border border-line bg-canvas px-2.5 py-1.5 text-sm outline-none focus:border-brand";
 
 export function BookmarkManager({ initialGroups }: { initialGroups: BookmarkGroup[] }) {
+  const t = useT();
   const [groups, setGroups] = useState(initialGroups);
   const [modal, setModal] = useState<{ open: boolean; form: Form }>({ open: false, form: EMPTY });
   const [busy, setBusy] = useState(false);
@@ -43,13 +45,13 @@ export function BookmarkManager({ initialGroups }: { initialGroups: BookmarkGrou
       });
       const data = (await response.json()) as { error?: string; groups?: BookmarkGroup[] };
       if (!response.ok) {
-        setError(data.error ?? "İşlem başarısız.");
+        setError(data.error ?? t("common.errors.actionFailed"));
         return false;
       }
       if (data.groups) setGroups(data.groups);
       return true;
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
       return false;
     } finally {
       setBusy(false);
@@ -66,7 +68,7 @@ export function BookmarkManager({ initialGroups }: { initialGroups: BookmarkGrou
   }
 
   async function remove(bookmark: Bookmark) {
-    if (!confirm(`"${bookmark.title}" bağlantısı silinsin mi?`)) return;
+    if (!confirm(t("home.bookmarks.confirmDelete", { name: bookmark.title }))) return;
     await send(`/api/bookmarks/${bookmark.id}`, "DELETE");
   }
 
@@ -77,7 +79,7 @@ export function BookmarkManager({ initialGroups }: { initialGroups: BookmarkGrou
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <BookmarkIcon className="size-4 text-subtle" aria-hidden />
-          Bağlantılar
+          {t("home.bookmarks.title")}
           <span className="font-normal text-subtle">{total}</span>
         </h2>
         <button
@@ -88,23 +90,22 @@ export function BookmarkManager({ initialGroups }: { initialGroups: BookmarkGrou
           }}
           className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand"
         >
-          <Plus className="size-4" /> Bağlantı ekle
+          <Plus className="size-4" /> {t("home.bookmarks.add")}
         </button>
       </div>
 
       <p className="mt-1 text-xs text-subtle">
-        Ana sayfada kartların altında gösterilir. Durumu izlenmez, logosu olmaz —
-        yalnızca bir bağlantı.
+        {t("home.bookmarks.intro")}
       </p>
 
       {total === 0 ? (
-        <p className="mt-4 text-sm text-subtle">Henüz bağlantı yok.</p>
+        <p className="mt-4 text-sm text-subtle">{t("home.bookmarks.empty")}</p>
       ) : (
         <div className="mt-4 space-y-4">
           {groups.map((group) => (
             <div key={group.name || "diger"}>
               <h3 className="mb-1.5 text-xs font-semibold text-subtle">
-                {group.name || "Grupsuz"}
+                {group.name || t("home.bookmarks.ungrouped")}
               </h3>
               <ul className="divide-y divide-line rounded-md border border-line">
                 {group.items.map((item) => (
@@ -129,7 +130,7 @@ export function BookmarkManager({ initialGroups }: { initialGroups: BookmarkGrou
                           },
                         });
                       }}
-                      aria-label={`${item.title} bağlantısını düzenle`}
+                      aria-label={t("home.bookmarks.editAria", { name: item.title })}
                       className="rounded p-1 text-subtle transition-colors hover:text-ink"
                     >
                       <Pencil className="size-3.5" />
@@ -137,7 +138,7 @@ export function BookmarkManager({ initialGroups }: { initialGroups: BookmarkGrou
                     <button
                       type="button"
                       onClick={() => void remove(item)}
-                      aria-label={`${item.title} bağlantısını sil`}
+                      aria-label={t("home.bookmarks.deleteAria", { name: item.title })}
                       className="rounded p-1 text-subtle transition-colors hover:text-danger"
                     >
                       <Trash2 className="size-3.5" />
@@ -152,7 +153,7 @@ export function BookmarkManager({ initialGroups }: { initialGroups: BookmarkGrou
 
       <Modal
         open={modal.open}
-        title={modal.form.id === null ? "Bağlantı ekle" : "Bağlantıyı düzenle"}
+        title={modal.form.id === null ? t("home.bookmarks.add") : t("home.bookmarks.edit")}
         onClose={() => setModal((m) => ({ ...m, open: false }))}
       >
         <form
@@ -163,7 +164,7 @@ export function BookmarkManager({ initialGroups }: { initialGroups: BookmarkGrou
           }}
         >
           <label className="block">
-            <span className="text-xs font-medium">Başlık</span>
+            <span className="text-xs font-medium">{t("home.bookmarks.titleField")}</span>
             <input
               type="text"
               value={modal.form.title}
@@ -176,7 +177,7 @@ export function BookmarkManager({ initialGroups }: { initialGroups: BookmarkGrou
           </label>
 
           <label className="block">
-            <span className="text-xs font-medium">Adres</span>
+            <span className="text-xs font-medium">{t("appForm.address")}</span>
             <input
               type="text"
               value={modal.form.url}
@@ -189,14 +190,14 @@ export function BookmarkManager({ initialGroups }: { initialGroups: BookmarkGrou
           </label>
 
           <label className="block">
-            <span className="text-xs font-medium">Grup (isteğe bağlı)</span>
+            <span className="text-xs font-medium">{t("home.bookmarks.group")}</span>
             <input
               type="text"
               value={modal.form.group}
               onChange={(e) =>
                 setModal((m) => ({ ...m, form: { ...m.form, group: e.target.value } }))
               }
-              placeholder="Sık Kullanılan"
+              placeholder={t("home.bookmarks.groupPlaceholder")}
               className={`mt-1 ${inputClass}`}
             />
           </label>
@@ -209,14 +210,14 @@ export function BookmarkManager({ initialGroups }: { initialGroups: BookmarkGrou
               onClick={() => setModal((m) => ({ ...m, open: false }))}
               className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
             >
-              Vazgeç
+              {t("common.actions.cancel")}
             </button>
             <button
               type="submit"
               disabled={busy}
               className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
             >
-              {busy ? "Kaydediliyor…" : "Kaydet"}
+              {busy ? t("common.states.saving") : t("common.actions.save")}
             </button>
           </div>
         </form>

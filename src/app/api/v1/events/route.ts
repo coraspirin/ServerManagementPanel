@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardV1 } from "@/lib/apiv1/guard";
 import {
   LIMITS,
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
   if (severityRaw !== null && !(severityRaw in SEVERITY_ORDER)) {
     return apiError(
       "invalid_request",
-      `geçersiz seviye. Geçerli değerler: ${Object.keys(SEVERITY_ORDER).join(", ")}`,
+      serverT("api.v1.invalidValue", { field: serverT("api.v1.field.severity"), values: Object.keys(SEVERITY_ORDER).join(", ") }),
     );
   }
 
@@ -38,10 +39,10 @@ export async function GET(request: Request) {
   // Bozuk imleç SESSİZCE BAŞA DÖNMEZ: istemcinin hatasını gizlemek, "neden
   // hep aynı sayfayı görüyorum" sorusunu hata ayıklanamaz hâle getirirdi.
   if (cursorRaw !== null && cursor === undefined) {
-    return apiError("invalid_request", "geçersiz cursor");
+    return apiError("invalid_request", serverT("api.v1.invalidCursor"));
   }
   if (cursorRaw !== null && cursor === null) {
-    return apiError("invalid_request", "geçersiz cursor");
+    return apiError("invalid_request", serverT("api.v1.invalidCursor"));
   }
 
   const rows = listEventsPage({

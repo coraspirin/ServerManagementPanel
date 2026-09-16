@@ -24,6 +24,7 @@
 import { isMap, isScalar, type Document, type YAMLMap } from "yaml";
 
 import { readAllServices, serviceNames, type ServiceConfig } from "./service.ts";
+import type { TFunction } from "../i18n/translate.ts";
 
 export type CheckSeverity = "engel" | "uyari" | "oneri";
 
@@ -155,7 +156,7 @@ function yolSatiri(
  * Yığın içinde birden çok servis aynı host portunu isterse, `compose up`
  * çalışırken patlar. Bunu kurulumdan önce söylemek gerekiyor.
  */
-function iciCakismalar(services: ServiceConfig[]): Finding[] {
+function iciCakismalar(services: ServiceConfig[], t: TFunction): Finding[] {
   const sahip = new Map<number, string>();
   const bulgular: Finding[] = [];
 
@@ -168,8 +169,8 @@ function iciCakismalar(services: ServiceConfig[]): Finding[] {
           severity: "engel",
           service: service.name,
           anchor: "ports",
-          title: `${port.published} portunu iki servis birden istiyor`,
-          detail: `${onceki} ve ${service.name} aynı host portunu yayınlıyor; ikisi birden başlayamaz.`,
+          title: t("composeCheck.portClash.title", { port: port.published }),
+          detail: t("composeCheck.portClash.detail", { first: onceki, second: service.name }),
         });
       }
       sahip.set(port.published, service.name);
@@ -180,14 +181,14 @@ function iciCakismalar(services: ServiceConfig[]): Finding[] {
 }
 
 /** Saniyeyi insan okunur yaşa çevirir; `null` gelmesi beklenmiyor. */
-function dakika(seconds: number | null): string {
-  if (seconds === null) return "bilinmeyen süre";
-  if (seconds < 90) return "az";
-  if (seconds < 5400) return `${Math.round(seconds / 60)} dakika`;
-  return `${Math.round(seconds / 3600)} saat`;
+function dakika(seconds: number | null, t: TFunction): string {
+  if (seconds === null) return t("composeCheck.age.unknown");
+  if (seconds < 90) return t("composeCheck.age.few");
+  if (seconds < 5400) return t("composeCheck.age.minutes", { count: Math.round(seconds / 60) });
+  return t("composeCheck.age.hours", { count: Math.round(seconds / 3600) });
 }
 
-function portBulgulari(service: ServiceConfig, context: CheckContext): Finding[] {
+function portBulgulari(service: ServiceConfig, context: CheckContext, t: TFunction): Finding[] {
   const bulgular: Finding[] = [];
 
   for (const port of service.ports) {
@@ -198,9 +199,8 @@ function portBulgulari(service: ServiceConfig, context: CheckContext): Finding[]
         severity: "engel",
         service: service.name,
         anchor: "ports",
-        title: `${port.published} panelin kendi portu`,
-        detail:
-          "Bu portu başka bir servise vermek paneli erişilemez hâle getirir. Başka bir port seç.",
+        title: t("composeCheck.panelPort.title", { port: port.published }),
+        detail: t("composeCheck.panelPort.detail"),
       });
       continue;
     }
@@ -223,13 +223,13 @@ function portBulgulari(service: ServiceConfig, context: CheckContext): Finding[]
         severity: taze ? "engel" : "uyari",
         service: service.name,
         anchor: "ports",
-        title: `${port.published} portu zaten kullanımda`,
+        title: t("composeCheck.portInUse.title", { port: port.published }),
         detail: taze
-          ? `Bu portu şu an ${tutan} tutuyor. Docker "port is already allocated" der ve ` +
-            "yığın başlamaz. Başka bir port seç ya da o portu tutanı durdur."
-          : `Bu portu ${tutan} tutuyordu — ama bu bilgi ${dakika(context.reservedAgeSeconds)} ` +
-            "önceki port taramasından geliyor ve o zamandan beri değişmiş olabilir. " +
-            "Emin olmak için Port Haritası ekranından yeni bir tarama çalıştır.",
+          ? t("composeCheck.portInUse.fresh", { holder: tutan })
+          : t("composeCheck.portInUse.stale", {
+              holder: tutan,
+              age: dakika(context.reservedAgeSeconds, t),
+            }),
       });
     }
   }
@@ -244,7 +244,7 @@ function portBulgulari(service: ServiceConfig, context: CheckContext): Finding[]
  * onu siler ve veri gider — panelde prune düğmesi olduğu için bu tuzak bize
  * ait, söylemek zorundayız.
  */
-function volumeBulgulari(service: ServiceConfig): Finding[] {
+function volumeBulgulari(service: ServiceConfig, t: TFunction): Finding[] {
   const bulgular: Finding[] = [];
 
   for (const volume of service.volumes) {
@@ -252,10 +252,8 @@ function volumeBulgulari(service: ServiceConfig): Finding[] {
       bulgular.push({
         severity: "uyari",
         service: service.name,
-        title: `anonim volume: ${volume}`,
-        detail:
-          "Kaynağı belirtilmemiş volume'ün adı rastgele olur ve 'kullanılmayanları temizle' " +
-          "işleminde silinir. Adlandırılmış bir volume ya da host dizini vermek veriyi korur.",
+        title: t("composeCheck.anonVolume.title", { volume }),
+        detail: t("composeCheck.anonVolume.detail"),
       });
     }
   }
@@ -267,6 +265,7 @@ function servisBulgulari(
   doc: Document,
   service: ServiceConfig,
   context: CheckContext,
+  t: TFunction,
 ): Finding[] {
   const bulgular: Finding[] = [];
   const build = raw(doc, service.name, "build");
@@ -277,11 +276,8 @@ function servisBulgulari(
     bulgular.push({
       severity: "engel",
       service: service.name,
-      title: "build: bloğu var",
-      detail:
-        "Bu servis imajı yerinde derliyor; derleme için gereken Dockerfile ve dosyalar " +
-        "yapıştırılan YAML ile gelmiyor. Dosyaları önce Dosya Yöneticisi ile dizine koy, " +
-        "ya da hazır bir imaj kullan.",
+      title: t("composeCheck.build.title"),
+      detail: t("composeCheck.build.detail"),
     });
   }
 
@@ -289,8 +285,8 @@ function servisBulgulari(
     bulgular.push({
       severity: "engel",
       service: service.name,
-      title: "image tanımlı değil",
-      detail: "Servisin ne çalıştıracağı belirtilmemiş.",
+      title: t("composeCheck.noImage.title"),
+      detail: t("composeCheck.noImage.detail"),
     });
   }
 
@@ -299,8 +295,8 @@ function servisBulgulari(
     bulgular.push({
       severity: "engel",
       service: service.name,
-      title: `container_name çakışması: ${containerName}`,
-      detail: "Bu adla çalışan bir container zaten var; Docker ikincisini yaratmaz.",
+      title: t("composeCheck.nameClash.title", { name: containerName }),
+      detail: t("composeCheck.nameClash.detail"),
     });
   }
 
@@ -308,11 +304,9 @@ function servisBulgulari(
     bulgular.push({
       severity: "oneri",
       service: service.name,
-      title: "restart politikası yok",
-      detail:
-        "Sunucu yeniden başladığında bu container kendiliğinden gelmez. " +
-        "En sık 'container kayboldu' sebebi budur.",
-      fix: { kind: "restart", label: "unless-stopped ekle" },
+      title: t("composeCheck.noRestart.title"),
+      detail: t("composeCheck.noRestart.detail"),
+      fix: { kind: "restart", label: t("composeCheck.noRestart.fix") },
     });
   }
 
@@ -320,11 +314,9 @@ function servisBulgulari(
     bulgular.push({
       severity: "oneri",
       service: service.name,
-      title: "log döndürme yok",
-      detail:
-        "Varsayılan json-file sürücüsü sınırsız büyür; uzun çalışan bir servis diski " +
-        "sessizce doldurur.",
-      fix: { kind: "logging", label: "10 MB × 3 dosya sınırı ekle" },
+      title: t("composeCheck.noLogging.title"),
+      detail: t("composeCheck.noLogging.detail"),
+      fix: { kind: "logging", label: t("composeCheck.noLogging.fix") },
     });
   }
 
@@ -332,17 +324,17 @@ function servisBulgulari(
     bulgular.push({
       severity: "oneri",
       service: service.name,
-      title: "sürüm etiketi sabitlenmemiş",
-      detail:
-        `${service.image || "imaj"} her çekilişte farklı bir sürüm getirebilir; ` +
-        "bir şey bozulduğunda geri dönülecek sürüm bilinmez.",
+      title: t("composeCheck.unpinned.title"),
+      detail: t("composeCheck.unpinned.detail", {
+        image: service.image || t("composeCheck.unpinned.image"),
+      }),
     });
   }
 
   return [
     ...bulgular,
-    ...portBulgulari(service, context),
-    ...volumeBulgulari(service),
+    ...portBulgulari(service, context, t),
+    ...volumeBulgulari(service, t),
   ];
 }
 
@@ -351,7 +343,7 @@ function servisBulgulari(
  * bulunmayan ağlar. Compose bunu `config` aşamasında zaten yakalıyor ama
  * mesajı ham; burada adıyla söyleniyor.
  */
-function agBulgulari(doc: Document, context: CheckContext): Finding[] {
+function agBulgulari(doc: Document, context: CheckContext, t: TFunction): Finding[] {
   // Docker'a sorulamadıysa hiçbir şey iddia etme. "Bilmiyorum" ile "yok"u
   // karıştırmak, var olan bir ağ için "bulunamadı" demek olurdu.
   if (context.networks === null) return [];
@@ -373,33 +365,35 @@ function agBulgulari(doc: Document, context: CheckContext): Finding[] {
     bulgular.push({
       severity: "engel",
       service: "",
-      title: `dış ağ bulunamadı: ${name}`,
-      detail:
-        "Bu ağ 'external' işaretli, yani compose onu yaratmaz — önceden var olmalı. " +
-        "Docker'da böyle bir ağ yok.",
+      title: t("composeCheck.externalNetwork.title", { name }),
+      detail: t("composeCheck.externalNetwork.detail"),
     });
   }
 
   return bulgular;
 }
 
-export function checkCompose(doc: Document, context: CheckContext = EMPTY_CONTEXT): Finding[] {
+/**
+ * `t` parametreyle geliyor: bu modül istemci paketine de giriyor (`blocked`),
+ * sunucu çeviri katmanını içe aktarsaydı bütün dil dosyaları tarayıcıya giderdi.
+ */
+export function checkCompose(doc: Document, context: CheckContext, t: TFunction): Finding[] {
   if (serviceNames(doc).length === 0) {
     return [
       {
         severity: "engel",
         service: "",
-        title: "services bloğu yok",
-        detail: "Compose dosyasında tanımlı servis bulunamadı.",
+        title: t("composeCheck.noServices.title"),
+        detail: t("composeCheck.noServices.detail"),
       },
     ];
   }
 
   const services = readAllServices(doc);
   const bulgular = [
-    ...services.flatMap((service) => servisBulgulari(doc, service, context)),
-    ...iciCakismalar(services),
-    ...agBulgulari(doc, context),
+    ...services.flatMap((service) => servisBulgulari(doc, service, context, t)),
+    ...iciCakismalar(services, t),
+    ...agBulgulari(doc, context, t),
   ];
 
   /*

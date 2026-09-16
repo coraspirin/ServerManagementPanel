@@ -9,33 +9,33 @@ import "server-only";
  */
 
 import { getString } from "@/lib/settings";
-import { DEFAULT_LOCALE, isLocale, type Locale } from "./locales.ts";
+import { isLocale } from "@/locales";
+import { SOURCE_LOCALE, type Dictionary, type Locale } from "./locales.ts";
 import { getDictionary, setLocaleResolver, translator } from "./runtime.ts";
-import type { Dictionary } from "./dict/tr/index.ts";
 import type { TFunction } from "./translate.ts";
 
 /**
  * Seçili arayüz dili.
  *
  * Try/catch bilerek: bu işlev migration'lar koşmadan önce de (açılışın ilk
- * anları) çağrılabiliyor ve o sırada `settings` tablosu henüz yok. Dilsiz
- * kalmaktansa Türkçeye düşmek doğru davranış.
+ * anları) çağrılabiliyor ve o sırada `settings` tablosu henüz yok. Kayıtlı dil
+ * dosyası silinmişse de kaynak dile düşülüyor — dilsiz kalmaktansa Türkçe.
  */
 export function getLocale(): Locale {
   try {
     const value = getString("general.language");
-    return isLocale(value) ? value : DEFAULT_LOCALE;
+    return isLocale(value) ? value : SOURCE_LOCALE;
   } catch {
-    return DEFAULT_LOCALE;
+    return SOURCE_LOCALE;
   }
 }
 
 /** Sunucu bileşenleri için çeviri işlevi. */
-export function getT(): TFunction<Dictionary> {
+export function getT(): TFunction {
   return translator(getLocale());
 }
 
-/** İstemciye prop olarak geçilecek sözlük — yalnızca SEÇİLİ dil. */
+/** İstemciye prop olarak geçilecek sözlük — yalnızca SEÇİLİ dil, eksikleri dolu. */
 export function getActiveDictionary(): Dictionary {
   return getDictionary(getLocale());
 }

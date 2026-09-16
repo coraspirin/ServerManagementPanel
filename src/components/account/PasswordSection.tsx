@@ -3,12 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Lock } from "lucide-react";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * Kendi parolanı değiştirme. Başarılı olduğunda TÜM oturumlar düşer — bu
  * ekranınki dahil. Sürpriz olmasın diye düğmenin altında yazıyor.
  */
 export function PasswordSection() {
+  const t = useT();
   const router = useRouter();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -19,7 +21,7 @@ export function PasswordSection() {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (next !== repeat) {
-      setError("Yeni parolalar eşleşmiyor.");
+      setError(t("auth.password.mismatch"));
       return;
     }
 
@@ -33,13 +35,13 @@ export function PasswordSection() {
       });
       const data = await response.json();
       if (!response.ok) {
-        setError(data.error ?? "Değiştirilemedi.");
+        setError(data.error ?? t("auth.password.failed"));
         return;
       }
       router.replace("/login");
       router.refresh();
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
@@ -52,15 +54,15 @@ export function PasswordSection() {
     <form onSubmit={submit} className="rounded-lg border border-line bg-surface p-5">
       <h2 className="flex items-center gap-2 text-sm font-semibold">
         <Lock className="size-4 text-subtle" aria-hidden />
-        Parola
+        {t("account.password.title")}
       </h2>
       <p className="mt-1 text-xs text-subtle">
-        En az 10 karakter, en az bir harf ve bir rakam.
+        {t("account.password.rule")}
       </p>
 
       <div className="mt-4 grid gap-3 sm:max-w-sm">
         <label className="block text-sm">
-          <span className="text-subtle">Mevcut parola</span>
+          <span className="text-subtle">{t("auth.password.current")}</span>
           <input
             type="password"
             autoComplete="current-password"
@@ -71,7 +73,7 @@ export function PasswordSection() {
           />
         </label>
         <label className="block text-sm">
-          <span className="text-subtle">Yeni parola</span>
+          <span className="text-subtle">{t("account.password.next")}</span>
           <input
             type="password"
             autoComplete="new-password"
@@ -82,7 +84,7 @@ export function PasswordSection() {
           />
         </label>
         <label className="block text-sm">
-          <span className="text-subtle">Yeni parola (tekrar)</span>
+          <span className="text-subtle">{t("auth.password.repeat")}</span>
           <input
             type="password"
             autoComplete="new-password"
@@ -101,10 +103,10 @@ export function PasswordSection() {
         disabled={busy}
         className="mt-4 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
       >
-        {busy ? "Değiştiriliyor…" : "Parolayı değiştir"}
+        {busy ? t("auth.password.submitBusy") : t("auth.password.submit")}
       </button>
       <p className="mt-2 text-xs text-subtle">
-        Değiştirdiğinde açık olan tüm oturumlar kapanır ve yeniden giriş yapman istenir.
+        {t("account.password.sessionsNote")}
       </p>
     </form>
   );

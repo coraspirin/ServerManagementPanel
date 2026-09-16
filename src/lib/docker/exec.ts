@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import http from "node:http";
 import type { Duplex } from "node:stream";
 import { randomBytes } from "node:crypto";
@@ -60,7 +61,7 @@ function startReaper() {
     const now = Date.now();
     const timeout = getNumber("docker.exec_idle_minutes") * 60_000;
     for (const session of sessions.values()) {
-      if (now - session.lastSeen > timeout) closeSession(session.id, "boşta kaldı");
+      if (now - session.lastSeen > timeout) closeSession(session.id, serverT("execLib.idle"));
     }
     if (sessions.size === 0 && reaper) {
       clearInterval(reaper);
@@ -103,7 +104,7 @@ function dockerJson<T>(
         });
       },
     );
-    req.on("timeout", () => req.destroy(new Error("Docker soketi zaman aşımına uğradı")));
+    req.on("timeout", () => req.destroy(new Error(serverT("execLib.socketTimeout"))));
     req.on("error", reject);
     if (payload) req.write(payload);
     req.end();
@@ -171,10 +172,13 @@ export async function startSession(options: StartExecOptions): Promise<Session> 
   if (created.status !== 201 || !created.data?.Id) {
     throw new Error(
       created.status === 404
-        ? "container bulunamadı"
+        ? serverT("dockerUpdate.notFound")
         : created.status === 409
-          ? "container çalışmıyor"
-          : `exec oluşturulamadı (${created.status}): ${created.raw.slice(0, 160)}`,
+          ? serverT("execLib.notRunning")
+          : serverT("execLib.createFailed", {
+              status: created.status,
+              raw: created.raw.slice(0, 160),
+            }),
     );
   }
 

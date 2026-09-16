@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { revokeSession } from "@/lib/auth/users";
@@ -23,7 +24,7 @@ export async function DELETE(request: Request, { params }: Context) {
   const own = (await cookies()).get(SESSION_COOKIE)?.value;
   if (own && hashToken(own) === tokenHash) {
     return Response.json(
-      { error: "Kullandığın oturumu buradan kapatamazsın; çıkış yap düğmesini kullan." },
+      { error: serverT("api.sessions.current") },
       { status: 400 },
     );
   }
@@ -36,11 +37,11 @@ export async function DELETE(request: Request, { params }: Context) {
     action: "sessions.revoke",
     targetType: "session",
     targetId: tokenHash.slice(0, 12),
-    detail: removed ? "oturum kapatıldı" : "oturum bulunamadı",
+    detail: removed ? serverT("api.sessions.closed") : serverT("api.notFound.session"),
     ip: clientIp(request),
     result: removed ? "ok" : "error",
   });
 
-  if (!removed) return Response.json({ error: "Oturum bulunamadı." }, { status: 404 });
+  if (!removed) return Response.json({ error: serverT("api.notFound.session") }, { status: 404 });
   return Response.json({ ok: true, ...(await directoryPayload()) });
 }

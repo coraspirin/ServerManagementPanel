@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Gauge } from "lucide-react";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import type { SpeedtestResult } from "@/lib/network/speedtest";
+import { useFormat, useT } from "@/lib/i18n/client";
 
 /** M2.12 — hız testi geçmişi. */
 
@@ -25,16 +26,15 @@ function Bar({ value, max, tone }: { value: number; max: number; tone: string })
 }
 
 export function SpeedtestSection({ initial }: { initial: SpeedtestResult[] }) {
+  const t = useT();
+  const f = useFormat();
   const [results, setResults] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   async function run() {
     setBusy(true);
-    setNotice(
-      "Ölçülüyor… önce indirme sonra yükleme, her biri için ısınma + sabit süreli " +
-        "pencere. Hat ne kadar hızlıysa o kadar çok veri akar; yarım dakikayı bulabilir.",
-    );
+    setNotice(t("speedtest.measuringLong"));
     try {
       const response = await fetch("/api/network/speedtest", {
         method: "POST",
@@ -48,11 +48,15 @@ export function SpeedtestSection({ initial }: { initial: SpeedtestResult[] }) {
       if (data.results) setResults(data.results);
       setNotice(
         data.result?.ok
-          ? `İndirme ${data.result.downloadMbps} Mbit · yükleme ${data.result.uploadMbps} Mbit · gecikme ${data.result.pingMs} ms`
-          : (data.result?.error ?? data.error ?? "Ölçüm başarısız."),
+          ? t("speedtest.result", {
+              down: String(data.result.downloadMbps),
+              up: String(data.result.uploadMbps),
+              ping: String(data.result.pingMs),
+            })
+          : (data.result?.error ?? data.error ?? t("speedtest.failed")),
       );
     } catch {
-      setNotice("Sunucuya ulaşılamadı.");
+      setNotice(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
@@ -67,8 +71,10 @@ export function SpeedtestSection({ initial }: { initial: SpeedtestResult[] }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <Gauge className="size-4 text-subtle" aria-hidden />
-          Hız testi
-          <span className="font-normal text-subtle">{results.length} ölçüm</span>
+          {t("speedtest.title")}
+          <span className="font-normal text-subtle">
+            {t("speedtest.count", { count: results.length })}
+          </span>
         </h2>
         <button
           type="button"
@@ -76,21 +82,21 @@ export function SpeedtestSection({ initial }: { initial: SpeedtestResult[] }) {
           disabled={busy}
           className="rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
         >
-          {busy ? "Ölçülüyor…" : "Şimdi ölç"}
+          {busy ? t("speedtest.measuring") : t("speedtest.run")}
         </button>
       </div>
 
       {notice && <p className="mt-2 text-sm">{notice}</p>}
 
       {results.length === 0 ? (
-        <p className="mt-4 text-sm text-subtle">Henüz ölçüm yok.</p>
+        <p className="mt-4 text-sm text-subtle">{t("speedtest.empty")}</p>
       ) : (
         <ul className="mt-4 space-y-2">
           {results.slice(0, 12).map((entry) => (
             <li key={entry.id} className="rounded-md border border-line px-3 py-2">
               <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs">
                 <span className="text-subtle">
-                  {new Date(entry.ts * 1000).toLocaleString("tr-TR")}
+                  {f.dateTime(entry.ts * 1000)}
                   {entry.serverName && ` · ${entry.serverName}`}
                 </span>
                 {entry.ok ? (

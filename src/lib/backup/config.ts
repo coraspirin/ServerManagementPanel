@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
 import { appVersion } from "@/lib/env";
@@ -83,11 +84,11 @@ export function exportConfig(): ConfigExport {
       .prepare("SELECT name, mac, broadcast, port, check_host FROM wol_devices")
       .all(),
     excluded: [
-      "secret ayarlar (MASTER_KEY'e bağlı — hedefte çözülemez)",
-      "widget ve DDNS token'ları",
-      "metrikler, uptime geçmişi, olaylar, audit kaydı",
-      "kullanıcılar ve oturumlar",
-      "yüklenmiş logo dosyaları",
+      serverT("configLib.excluded.secrets"),
+      serverT("configLib.excluded.tokens"),
+      serverT("configLib.excluded.history"),
+      serverT("configLib.excluded.users"),
+      serverT("configLib.excluded.logos"),
     ],
   };
 }
@@ -113,7 +114,7 @@ export function importConfig(
   updatedBy: string,
 ): { ok: true; result: ImportResult } | { ok: false; error: string } {
   if (data.format !== FORMAT) {
-    return { ok: false, error: `Desteklenmeyen dosya biçimi (${data.format}).` };
+    return { ok: false, error: serverT("configLib.unsupportedFormat", { format: String(data.format) }) };
   }
 
   const db = getDb();

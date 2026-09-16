@@ -26,6 +26,7 @@ import { InspectTab } from "./detail/InspectTab";
 import { NetworkTab } from "./detail/NetworkTab";
 import { ResourcesTab } from "./detail/ResourcesTab";
 import { useContainerDetail } from "./detail/useDetail";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * Bir container hakkında bilinen her şey, tek pencerede.
@@ -52,8 +53,13 @@ import { useContainerDetail } from "./detail/useDetail";
  */
 const TerminalPane = dynamicImport(
   () => import("./TerminalPane").then((m) => m.TerminalPane),
-  { ssr: false, loading: () => <p className="text-sm text-subtle">terminal yükleniyor…</p> },
+  { ssr: false, loading: () => <TerminalLoading /> },
 );
+
+function TerminalLoading() {
+  const t = useT();
+  return <p className="text-sm text-subtle">{t("docker.drawer.terminalLoading")}</p>;
+}
 
 export type DrawerTab =
   | "genel"
@@ -68,16 +74,16 @@ export type DrawerTab =
   | "inspect";
 
 const TABS = [
-  { id: "genel", label: "Genel", icon: Info },
-  { id: "compose", label: "Compose", icon: SlidersHorizontal },
-  { id: "uret", label: "Compose üret", icon: FileCode2 },
-  { id: "ag", label: "Ağ", icon: Network },
-  { id: "ortam", label: "Ortam", icon: Boxes },
-  { id: "dosyalar", label: "Dosyalar", icon: FolderTree },
-  { id: "kaynaklar", label: "Kaynaklar", icon: Activity },
-  { id: "loglar", label: "Loglar", icon: ScrollText },
-  { id: "terminal", label: "Terminal", icon: TerminalIcon },
-  { id: "inspect", label: "Inspect", icon: Braces },
+  { id: "genel", label: "docker.drawer.tab.genel", icon: Info },
+  { id: "compose", label: "docker.drawer.tab.compose", icon: SlidersHorizontal },
+  { id: "uret", label: "docker.drawer.tab.uret", icon: FileCode2 },
+  { id: "ag", label: "docker.drawer.tab.ag", icon: Network },
+  { id: "ortam", label: "docker.drawer.tab.ortam", icon: Boxes },
+  { id: "dosyalar", label: "docker.drawer.tab.dosyalar", icon: FolderTree },
+  { id: "kaynaklar", label: "docker.drawer.tab.kaynaklar", icon: Activity },
+  { id: "loglar", label: "docker.drawer.tab.loglar", icon: ScrollText },
+  { id: "terminal", label: "docker.drawer.tab.terminal", icon: TerminalIcon },
+  { id: "inspect", label: "docker.drawer.tab.inspect", icon: Braces },
 ] as const;
 
 export type DrawerContainer = {
@@ -105,6 +111,7 @@ export function ContainerDrawer({
   initialTab?: DrawerTab;
   onClose: () => void;
 }) {
+  const t = useT();
   const [tab, setTab] = useState<DrawerTab>(initialTab);
 
   // Detay tek yerden okunuyor ve sekmelere dağıtılıyor; sekme değiştirmek ağ
@@ -149,7 +156,7 @@ export function ContainerDrawer({
                 }`}
               >
                 <entry.icon className="size-3.5" aria-hidden />
-                {entry.label}
+                {t(entry.label)}
               </button>
             ))}
           </div>
@@ -209,7 +216,7 @@ export function ContainerDrawer({
           {DETAY_SEKMELERI.has(tab) && (
             <>
               {error && <p className="text-sm text-danger">{error}</p>}
-              {!error && !data && <p className="text-sm text-subtle">yükleniyor…</p>}
+              {!error && !data && <p className="text-sm text-subtle">{t("common.states.loadingInline")}</p>}
 
               {data && tab === "genel" && (
                 <GeneralTab

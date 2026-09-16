@@ -1,6 +1,8 @@
 "use client";
 
 import type { UptimeDay } from "@/lib/monitors/types";
+import { useFormat, useT } from "@/lib/i18n/client";
+import type { TFunction } from "@/lib/i18n/translate";
 
 /**
  * Günlük kullanılabilirlik şeridi.
@@ -17,33 +19,34 @@ function dayColor(day: UptimeDay): string {
   return "bg-danger";
 }
 
-function dayTitle(day: UptimeDay): string {
-  const date = new Date(`${day.date}T00:00:00`).toLocaleDateString("tr-TR", {
-    day: "2-digit",
-    month: "short",
-  });
+function dayTitle(day: UptimeDay, t: TFunction, f: ReturnType<typeof useFormat>): string {
+  const date = f.date(`${day.date}T00:00:00`, { day: "2-digit", month: "short" });
 
   if (day.upPct === null) {
-    return day.maintenanceSeconds > 0 ? `${date} · bakım` : `${date} · veri yok`;
+    return day.maintenanceSeconds > 0
+      ? t("uptimeBars.maintenance", { date })
+      : t("uptimeBars.noData", { date });
   }
 
   const minutes = Math.round(day.downSeconds / 60);
-  const down = minutes > 0 ? ` · ${minutes} dk kesinti` : "";
-  return `${date} · %${day.upPct.toFixed(2)}${down}`;
+  const down = minutes > 0 ? t("uptimeBars.downtime", { count: minutes }) : "";
+  return `${date} · ${f.pct(day.upPct, 2)}${down}`;
 }
 
 export function UptimeBars({ days }: { days: UptimeDay[] }) {
+  const t = useT();
+  const f = useFormat();
   return (
     // 90 gün × en az 3px, dar telefonda satıra sığmıyor; taşarsa kırpmak yerine
     // kaydırılıyor — çubuklar daha da inceltilse okunamaz hale gelirdi.
     <div
       className="no-scrollbar flex h-6 items-stretch gap-px overflow-x-auto"
-      aria-label="Günlük kullanılabilirlik"
+      aria-label={t("uptimeBars.aria")}
     >
       {days.map((day) => (
         <div
           key={day.date}
-          title={dayTitle(day)}
+          title={dayTitle(day, t, f)}
           className={`min-w-[3px] flex-1 rounded-[1px] ${dayColor(day)}`}
         />
       ))}

@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { getDockerProvider } from "@/lib/providers";
 import { DEFAULT_PORT, type DbEngine } from "./types";
@@ -121,7 +122,7 @@ export async function importDiscovered(container: string): Promise<{ ok: boolean
 
   const image = raw?.Config?.Image ?? "";
   const engine = engineOf(image);
-  if (!engine) return { ok: false, error: "Bu container'da tanınan bir veritabanı yok." };
+  if (!engine) return { ok: false, error: serverT("dbDiscovery.none") };
 
   const env = envMap(raw?.Config?.Env ?? []);
   const proposal = suggest(engine, env);

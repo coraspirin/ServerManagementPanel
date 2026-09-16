@@ -22,6 +22,9 @@ import type { DdnsRecord } from "@/lib/proxy/ddns";
 import type { DiagnoseResult } from "@/lib/proxy/diagnose";
 import type { ProxyTargets } from "@/lib/proxy/reachability";
 import type { ProxyHostView, TargetKind, TlsMode } from "@/lib/proxy/store";
+import { useFormat, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
+import type { MessageKey, TFunction } from "@/lib/i18n/translate";
 
 /**
  * M2.8 — Yayınlama ekranı.
@@ -39,10 +42,10 @@ function readCsrfToken(): string {
 const inputClass =
   "w-full rounded-md border border-line bg-canvas px-2.5 py-1.5 text-sm outline-none focus:border-brand";
 
-const TLS_LABEL: Record<TlsMode, string> = {
-  auto: "Let's Encrypt",
-  internal: "Caddy yerel CA",
-  off: "TLS yok (düz HTTP)",
+const TLS_LABEL: Record<TlsMode, MessageKey> = {
+  auto: "proxy.tls.auto",
+  internal: "proxy.tls.internal",
+  off: "proxy.tls.off",
 };
 
 type HostForm = {
@@ -94,16 +97,19 @@ const EMPTY_DDNS: DdnsForm = {
   enabled: true,
 };
 
-function certTone(host: ProxyHostView): { text: string; className: string } {
-  if (host.tls === "off") return { text: "TLS yok", className: "text-subtle" };
-  if (!host.certificate) return { text: "henüz kontrol edilmedi", className: "text-subtle" };
+function certTone(host: ProxyHostView, t: TFunction): { text: string; className: string } {
+  if (host.tls === "off") return { text: t("proxy.cert.noTls"), className: "text-subtle" };
+  if (!host.certificate) return { text: t("proxy.cert.unchecked"), className: "text-subtle" };
   if (host.certificate.error) {
     return { text: host.certificate.error, className: "text-danger" };
   }
-  if (host.daysLeft === null) return { text: "bitiş okunamadı", className: "text-subtle" };
-  if (host.daysLeft < 0) return { text: `${-host.daysLeft} gün önce doldu`, className: "text-danger" };
-  if (host.daysLeft <= 21) return { text: `${host.daysLeft} gün kaldı`, className: "text-warn" };
-  return { text: `${host.daysLeft} gün kaldı`, className: "text-ok" };
+  if (host.daysLeft === null) return { text: t("proxy.cert.noExpiry"), className: "text-subtle" };
+  if (host.daysLeft < 0) {
+    return { text: t("proxy.cert.expired", { count: -host.daysLeft }), className: "text-danger" };
+  }
+  const left = t("proxy.cert.daysLeft", { count: host.daysLeft });
+  if (host.daysLeft <= 21) return { text: left, className: "text-warn" };
+  return { text: left, className: "text-ok" };
 }
 
 /**
@@ -141,6 +147,8 @@ export function ProxyScreen({
   publishedPorts: PublishedPorts;
   defaultTls: TlsMode;
 }) {
+  const t = useT();
+  const f = useFormat();
   const blankHost = emptyHost(defaultTls);
   const [hosts, setHosts] = useState(initialHosts);
   const [ddns, setDdns] = useState(initialDdns);
@@ -176,7 +184,7 @@ export function ProxyScreen({
       const data = (await response.json()) as Record<string, unknown>;
 
       if (!response.ok) {
-        setError((data.error as string) ?? "İşlem başarısız.");
+        setError((data.error as string) ?? t("common.errors.actionFailed"));
         return null;
       }
       if (Array.isArray(data.hosts)) setHosts(data.hosts as ProxyHostView[]);
@@ -190,7 +198,7 @@ export function ProxyScreen({
 
       return data;
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
       return null;
     } finally {
       setBusy(false);
@@ -214,7 +222,7 @@ export function ProxyScreen({
   }
 
   async function removeHost(host: ProxyHostView) {
-    if (!confirm(`${host.domain} yayından kaldırılsın mı?`)) return;
+    if (!confirm(t("proxy.confirmRemoveHost", { domain: host.domain }))) return;
     await send(`/api/proxy/${host.id}`, "DELETE");
   }
 
@@ -230,8 +238,13 @@ export function ProxyScreen({
       | undefined;
     if (summary) {
       setNotice(
-        `DDNS: ${summary.updated.length} güncellendi · ${summary.unchanged.length} değişmedi` +
-          (summary.failed.length ? ` · hata: ${summary.failed.join(" | ")}` : ""),
+        t("proxy.ddnsSummary", {
+          updated: summary.updated.length,
+          unchanged: summary.unchanged.length,
+        }) +
+          (summary.failed.length
+            ? t("proxy.ddnsSummaryFailed", { list: summary.failed.join(" | ") })
+            : ""),
       );
     }
   }
@@ -246,7 +259,7 @@ export function ProxyScreen({
             onClick={() => setNotice(null)}
             className="shrink-0 text-xs text-subtle hover:text-ink"
           >
-            kapat
+            {t("proxy.dismiss")}
           </button>
         </p>
       )}
@@ -260,7 +273,7 @@ export function ProxyScreen({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
             <Globe className="size-4 text-subtle" aria-hidden />
-            Yayınlanan adresler
+            {t("proxy.hosts.title")}
             <span className="font-normal text-subtle">{hosts.length}</span>
           </h2>
           <button
@@ -271,22 +284,20 @@ export function ProxyScreen({
             }}
             className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white"
           >
-            <Plus className="size-4" /> Adres yayınla
+            <Plus className="size-4" /> {t("proxy.hosts.publish")}
           </button>
         </div>
 
         <p className="mt-1 text-xs text-subtle">
-          Kurallar Caddy&apos;ye ayrı bir dosya olarak yazılır ve <code>caddy reload</code> ile
-          devreye alınır. Let&apos;s Encrypt için alan adının bu sunucuya çözülmesi ve 80/443
-          portlarının dışarıdan erişilebilir olması gerekir.
+          <Rich text={t("proxy.hosts.intro")} values={{ cmd: <code>caddy reload</code> }} />
         </p>
 
         {hosts.length === 0 ? (
-          <p className="mt-4 text-sm text-subtle">Henüz yayınlanan adres yok.</p>
+          <p className="mt-4 text-sm text-subtle">{t("proxy.hosts.empty")}</p>
         ) : (
           <ul className="mt-4 divide-y divide-line rounded-md border border-line">
             {hosts.map((host) => {
-              const cert = certTone(host);
+              const cert = certTone(host, t);
               return (
                 <li key={host.id} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
                   <span className="min-w-0 flex-1">
@@ -307,11 +318,11 @@ export function ProxyScreen({
                         <ExternalLink className="size-3 shrink-0" aria-hidden />
                       </a>
                       {!host.enabled && (
-                        <span className="rounded bg-line px-1 text-[10px] text-subtle">kapalı</span>
+                        <span className="rounded bg-line px-1 text-[10px] text-subtle">{t("proxy.hosts.disabled")}</span>
                       )}
                     </span>
                     <span className="block truncate font-mono text-[11px] text-subtle">
-                      → {host.target}:{host.port} · {TLS_LABEL[host.tls]}
+                      → {host.target}:{host.port} · {t(TLS_LABEL[host.tls])}
                     </span>
                   </span>
 
@@ -323,9 +334,9 @@ export function ProxyScreen({
                   <button
                     type="button"
                     disabled={busy}
-                    title="Yayını sına — DNS, bağlantı ve hedefi sırayla dener"
+                    title={t("proxy.hosts.diagnoseTitle")}
                     onClick={() => void diagnose(host)}
-                    aria-label={`${host.domain} yayınını sına`}
+                    aria-label={t("proxy.hosts.diagnoseAria", { domain: host.domain })}
                     className="rounded p-1 text-subtle hover:text-brand disabled:opacity-50"
                   >
                     <Stethoscope className="size-3.5" />
@@ -348,7 +359,7 @@ export function ProxyScreen({
                         },
                       });
                     }}
-                    aria-label={`${host.domain} kaydını düzenle`}
+                    aria-label={t("proxy.editAria", { name: host.domain })}
                     className="rounded p-1 text-subtle hover:text-ink"
                   >
                     <Pencil className="size-3.5" />
@@ -356,7 +367,7 @@ export function ProxyScreen({
                   <button
                     type="button"
                     onClick={() => void removeHost(host)}
-                    aria-label={`${host.domain} kaydını sil`}
+                    aria-label={t("proxy.deleteAria", { name: host.domain })}
                     className="rounded p-1 text-subtle hover:text-danger"
                   >
                     <Trash2 className="size-3.5" />
@@ -372,11 +383,11 @@ export function ProxyScreen({
           onClick={() => setShowConfig((v) => !v)}
           className="mt-3 text-xs text-subtle hover:text-ink"
         >
-          {showConfig ? "Üretilen Caddy yapılandırmasını gizle" : "Üretilen Caddy yapılandırmasını göster"}
+          {showConfig ? t("proxy.hosts.hideConfig") : t("proxy.hosts.showConfig")}
         </button>
         {showConfig && (
           <pre className="mt-2 max-h-72 overflow-auto rounded-md border border-line bg-canvas p-3 font-mono text-[11px]">
-            {config || "(henüz üretilmedi)"}
+            {config || t("proxy.hosts.notGenerated")}
           </pre>
         )}
       </section>
@@ -384,7 +395,7 @@ export function ProxyScreen({
       <section className="rounded-lg border border-line bg-surface p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-semibold">
-            Dinamik DNS <span className="font-normal text-subtle">{ddns.length}</span>
+            {t("proxy.ddns.title")} <span className="font-normal text-subtle">{ddns.length}</span>
           </h2>
           <div className="flex gap-2">
             <button
@@ -393,7 +404,7 @@ export function ProxyScreen({
               disabled={busy || ddns.length === 0}
               className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm hover:border-brand disabled:opacity-50"
             >
-              <RefreshCw className="size-4" /> Şimdi eşitle
+              <RefreshCw className="size-4" /> {t("proxy.ddns.syncNow")}
             </button>
             <button
               type="button"
@@ -403,18 +414,17 @@ export function ProxyScreen({
               }}
               className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm hover:border-brand"
             >
-              <Plus className="size-4" /> Kayıt ekle
+              <Plus className="size-4" /> {t("proxy.ddns.add")}
             </button>
           </div>
         </div>
 
         <p className="mt-1 text-xs text-subtle">
-          Ev IP&apos;si değişince alan adı kaydı güncellenir. IP değişmediyse sağlayıcıya istek
-          gitmez.
+          {t("proxy.ddns.intro")}
         </p>
 
         {ddns.length === 0 ? (
-          <p className="mt-4 text-sm text-subtle">Henüz DDNS kaydı yok.</p>
+          <p className="mt-4 text-sm text-subtle">{t("proxy.ddns.empty")}</p>
         ) : (
           <ul className="mt-4 divide-y divide-line rounded-md border border-line">
             {ddns.map((record) => (
@@ -425,8 +435,8 @@ export function ProxyScreen({
                     {record.provider}
                     {record.lastIp && ` · ${record.lastIp}`}
                     {record.lastSyncAt &&
-                      ` · ${new Date(record.lastSyncAt * 1000).toLocaleString("tr-TR")}`}
-                    {!record.hasSecret && " · token girilmemiş"}
+                      ` · ${f.dateTime(record.lastSyncAt * 1000)}`}
+                    {!record.hasSecret && t("proxy.ddns.noToken")}
                   </span>
                   {record.lastError && (
                     <span className="block text-[11px] text-danger">{record.lastError}</span>
@@ -448,7 +458,7 @@ export function ProxyScreen({
                       },
                     });
                   }}
-                  aria-label={`${record.hostname} kaydını düzenle`}
+                  aria-label={t("proxy.editAria", { name: record.hostname })}
                   className="rounded p-1 text-subtle hover:text-ink"
                 >
                   <Pencil className="size-3.5" />
@@ -456,10 +466,10 @@ export function ProxyScreen({
                 <button
                   type="button"
                   onClick={async () => {
-                    if (!confirm(`${record.hostname} DDNS kaydı silinsin mi?`)) return;
+                    if (!confirm(t("proxy.ddns.confirmDelete", { name: record.hostname }))) return;
                     await send(`/api/proxy/ddns?id=${record.id}`, "DELETE");
                   }}
-                  aria-label={`${record.hostname} kaydını sil`}
+                  aria-label={t("proxy.deleteAria", { name: record.hostname })}
                   className="rounded p-1 text-subtle hover:text-danger"
                 >
                   <Trash2 className="size-3.5" />
@@ -472,7 +482,7 @@ export function ProxyScreen({
 
       <Modal
         open={hostModal.open}
-        title={hostModal.form.id === null ? "Adres yayınla" : "Yayını düzenle"}
+        title={hostModal.form.id === null ? t("proxy.hosts.publish") : t("proxy.hostModal.edit")}
         onClose={() => setHostModal((m) => ({ ...m, open: false }))}
       >
         <form
@@ -483,7 +493,7 @@ export function ProxyScreen({
           }}
         >
           <label className="block">
-            <span className="text-xs font-medium">Alan adı</span>
+            <span className="text-xs font-medium">{t("proxy.form.domain")}</span>
             <input
               type="text"
               value={hostModal.form.domain}
@@ -498,7 +508,7 @@ export function ProxyScreen({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
-              <span className="text-xs font-medium">Hedef türü</span>
+              <span className="text-xs font-medium">{t("proxy.form.targetKind")}</span>
               <select
                 value={hostModal.form.targetKind}
                 onChange={(e) =>
@@ -509,13 +519,13 @@ export function ProxyScreen({
                 }
                 className={`mt-1 ${inputClass}`}
               >
-                <option value="container">Docker container</option>
-                <option value="url">Ağdaki başka makine</option>
+                <option value="container">{t("proxy.form.kindContainer")}</option>
+                <option value="url">{t("proxy.form.kindUrl")}</option>
               </select>
             </label>
 
             <label className="block">
-              <span className="text-xs font-medium">Hedef</span>
+              <span className="text-xs font-medium">{t("proxy.form.target")}</span>
               {hostModal.form.targetKind === "container" ? (
                 <select
                   value={hostModal.form.target}
@@ -524,11 +534,11 @@ export function ProxyScreen({
                   }
                   className={`mt-1 ${inputClass}`}
                 >
-                  <option value="">Seç…</option>
+                  <option value="">{t("proxy.form.choose")}</option>
                   {targets.containers.map((entry) => (
                     <option key={entry.name} value={entry.name}>
                       {entry.name}
-                      {entry.reachable ? "" : " — farklı ağda"}
+                      {entry.reachable ? "" : t("proxy.form.otherNetwork")}
                     </option>
                   ))}
                 </select>
@@ -557,7 +567,7 @@ export function ProxyScreen({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
-              <span className="text-xs font-medium">Port</span>
+              <span className="text-xs font-medium">{t("proxy.form.port")}</span>
               <input
                 type="number"
                 value={hostModal.form.port}
@@ -569,7 +579,7 @@ export function ProxyScreen({
             </label>
 
             <label className="block">
-              <span className="text-xs font-medium">Sertifika</span>
+              <span className="text-xs font-medium">{t("proxy.form.certificate")}</span>
               <select
                 value={hostModal.form.tls}
                 onChange={(e) =>
@@ -577,9 +587,9 @@ export function ProxyScreen({
                 }
                 className={`mt-1 ${inputClass}`}
               >
-                <option value="auto">Let&apos;s Encrypt (gerçek alan adı)</option>
-                <option value="internal">Caddy yerel CA (LAN)</option>
-                <option value="off">TLS yok</option>
+                <option value="auto">{t("proxy.form.tlsAuto")}</option>
+                <option value="internal">{t("proxy.form.tlsInternal")}</option>
+                <option value="off">{t("proxy.form.tlsOff")}</option>
               </select>
             </label>
           </div>
@@ -593,7 +603,7 @@ export function ProxyScreen({
               }
               className="size-4 accent-[var(--brand)]"
             />
-            WebSocket başlıklarını ilet (Home Assistant, Zigbee2MQTT)
+            {t("proxy.form.websocket")}
           </label>
 
           <label className="flex items-center gap-2 text-sm">
@@ -605,7 +615,7 @@ export function ProxyScreen({
               }
               className="size-4 accent-[var(--brand)]"
             />
-            Etkin
+            {t("proxy.form.enabled")}
           </label>
 
           {error && <p className="text-sm text-danger">{error}</p>}
@@ -616,14 +626,14 @@ export function ProxyScreen({
               onClick={() => setHostModal((m) => ({ ...m, open: false }))}
               className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle hover:text-ink"
             >
-              Vazgeç
+              {t("common.actions.cancel")}
             </button>
             <button
               type="submit"
               disabled={busy}
               className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
             >
-              {busy ? "Uygulanıyor…" : "Kaydet ve uygula"}
+              {busy ? t("proxy.form.applying") : t("proxy.form.saveApply")}
             </button>
           </div>
         </form>
@@ -631,7 +641,7 @@ export function ProxyScreen({
 
       <Modal
         open={ddnsModal.open}
-        title={ddnsModal.form.id === null ? "DDNS kaydı ekle" : "DDNS kaydını düzenle"}
+        title={ddnsModal.form.id === null ? t("proxy.ddnsModal.add") : t("proxy.ddnsModal.edit")}
         onClose={() => setDdnsModal((m) => ({ ...m, open: false }))}
       >
         <form
@@ -642,7 +652,7 @@ export function ProxyScreen({
           }}
         >
           <label className="block">
-            <span className="text-xs font-medium">Sağlayıcı</span>
+            <span className="text-xs font-medium">{t("proxy.ddnsModal.provider")}</span>
             <select
               value={ddnsModal.form.provider}
               onChange={(e) =>
@@ -653,13 +663,13 @@ export function ProxyScreen({
               }
               className={`mt-1 ${inputClass}`}
             >
-              <option value="duckdns">DuckDNS (alan adı gerekmez)</option>
-              <option value="cloudflare">Cloudflare (kendi alan adın)</option>
+              <option value="duckdns">{t("proxy.ddnsModal.duckdns")}</option>
+              <option value="cloudflare">{t("proxy.ddnsModal.cloudflare")}</option>
             </select>
           </label>
 
           <label className="block">
-            <span className="text-xs font-medium">Alan adı</span>
+            <span className="text-xs font-medium">{t("proxy.form.domain")}</span>
             <input
               type="text"
               value={ddnsModal.form.hostname}
@@ -685,7 +695,7 @@ export function ProxyScreen({
                 className={`mt-1 font-mono ${inputClass}`}
               />
               <span className="mt-1 block text-[11px] text-subtle">
-                Cloudflare panelinde alan adının genel bakış sayfasının sağ sütununda yazıyor.
+                {t("proxy.ddnsModal.zoneHelp")}
               </span>
             </label>
           )}
@@ -700,12 +710,14 @@ export function ProxyScreen({
               onChange={(e) =>
                 setDdnsModal((m) => ({ ...m, form: { ...m.form, secret: e.target.value } }))
               }
-              placeholder={ddnsModal.form.id === null ? "" : "kayıtlı — değiştirmek için yaz"}
+              placeholder={ddnsModal.form.id === null ? "" : t("proxy.ddnsModal.secretSaved")}
               className={`mt-1 ${inputClass}`}
             />
             <span className="mt-1 block text-[11px] text-subtle">
-              Şifrelenerek saklanır (T3). Cloudflare&apos;de yalnızca <em>Zone → DNS → Edit</em>{" "}
-              yetkisi olan bir token üret; hesabın tamamına yetkili anahtar kullanma.
+              <Rich
+                text={t("proxy.ddnsModal.secretHelp")}
+                values={{ scope: <em>Zone → DNS → Edit</em> }}
+              />
             </span>
           </label>
 
@@ -718,7 +730,7 @@ export function ProxyScreen({
               }
               className="size-4 accent-[var(--brand)]"
             />
-            Etkin
+            {t("proxy.form.enabled")}
           </label>
 
           {error && <p className="text-sm text-danger">{error}</p>}
@@ -729,14 +741,14 @@ export function ProxyScreen({
               onClick={() => setDdnsModal((m) => ({ ...m, open: false }))}
               className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle hover:text-ink"
             >
-              Vazgeç
+              {t("common.actions.cancel")}
             </button>
             <button
               type="submit"
               disabled={busy}
               className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
             >
-              {busy ? "Kaydediliyor…" : "Kaydet"}
+              {busy ? t("common.states.saving") : t("common.actions.save")}
             </button>
           </div>
         </form>
@@ -761,6 +773,7 @@ function NetworkWarning({
   form: HostForm;
   targets: ProxyTargets;
 }) {
+  const t = useT();
   if (form.targetKind !== "container" || !form.target) return null;
 
   const entry = targets.containers.find((item) => item.name === form.target);
@@ -775,48 +788,52 @@ function NetworkWarning({
     <p className="flex items-start gap-1.5 rounded-md border border-warn/40 bg-warn/5 px-3 py-2 text-xs text-warn">
       <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
       <span>
-        <strong>Bu hâliyle kaydedersen sayfa 502 verir.</strong>{" "}
-        <strong>{targets.caddyName}</strong>, container adlarını yalnızca{" "}
-        <em>ortak olduğu ağlarda</em> çözebilir — <strong>{form.target}</strong> ile ortak bir
-        ağı yok ({entry.networks.join(", ") || "ağı yok"} ↔{" "}
-        {targets.caddyNetworks.join(", ") || "ağı yok"}).
+        <strong>{t("proxy.warn.title")}</strong>{" "}
+        <Rich
+          text={t("proxy.warn.cause")}
+          values={{
+            caddy: <strong>{targets.caddyName}</strong>,
+            shared: <em>{t("proxy.warn.sharedNetworks")}</em>,
+            target: <strong>{form.target}</strong>,
+            left: entry.networks.join(", ") || t("proxy.warn.noNetwork"),
+            right: targets.caddyNetworks.join(", ") || t("proxy.warn.noNetwork"),
+          }}
+        />
         <br />
-        <span className="opacity-90">
-          Bu normaldir, hedefin yanlış kurulduğu anlamına gelmez: her compose yığını kendi ağını
-          yaratır ve bu ağlar birbirinden yalıtılmıştır. Caddy de bir yığında yaşadığı için
-          yalnızca kendi yığınındaki container&apos;ları adla çözebiliyor.
-        </span>
+        <span className="opacity-90">{t("proxy.warn.normal")}</span>
         <br />
-        <strong>İki çözümden biri:</strong>
+        <strong>{t("proxy.warn.twoFixes")}</strong>
         <br />
-        1. Hedef türünü &ldquo;Ağdaki başka makine&rdquo; yap
+        {t("proxy.warn.fix1")}
         {hostAginda ? (
-          <>
-            {" "}
-            ve sunucunun IP&apos;si ile <em>uygulamanın kendi portunu</em> yaz. Bu container host
-            ağını kullanıyor, yani portlarını doğrudan host&apos;ta açıyor; Docker port eşlemesi
-            bildirmediği için panel örnek veremiyor.
-          </>
+          <Rich
+            text={t("proxy.warn.fix1Host")}
+            values={{ port: <em>{t("proxy.warn.fix1HostPort")}</em> }}
+          />
         ) : entry.publishedPorts.length > 0 ? (
-          <>
-            {" "}
-            ve sunucunun IP&apos;si ile yayınlanmış portu yaz (ör. hedef{" "}
-            <code className="font-mono">192.168.61.114</code>, port{" "}
-            <code className="font-mono">{entry.publishedPorts[0]}</code>). Adı değil ağ üzerinden
-            bir adres verdiğin için Caddy&apos;nin isim çözmesi gerekmez.
-          </>
+          <Rich
+            text={t("proxy.warn.fix1Published")}
+            values={{
+              ip: <code className="font-mono">192.168.61.114</code>,
+              port: <code className="font-mono">{entry.publishedPorts[0]}</code>,
+            }}
+          />
         ) : (
-          <>
-            {" "}
-            ve sunucunun IP&apos;si ile bir port yaz — ama bu container hiçbir port
-            <strong> yayınlamıyor</strong>, yani önce compose dosyasında ona bir port vermen
-            gerekiyor.
-          </>
+          <Rich
+            text={t("proxy.warn.fix1None")}
+            values={{ strong: <strong>{t("proxy.warn.fix1NoneStrong")}</strong> }}
+          />
         )}
         <br />
-        2. Ya da <strong>{targets.caddyName}</strong>&apos;yi{" "}
-        <code className="font-mono">{entry.networks[0] ?? "bu container'ın ağına"}</code> ağına
-        bağla; o zaman adla çözebilir.
+        <Rich
+          text={t("proxy.warn.fix2")}
+          values={{
+            caddy: <strong>{targets.caddyName}</strong>,
+            network: (
+              <code className="font-mono">{entry.networks[0] ?? t("proxy.warn.thisNetwork")}</code>
+            ),
+          }}
+        />
       </span>
     </p>
   );
@@ -844,12 +861,13 @@ function DiagnoseModal({
   result: DiagnoseResult | null;
   onClose: () => void;
 }) {
+  const t = useT();
   return (
-    <Modal open={result !== null} title="Yayın sınaması" onClose={onClose} wide>
+    <Modal open={result !== null} title={t("proxy.diagnose.title")} onClose={onClose} wide>
       {result && (
         <div className="space-y-3">
           <p className="text-sm">
-            <span className="text-subtle">Adres:</span>{" "}
+            <span className="text-subtle">{t("proxy.diagnose.address")}</span>{" "}
             <a
               href={result.url}
               target="_blank"
@@ -893,10 +911,10 @@ function DiagnoseModal({
             }`}
           >
             {!result.ok
-              ? "En az bir adım düştü; yukarıdaki öneriye bak."
+              ? t("proxy.diagnose.failed")
               : result.steps.some((step) => step.status === "unknown")
-                ? "Düşen adım yok ama bir adım panelden sınanamadı — açıklamaya bak."
-                : "Üç adım da geçti — adres çalışıyor olmalı."}
+                ? t("proxy.diagnose.unknown")
+                : t("proxy.diagnose.ok")}
           </p>
         </div>
       )}

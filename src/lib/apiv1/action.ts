@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { audit } from "@/lib/auth/audit";
 import { getNumber } from "@/lib/settings";
@@ -68,7 +69,7 @@ export function beginIdempotent(request: Request, actor: ApiActor): IdempotencyR
       kind: "invalid",
       response: apiError(
         "invalid_request",
-        "Idempotency-Key en fazla 128 karakter olmalı ve yalnızca A-Z a-z 0-9 _ . : - içerebilir",
+        serverT("apiv1.idempotencyFormat"),
       ),
     };
   }

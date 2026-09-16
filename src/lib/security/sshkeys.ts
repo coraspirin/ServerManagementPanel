@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { createHash } from "node:crypto";
 
@@ -127,7 +128,7 @@ export async function auditSshKeys(): Promise<SshAudit> {
   };
 
   const image = await panelImage();
-  if (!image) return { ...empty, error: "Panel imajı belirlenemedi." };
+  if (!image) return { ...empty, error: serverT("stacks.noPanelImage") };
 
   let output: string;
   try {
@@ -141,11 +142,14 @@ export async function auditSshKeys(): Promise<SshAudit> {
       user: "0:0",
     });
     if (result.exitCode !== 0) {
-      return { ...empty, error: result.output.slice(0, 300) || "denetim başarısız" };
+      return { ...empty, error: result.output.slice(0, 300) || serverT("sshLib.auditFailed") };
     }
     output = result.stdout ?? result.output;
   } catch (error) {
-    return { ...empty, error: error instanceof Error ? error.message : "denetim çalıştırılamadı" };
+    return {
+      ...empty,
+      error: error instanceof Error ? error.message : serverT("sshLib.auditExec"),
+    };
   }
 
   const line = output
@@ -153,7 +157,7 @@ export async function auditSshKeys(): Promise<SshAudit> {
     .map((entry) => entry.trim())
     .reverse()
     .find((entry) => entry.startsWith("{"));
-  if (!line) return { ...empty, error: "denetim çıktısı ayrıştırılamadı" };
+  if (!line) return { ...empty, error: serverT("sshLib.parseFailed") };
 
   let parsed: {
     keys: {
@@ -170,7 +174,7 @@ export async function auditSshKeys(): Promise<SshAudit> {
   try {
     parsed = JSON.parse(line) as typeof parsed;
   } catch {
-    return { ...empty, error: "denetim çıktısı geçerli JSON değil" };
+    return { ...empty, error: serverT("sshLib.notJson") };
   }
 
   const keys: SshKey[] = parsed.keys.map((entry) => ({
@@ -187,25 +191,23 @@ export async function auditSshKeys(): Promise<SshAudit> {
   const notes: string[] = [];
 
   if (parsed.sshd.passwordAuthentication?.toLowerCase() === "yes") {
-    notes.push(
-      "Parola ile SSH girişi AÇIK. Anahtar tabanlı girişe geçtiysen kapatmak kaba kuvvet yüzeyini tamamen kaldırır.",
-    );
+    notes.push(serverT("sshLib.passwordOn"));
   }
   if (parsed.sshd.permitRootLogin && !/^(no|prohibit-password)$/i.test(parsed.sshd.permitRootLogin)) {
-    notes.push(`root ile doğrudan SSH girişi: ${parsed.sshd.permitRootLogin}`);
+    notes.push(serverT("sshLib.rootLogin", { value: parsed.sshd.permitRootLogin }));
   }
   const rootKeys = keys.filter((key) => key.owner === "root");
   if (rootKeys.length > 0) {
-    notes.push(`root hesabında ${rootKeys.length} yetkili anahtar var.`);
+    notes.push(serverT("sshLib.rootKeys", { count: rootKeys.length }));
   }
   for (const key of keys) {
     if (key.fileMode && !["600", "400", "644"].includes(key.fileMode)) {
-      notes.push(`${key.file} izinleri ${key.fileMode} — sshd fazla açık dosyaları yok sayabilir.`);
+      notes.push(serverT("sshLib.fileMode", { file: key.file, mode: key.fileMode }));
       break;
     }
   }
   if (keys.length === 0) {
-    notes.push("Hiç yetkili anahtar bulunamadı; giriş yalnızca parolayla yapılıyor olabilir.");
+    notes.push(serverT("sshLib.noKeys"));
   }
 
   return { keys, sshd: parsed.sshd, notes, error: null };

@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { fail2banState, failedLogins, unban } from "@/lib/security/fail2ban";
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const action = String(body.action ?? "");
@@ -129,5 +130,5 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, forwards: storedForwards() });
   }
 
-  return Response.json({ error: "Bilinmeyen işlem." }, { status: 400 });
+  return Response.json({ error: serverT("api.unknownAction") }, { status: 400 });
 }

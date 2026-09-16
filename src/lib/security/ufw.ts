@@ -7,6 +7,8 @@
  * erişimini kaybetmesi demek ve bu, helper'a hiç dokunmadan doğrulanabilmeli.
  */
 
+import { serverT } from "../i18n/runtime.ts";
+
 export type FirewallRule = {
   number: number;
   raw: string;
@@ -166,13 +168,13 @@ export function dangerousChange(change: FirewallChange, state: FirewallState): s
       change.rule.match(/^(\d{1,5})/)?.[1] ?? change.rule.match(/port (\d{1,5})/)?.[1] ?? 0,
     );
     if (panelPorts().includes(port)) {
-      return `Bu kural panelin kendi portunu (${port}) kapatabilir.`;
+      return serverT("ufw.panelPort", { port });
     }
     if (port === 443 || port === 80) {
-      return "Bu kural panelin kendisine erişimi kesebilir.";
+      return serverT("ufw.panelAccess");
     }
     if (port === 22) {
-      return "Bu kural SSH erişimini kesebilir — panel bozulursa sunucuya giremezsin.";
+      return serverT("ufw.ssh");
     }
     return null;
   }
@@ -181,39 +183,26 @@ export function dangerousChange(change: FirewallChange, state: FirewallState): s
     const missing: string[] = [];
     if (!allowsPort(state.rules, 22)) missing.push("SSH (22)");
     for (const port of panelPorts()) {
-      if (!allowsPort(state.rules, port)) missing.push(`panel portu (${port})`);
+      if (!allowsPort(state.rules, port)) missing.push(serverT("ufw.panelPortName", { port }));
     }
 
     if (missing.length > 0) {
-      return (
-        `Güvenlik duvarı açılırsa şunlara erişim kesilebilir: ${missing.join(", ")} — ` +
-        "kural listesinde bunlara izin veren bir satır yok. Önce kuralları ekle, sonra etkinleştir."
-      );
+      return serverT("ufw.enableMissing", { list: missing.join(", ") });
     }
 
     const subnet = panelSubnet();
     if (!state.rules.some((rule) => rule.from.includes(subnet))) {
-      return (
-        `Kural listesinde Docker alt ağından (${subnet}) gelen trafiğe izin veren bir satır ` +
-        "görünmüyor. SSH ve panel portu açık olduğu için erişimini kaybetmemelisin, ama " +
-        "container'lar arası bazı akışlar etkilenebilir."
-      );
+      return serverT("ufw.dockerSubnet", { subnet });
     }
 
     return null;
   }
 
   if (change.direction === "incoming" && change.policy === "allow") {
-    return (
-      "Gelen trafiğin varsayılanını 'allow' yapmak, kural yazılmamış HER portu dışarı açar — " +
-      "güvenlik duvarı bu hâlde neredeyse hiçbir şey korumaz."
-    );
+    return serverT("ufw.allowIncoming");
   }
   if (change.direction === "outgoing" && change.policy !== "allow") {
-    return (
-      "Giden trafiği kısıtlamak sunucunun kendi güncellemelerini, DNS'ini ve panelin dış " +
-      "çağrılarını kesebilir."
-    );
+    return serverT("ufw.restrictOutgoing");
   }
 
   return null;

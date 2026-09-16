@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ChevronRight, Folder, FolderOpen, Plus, RotateCw, X } from "lucide-react";
 import { Modal } from "@/components/Modal";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * Host klasör seçici (M3.45).
@@ -51,7 +52,10 @@ function crumbs(target: string): { label: string; path: string }[] {
  * Ayrı ayrı durum güncelleyen bir yardımcı, React'ın "efekt içinde eşzamanlı
  * setState" kuralına takılıyordu.
  */
-async function fetchListing(target: string): Promise<Listing> {
+async function fetchListing(
+  target: string,
+  messages: { failed: string; network: string },
+): Promise<Listing> {
   try {
     const response = await fetch(`/api/host/dirs?path=${encodeURIComponent(target)}`, {
       cache: "no-store",
@@ -62,14 +66,14 @@ async function fetchListing(target: string): Promise<Listing> {
         path: target,
         parent: null,
         dirs: [],
-        error: payload.error ?? "Klasör listesi alınamadı.",
+        error: payload.error ?? messages.failed,
       };
     }
     // Sunucu yolu normalleştirmiş olabilir; "hangi yolun listesi" sorusunun
     // cevabı istenen yol olmalı, yoksa yükleniyor durumu hiç kapanmaz.
     return { ...payload, path: target };
   } catch {
-    return { path: target, parent: null, dirs: [], error: "Sunucuya ulaşılamadı." };
+    return { path: target, parent: null, dirs: [], error: messages.network };
   }
 }
 
@@ -93,6 +97,7 @@ export function DirBrowser({
   onPick: (path: string) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const [current, setCurrent] = useState(startPath || "/");
   const [listing, setListing] = useState<Listing | null>(null);
   /** Yenile düğmesinin jetonu: aynı yolu yeniden çekmenin tek yolu. */
@@ -103,7 +108,10 @@ export function DirBrowser({
 
     let alive = true;
     (async () => {
-      const next = await fetchListing(current);
+      const next = await fetchListing(current, {
+        failed: t("dirPicker.listFailed"),
+        network: t("common.errors.network"),
+      });
       // Kullanıcı yanıt gelmeden başka klasöre geçmiş olabilir; geç gelen
       // liste ekrandakini ezmemeli.
       if (alive) setListing(next);
@@ -112,7 +120,7 @@ export function DirBrowser({
     return () => {
       alive = false;
     };
-  }, [open, current, reloadToken]);
+  }, [open, current, reloadToken, t]);
 
   /*
     Yükleniyor durumu TÜRETİLİYOR, ayrı bir state değil: elimizdeki liste
@@ -153,7 +161,7 @@ export function DirBrowser({
           <button
             type="button"
             onClick={reload}
-            title="Yenile"
+            title={t("common.actions.refresh")}
             className="ml-auto rounded p-1 text-subtle transition-colors hover:text-ink"
           >
             <RotateCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />
@@ -169,7 +177,7 @@ export function DirBrowser({
         <div className="max-h-72 overflow-y-auto rounded-md border border-line">
           {listing && listing.dirs.length === 0 && !listing.error ? (
             <p className="px-3 py-6 text-center text-xs text-subtle">
-              Burada alt klasör yok. Yine de bu klasörü seçebilirsin.
+              {t("dirPicker.noSubfolders")}
             </p>
           ) : (
             <ul className="divide-y divide-line">
@@ -197,14 +205,14 @@ export function DirBrowser({
             onClick={onClose}
             className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
           >
-            Vazgeç
+            {t("common.actions.cancel")}
           </button>
           <button
             type="button"
             onClick={() => onPick(current)}
             className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
           >
-            Bu klasörü seç
+            {t("dirPicker.choose")}
           </button>
         </div>
       </div>
@@ -222,6 +230,7 @@ export function DirPicker({
   disabled: boolean;
   onCommit: (value: string) => void;
 }) {
+  const t = useT();
   const [browsing, setBrowsing] = useState(false);
 
   return (
@@ -230,13 +239,13 @@ export function DirPicker({
         title={value}
         className={`${inputClass} min-w-0 truncate font-mono ${value ? "" : "text-subtle"}`}
       >
-        {value || "seçilmedi"}
+        {value || t("dirPicker.notSelected")}
       </span>
       <button
         type="button"
         disabled={disabled}
         onClick={() => setBrowsing(true)}
-        title="Klasör seç"
+        title={t("dirPicker.pick")}
         className="shrink-0 rounded-md border border-line p-1.5 text-subtle transition-colors hover:border-brand hover:text-brand disabled:opacity-50"
       >
         <FolderOpen className="size-4" />
@@ -244,7 +253,7 @@ export function DirPicker({
 
       <DirBrowser
         open={browsing}
-        title="Klasör seç"
+        title={t("dirPicker.pick")}
         startPath={value}
         onClose={() => setBrowsing(false)}
         onPick={(picked) => {
@@ -272,6 +281,7 @@ export function DirListEditor({
   disabled: boolean;
   onCommit: (value: string) => void;
 }) {
+  const t = useT();
   const [browsing, setBrowsing] = useState(false);
 
   const list = value
@@ -285,7 +295,7 @@ export function DirListEditor({
     <div className="w-full space-y-1.5 sm:w-72">
       {list.length === 0 ? (
         <p className="text-xs text-warn">
-          Hiç kök tanımlı değil — dosya yöneticisi kapalı.
+          {t("dirPicker.noRoots")}
         </p>
       ) : (
         <ul className="space-y-1">
@@ -300,7 +310,7 @@ export function DirListEditor({
                 type="button"
                 disabled={disabled}
                 onClick={() => write(list.filter((item) => item !== entry))}
-                aria-label={`${entry} kaldır`}
+                aria-label={t("dirPicker.removeAria", { name: entry })}
                 className="shrink-0 rounded p-0.5 text-subtle transition-colors hover:text-danger disabled:opacity-50"
               >
                 <X className="size-3.5" />
@@ -317,12 +327,12 @@ export function DirListEditor({
         className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-xs text-subtle transition-colors hover:border-brand hover:text-brand disabled:opacity-50"
       >
         <Plus className="size-3.5" aria-hidden />
-        Klasör ekle
+        {t("dirPicker.add")}
       </button>
 
       <DirBrowser
         open={browsing}
-        title="İzinli kök ekle"
+        title={t("dirPicker.addRoot")}
         startPath={list[0] ?? "/"}
         onClose={() => setBrowsing(false)}
         onPick={(picked) => {

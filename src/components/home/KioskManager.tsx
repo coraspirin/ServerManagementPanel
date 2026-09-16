@@ -4,6 +4,7 @@ import { useState } from "react";
 import { MonitorSmartphone, Plus, Trash2 } from "lucide-react";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import type { KioskTokenView } from "@/lib/home/kiosk";
+import { useFormat, useT } from "@/lib/i18n/client";
 
 /**
  * M2.7 — kiosk bağlantıları.
@@ -18,18 +19,17 @@ function readCsrfToken(): string {
   return match ? decodeURIComponent(match[1]) : "";
 }
 
-function formatDate(ts: number | null): string {
-  return ts === null
-    ? "—"
-    : new Date(ts * 1000).toLocaleString("tr-TR", {
-        day: "2-digit",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-}
+const SHORT: Intl.DateTimeFormatOptions = {
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+};
 
 export function KioskManager({ initialTokens }: { initialTokens: KioskTokenView[] }) {
+  const t = useT();
+  const f = useFormat();
+  const formatDate = (ts: number | null) => (ts === null ? "—" : f.dateTime(ts * 1000, SHORT));
   const [tokens, setTokens] = useState(initialTokens);
   const [name, setName] = useState("");
   const [days, setDays] = useState("");
@@ -53,7 +53,7 @@ export function KioskManager({ initialTokens }: { initialTokens: KioskTokenView[
         tokens?: KioskTokenView[];
       };
       if (!response.ok) {
-        setError(data.error ?? "Bağlantı üretilemedi.");
+        setError(data.error ?? t("home.kiosk.createFailed"));
         return;
       }
       if (data.tokens) setTokens(data.tokens);
@@ -63,14 +63,14 @@ export function KioskManager({ initialTokens }: { initialTokens: KioskTokenView[
       setName("");
       setDays("");
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
   }
 
   async function revoke(token: KioskTokenView) {
-    if (!confirm(`"${token.name || token.fingerprint}" bağlantısı iptal edilsin mi?`)) return;
+    if (!confirm(t("home.kiosk.confirmRevoke", { name: token.name || token.fingerprint }))) return;
 
     setBusy(true);
     try {
@@ -80,7 +80,7 @@ export function KioskManager({ initialTokens }: { initialTokens: KioskTokenView[
       });
       const data = (await response.json()) as { tokens?: KioskTokenView[]; error?: string };
       if (response.ok && data.tokens) setTokens(data.tokens);
-      else setError(data.error ?? "İptal edilemedi.");
+      else setError(data.error ?? t("home.kiosk.revokeFailed"));
     } finally {
       setBusy(false);
     }
@@ -90,31 +90,30 @@ export function KioskManager({ initialTokens }: { initialTokens: KioskTokenView[
     <section className="rounded-lg border border-line bg-surface p-5">
       <h2 className="flex items-center gap-2 text-sm font-semibold">
         <MonitorSmartphone className="size-4 text-subtle" aria-hidden />
-        Kiosk bağlantıları
+        {t("home.kiosk.title")}
       </h2>
       <p className="mt-1 text-xs text-subtle">
-        Duvara asılı tablet/monitör için oturum gerektirmeyen, salt-okunur bir görünüm.
-        Adresteki token yetkiyi taşır — yazma yapan hiçbir uç bu yolu kabul etmez.
+        {t("home.kiosk.intro")}
       </p>
 
       <div className="mt-4 flex flex-wrap items-end gap-2">
         <label className="block">
-          <span className="text-xs font-medium">Ad</span>
+          <span className="text-xs font-medium">{t("users.roles.name")}</span>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Mutfak tableti"
+            placeholder={t("home.kiosk.namePlaceholder")}
             className="mt-1 rounded-md border border-line bg-canvas px-2.5 py-1.5 text-sm outline-none focus:border-brand"
           />
         </label>
         <label className="block">
-          <span className="text-xs font-medium">Geçerlilik (gün)</span>
+          <span className="text-xs font-medium">{t("home.kiosk.validity")}</span>
           <input
             type="number"
             value={days}
             onChange={(e) => setDays(e.target.value)}
-            placeholder="boş = süresiz"
+            placeholder={t("home.kiosk.validityPlaceholder")}
             className="mt-1 w-32 rounded-md border border-line bg-canvas px-2.5 py-1.5 text-sm outline-none focus:border-brand"
           />
         </label>
@@ -124,14 +123,14 @@ export function KioskManager({ initialTokens }: { initialTokens: KioskTokenView[
           disabled={busy}
           className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
         >
-          <Plus className="size-4" /> Bağlantı üret
+          <Plus className="size-4" /> {t("home.kiosk.create")}
         </button>
       </div>
 
       {fresh && (
         <div className="mt-3 rounded-md border border-brand/40 bg-brand/5 px-3 py-2">
           <p className="text-xs font-medium">
-            Bu adres bir daha gösterilmeyecek — şimdi kopyala.
+            {t("home.kiosk.shownOnce")}
           </p>
           <code className="mt-1 block break-all font-mono text-xs">{fresh}</code>
         </div>
@@ -144,19 +143,20 @@ export function KioskManager({ initialTokens }: { initialTokens: KioskTokenView[
           {tokens.map((token) => (
             <li key={token.fingerprint} className="flex items-center gap-3 px-3 py-2 text-sm">
               <span className="min-w-0 flex-1">
-                <span className="block truncate">{token.name || "(adsız)"}</span>
+                <span className="block truncate">{token.name || t("home.kiosk.unnamed")}</span>
                 <span className="block text-[11px] text-subtle">
-                  {token.fingerprint} · son kullanım {formatDate(token.lastSeenAt)} ·{" "}
+                  {token.fingerprint} ·{" "}
+                  {t("home.kiosk.lastUsed", { when: formatDate(token.lastSeenAt) })} ·{" "}
                   {token.expiresAt === null
-                    ? "süresiz"
-                    : `bitiş ${formatDate(token.expiresAt)}`}
+                    ? t("home.kiosk.noExpiry")
+                    : t("home.kiosk.expires", { when: formatDate(token.expiresAt) })}
                 </span>
               </span>
               <button
                 type="button"
                 onClick={() => void revoke(token)}
                 disabled={busy}
-                aria-label={`${token.name || token.fingerprint} bağlantısını iptal et`}
+                aria-label={t("home.kiosk.revokeAria", { name: token.name || token.fingerprint })}
                 className="rounded p-1 text-subtle transition-colors hover:text-danger disabled:opacity-50"
               >
                 <Trash2 className="size-3.5" />

@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -71,7 +72,7 @@ export function ouiStatus(): { present: boolean; ageDays: number | null; entries
 export async function refreshOui(force = false): Promise<{ updated: boolean; message: string }> {
   const status = ouiStatus();
   if (!force && status.present && (status.ageDays ?? 0) < MAX_AGE_DAYS) {
-    return { updated: false, message: `liste güncel (${status.entries} kayıt)` };
+    return { updated: false, message: serverT("ouiLib.current", { count: status.entries }) };
   }
 
   try {
@@ -81,15 +82,15 @@ export async function refreshOui(force = false): Promise<{ updated: boolean; mes
     const text = await response.text();
     // Kısa bir yanıt neredeyse kesin bir hata sayfasıdır; onu kaydedip
     // "liste var" sanmak, üreticilerin sessizce boş kalmasına yol açardı.
-    if (text.length < 100_000) throw new Error("beklenenden küçük yanıt");
+    if (text.length < 100_000) throw new Error(serverT("ouiLib.tooSmall"));
 
     writeFileSync(ouiPath(), text, "utf8");
     table = null;
-    return { updated: true, message: `${load().size} üretici kaydı indirildi` };
+    return { updated: true, message: serverT("ouiLib.downloaded", { count: load().size }) };
   } catch (error) {
     return {
       updated: false,
-      message: `OUI listesi indirilemedi: ${error instanceof Error ? error.message : String(error)}`,
+      message: serverT("oui.downloadFailed", { error: error instanceof Error ? error.message : String(error) }),
     };
   }
 }

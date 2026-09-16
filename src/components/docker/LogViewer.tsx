@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Minus, Pause, Play, Plus, Search } from "lucide-react";
 
 import { parseAnsi, stripAnsi, type AnsiSpan } from "@/lib/logs/ansi";
+import { useFormat, useT } from "@/lib/i18n/client";
 
 /**
  * Canlı container logu (M1.7).
@@ -99,6 +100,8 @@ export function LogViewer({
   containerName: string;
   tail: number;
 }) {
+  const t = useT();
+  const f = useFormat();
   const [lines, setLines] = useState<Line[]>([]);
   const [paused, setPaused] = useState(false);
   const [query, setQuery] = useState("");
@@ -199,7 +202,8 @@ export function LogViewer({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-xs text-subtle">
           <span className={`size-2 rounded-full ${connected ? "bg-ok" : "bg-line"}`} />
-          {connected ? "canlı" : "bağlantı yok"} · {lines.length} satır
+          {connected ? t("docker.logs.live") : t("docker.logs.disconnected")} ·{" "}
+          {t("docker.logs.lines", { count: lines.length })}
         </div>
 
         <div className="flex w-full items-center gap-2 sm:w-auto">
@@ -212,7 +216,7 @@ export function LogViewer({
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Logda ara…"
+              placeholder={t("docker.logs.search")}
               className="w-full rounded-md border border-line bg-canvas py-1.5 pl-8 pr-2 text-xs outline-none focus:border-brand sm:w-44"
             />
           </div>
@@ -223,19 +227,19 @@ export function LogViewer({
             className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand hover:text-brand"
           >
             {paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
-            {paused ? "Devam" : "Duraklat"}
+            {paused ? t("docker.logs.resume") : t("docker.logs.pause")}
           </button>
 
           <div className="flex items-center gap-px">
             <IconOnly
-              title="Yazıyı küçült"
+              title={t("docker.terminal.fontSmaller")}
               disabled={font <= MIN_FONT}
               onClick={() => setFont((v) => Math.max(MIN_FONT, v - 1))}
             >
               <Minus className="size-3" />
             </IconOnly>
             <IconOnly
-              title="Yazıyı büyüt"
+              title={t("docker.terminal.fontLarger")}
               disabled={font >= MAX_FONT}
               onClick={() => setFont((v) => Math.min(MAX_FONT, v + 1))}
             >
@@ -243,7 +247,7 @@ export function LogViewer({
             </IconOnly>
           </div>
 
-          <IconOnly title="Görünen satırları .txt olarak indir" onClick={download}>
+          <IconOnly title={t("docker.logs.download")} onClick={download}>
             <Download className="size-3.5" />
           </IconOnly>
         </div>
@@ -267,8 +271,8 @@ export function LogViewer({
         {filtered.length === 0 ? (
           <p className="text-subtle">
             {lines.length === 0
-              ? `${containerName} için henüz log gelmedi.`
-              : "Aramayla eşleşen satır yok."}
+              ? t("docker.logs.noLogs", { name: containerName })
+              : t("docker.logs.noMatch")}
           </p>
         ) : (
           filtered.map((line, index) => (
@@ -280,7 +284,7 @@ export function LogViewer({
             >
               {line.ts && (
                 <span className="mr-2 text-subtle">
-                  {new Date(line.ts).toLocaleTimeString("tr-TR")}
+                  {f.time(line.ts)}
                 </span>
               )}
               <AnsiLine spans={parseAnsi(line.text)} />
@@ -291,7 +295,7 @@ export function LogViewer({
 
       {paused && (
         <p className="text-[11px] text-warn">
-          Duraklatıldı — bu sırada gelen satırlar gösterilmiyor (akış açık kalıyor).
+          {t("docker.logs.paused")}
         </p>
       )}
     </div>

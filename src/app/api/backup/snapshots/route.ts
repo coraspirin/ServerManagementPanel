@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { tagFor } from "@/lib/backup/engine";
@@ -21,12 +22,12 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const jobId = Number(url.searchParams.get("jobId") ?? 0);
   const job = getJob(jobId);
-  if (!job) return Response.json({ error: "İş bulunamadı." }, { status: 404 });
+  if (!job) return Response.json({ error: serverT("api.notFound.job") }, { status: 404 });
 
   const secrets = repoSecrets(job.repoId);
   if (!secrets) {
     return Response.json(
-      { error: "Depo parolası çözülemedi. MASTER_KEY değişmiş olabilir." },
+      { error: serverT("api.backup.repoPasswordMaster") },
       { status: 400 },
     );
   }
@@ -47,19 +48,19 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const job = getJob(Number(body.jobId ?? 0));
-  if (!job) return Response.json({ error: "İş bulunamadı." }, { status: 404 });
+  if (!job) return Response.json({ error: serverT("api.notFound.job") }, { status: 404 });
 
   const snapshotId = String(body.snapshotId ?? "").trim();
   const target = String(body.target ?? "").trim();
 
-  if (!snapshotId) return Response.json({ error: "Snapshot seçilmeli." }, { status: 400 });
+  if (!snapshotId) return Response.json({ error: serverT("api.backup.snapshotRequired") }, { status: 400 });
   if (!target.startsWith("/") || target.includes("..")) {
     return Response.json(
-      { error: "Hedef yol mutlak olmalı ve '..' içermemeli." },
+      { error: serverT("api.backup.targetAbsolute") },
       { status: 400 },
     );
   }
@@ -69,14 +70,14 @@ export async function POST(request: Request) {
     (forbidden) => target === forbidden || target.startsWith(`${forbidden}/`),
   )) {
     return Response.json(
-      { error: `Bu hedefe geri yükleme yapılamaz: ${target}. Boş bir klasör seç.` },
+      { error: serverT("api.backup.targetForbidden", { target }) },
       { status: 400 },
     );
   }
 
   const secrets = repoSecrets(job.repoId);
   if (!secrets) {
-    return Response.json({ error: "Depo parolası çözülemedi." }, { status: 400 });
+    return Response.json({ error: serverT("api.backup.repoPassword") }, { status: 400 });
   }
 
   const result = await runRestore(secrets, snapshotId, target);
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
   return Response.json({
     ok,
     message: ok
-      ? `Snapshot ${snapshotId.slice(0, 8)} → ${target}/data altına açıldı.`
+      ? serverT("api.backup.restored", { id: snapshotId.slice(0, 8), target })
       : result.output.slice(0, 800),
   });
 }

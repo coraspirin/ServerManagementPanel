@@ -1,5 +1,6 @@
 import { CloudRain, CloudSnow, Cloudy, Sun, Zap } from "lucide-react";
 import type { Weather } from "@/lib/home/weather";
+import { getT } from "@/lib/i18n/server";
 
 /**
  * İkonu BİLEŞEN olarak değil, hazır ELEMAN olarak döndürüyor.
@@ -27,6 +28,7 @@ export function WeatherCard({
   label: string;
   big?: boolean;
 }) {
+  const t = getT();
   return (
     <div className="flex items-center gap-4">
       <WeatherIcon
@@ -44,8 +46,11 @@ export function WeatherCard({
         <div className={`text-subtle ${big ? "text-sm" : "text-[11px]"}`}>
           {/* Hissedilen ayrı yazılıyor: rüzgârlı bir günde 12° ile 6° arasındaki
               fark, dışarı çıkarken giyilecek şeyi değiştiriyor. */}
-          Hissedilen {Math.round(weather.apparent)}° · En yüksek{" "}
-          {Math.round(weather.max)}° / en düşük {Math.round(weather.min)}°
+          {t("home.weather.detail", {
+            apparent: Math.round(weather.apparent),
+            max: Math.round(weather.max),
+            min: Math.round(weather.min),
+          })}
         </div>
       </div>
     </div>

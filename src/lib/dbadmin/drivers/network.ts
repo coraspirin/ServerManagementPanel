@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import net from "node:net";
 import type { DbStructure, DbTable, QueryResult } from "../types";
@@ -292,7 +293,7 @@ type RespValue = string | number | null | RespValue[];
 function respDecode(buffer: string, offset: number): { value: RespValue; next: number } {
   const type = buffer[offset];
   const end = buffer.indexOf("\r\n", offset);
-  if (end < 0) throw new Error("eksik yanıt");
+  if (end < 0) throw new Error("eksik yanıt"); // i18n-ignore — iç işaret, aşağıda eşleştiriliyor
 
   const head = buffer.slice(offset + 1, end);
 
@@ -321,7 +322,7 @@ function respDecode(buffer: string, offset: number): { value: RespValue; next: n
       return { value: items, next: cursor };
     }
     default:
-      throw new Error(`bilinmeyen RESP türü: ${type}`);
+      throw new Error(serverT("dbDriver.unknownResp", { type }));
   }
 }
 
@@ -340,7 +341,7 @@ export function redisCommand(config: NetConfig, args: string[][]): Promise<RespV
     socket.on("connect", () => socket.write(commands.map(respEncode).join("")));
     socket.on("timeout", () => {
       socket.destroy();
-      reject(new Error("Redis zaman aşımı"));
+      reject(new Error(serverT("dbDriver.redisTimeout")));
     });
     socket.on("error", reject);
 
@@ -361,7 +362,7 @@ export function redisCommand(config: NetConfig, args: string[][]): Promise<RespV
         }
       } catch (error) {
         // Yanıt henüz tam gelmemiş olabilir; hata mesajı ise gerçekten hatadır.
-        if (error instanceof Error && error.message !== "eksik yanıt") {
+        if (error instanceof Error && error.message !== "eksik yanıt") { // i18n-ignore
           socket.destroy();
           reject(error);
         }
@@ -372,20 +373,20 @@ export function redisCommand(config: NetConfig, args: string[][]): Promise<RespV
 
 export async function redisQuery(config: NetConfig, command: string): Promise<Raw> {
   const parts = command.trim().split(/\s+/).filter((part) => part.length > 0);
-  if (parts.length === 0) throw new Error("Komut boş.");
+  if (parts.length === 0) throw new Error(serverT("dbDriver.commandEmpty"));
 
   const [value] = await redisCommand(config, [parts]);
 
   if (Array.isArray(value)) {
     return {
-      columns: ["değer"],
+      columns: [serverT("dbDriver.value")],
       rows: value.map((entry) => [entry === null ? null : String(entry)]),
       affected: null,
     };
   }
 
   return {
-    columns: ["sonuç"],
+    columns: [serverT("dbDriver.result")],
     rows: [[value === null ? null : String(value)]],
     affected: null,
   };

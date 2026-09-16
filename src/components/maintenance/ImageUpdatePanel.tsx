@@ -4,6 +4,9 @@ import { useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import type { ImageUpdate } from "@/lib/updates";
+import { useFormat, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
+import type { MessageKey } from "@/lib/i18n/translate";
 
 function readCsrfToken(): string {
   const match = document.cookie.match(new RegExp(`(?:^|; )${CSRF_COOKIE}=([^;]*)`));
@@ -27,6 +30,7 @@ function UpdateRow({
   canAct: boolean;
   onDone: () => void;
 }) {
+  const t = useT();
   const [progress, setProgress] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -34,11 +38,7 @@ function UpdateRow({
 
   async function run() {
     if (
-      !confirm(
-        `"${entry.container}" yeni image ile YENİDEN OLUŞTURULACAK.\n\n` +
-          "Servis kısa süre kesintiye uğrar. Yeni sürüm ayağa kalkmazsa panel " +
-          "eski container'ı geri getirir.\n\nDevam edilsin mi?",
-      )
+      !confirm(t("maintenance.images.confirmUpdate", { name: entry.container }))
     ) {
       return;
     }
@@ -46,7 +46,7 @@ function UpdateRow({
     setBusy(true);
     setFailed(null);
     setResult(null);
-    setProgress("başlıyor…");
+    setProgress(t("maintenance.images.starting"));
 
     try {
       const response = await fetch(
@@ -56,7 +56,7 @@ function UpdateRow({
 
       if (!response.ok || !response.body) {
         const payload = await response.json().catch(() => null);
-        setFailed(payload?.error ?? "Güncelleme başlatılamadı.");
+        setFailed(payload?.error ?? t("maintenance.images.startFailed"));
         return;
       }
 
@@ -85,14 +85,15 @@ function UpdateRow({
             // güncel" ile karıştırılmamalı: güncelleme var, panel bilerek
             // uygulamadı (M3.28).
             if (data.blockedBy) {
-              setFailed(`Güvenlik kapısı engelledi: ${data.blockedBy}`);
+              setFailed(t("maintenance.images.blocked", { reason: data.blockedBy }));
               setProgress(null);
               return;
             }
             setResult(
               data.changed
-                ? `güncellendi${data.scanSummary ? ` — ${data.scanSummary}` : ""}`
-                : "zaten güncel — kayıt defterindeki sürüm zaten kuruluydu",
+                ? t("maintenance.images.updated") +
+                    (data.scanSummary ? ` — ${data.scanSummary}` : "")
+                : t("maintenance.images.upToDate"),
             );
             setProgress(null);
             onDone();
@@ -103,7 +104,7 @@ function UpdateRow({
         }
       }
     } catch {
-      setFailed("Sunucuya ulaşılamadı.");
+      setFailed(t("common.errors.network"));
     } finally {
       setBusy(false);
       setProgress(null);
@@ -117,7 +118,7 @@ function UpdateRow({
           <span className="font-medium">{entry.container}</span>
           <span className="font-mono text-[11px] text-subtle">{entry.image}</span>
           <span className="rounded bg-brand/10 px-1.5 text-[10px] font-medium text-brand">
-            yeni sürüm var
+            {t("maintenance.images.newVersion")}
           </span>
         </div>
 
@@ -128,7 +129,7 @@ function UpdateRow({
             disabled={busy}
             className="rounded-md border border-line px-2.5 py-1 text-xs transition-colors hover:border-brand hover:text-brand disabled:opacity-50"
           >
-            {busy ? "güncelleniyor…" : "Güncelle"}
+            {busy ? t("maintenance.images.updating") : t("maintenance.images.update")}
           </button>
         )}
       </div>
@@ -140,19 +141,11 @@ function UpdateRow({
   );
 }
 
-function ago(ts: number): string {
-  const minutes = Math.floor((Date.now() / 1000 - ts) / 60);
-  if (minutes < 60) return `${minutes} dk önce`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 48) return `${hours} saat önce`;
-  return `${Math.floor(hours / 24)} gün önce`;
-}
-
 /** Sıçrama türünün okunur karşılığı. */
-const BUMP_LABEL: Record<string, string> = {
-  yama: "yama sürümü",
-  minor: "minör sürüm",
-  major: "MAJÖR sürüm — kırıcı değişiklik olabilir",
+const BUMP_LABEL: Record<string, MessageKey> = {
+  yama: "maintenance.images.bump.yama",
+  minor: "maintenance.images.bump.minor",
+  major: "maintenance.images.bump.major",
 };
 
 /**
@@ -171,6 +164,8 @@ export function ImageUpdatePanel({
   initialCheckedAt: number | null;
   canAct: boolean;
 }) {
+  const t = useT();
+  const f = useFormat();
   const [updates, setUpdates] = useState(initial);
   const [checkedAt, setCheckedAt] = useState(initialCheckedAt);
   const [busy, setBusy] = useState(false);
@@ -185,13 +180,13 @@ export function ImageUpdatePanel({
         headers: { [CSRF_HEADER]: readCsrfToken() },
       });
       const payload = await response.json();
-      if (!response.ok) setError(payload.error ?? "Kontrol başarısız.");
+      if (!response.ok) setError(payload.error ?? t("maintenance.images.checkFailed"));
       else {
         setUpdates(payload.updates as ImageUpdate[]);
         setCheckedAt(payload.checkedAt as number);
       }
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
@@ -223,11 +218,11 @@ export function ImageUpdatePanel({
     <section className="rounded-lg border border-line bg-surface">
       <div className="flex flex-wrap items-start justify-between gap-2 border-b border-line px-5 py-3">
         <div>
-          <h2 className="font-semibold">Container image&apos;ları</h2>
+          <h2 className="font-semibold">{t("maintenance.images.title")}</h2>
           <p className="mt-0.5 text-xs text-subtle">
             {checkedAt === null
-              ? "henüz kontrol edilmedi"
-              : `son kontrol: ${ago(checkedAt)}`}
+              ? t("maintenance.images.notChecked")
+              : t("maintenance.images.lastCheck", { when: f.relative(checkedAt * 1000) })}
           </p>
         </div>
 
@@ -239,7 +234,7 @@ export function ImageUpdatePanel({
             className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand hover:text-brand disabled:opacity-50"
           >
             <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />
-            {busy ? "kontrol ediliyor…" : "Şimdi kontrol et"}
+            {busy ? t("maintenance.images.checking") : t("maintenance.images.checkNow")}
           </button>
         )}
       </div>
@@ -249,11 +244,10 @@ export function ImageUpdatePanel({
 
         {updates.length === 0 ? (
           <p className="text-subtle">
-            Kontrol henüz çalışmadı. Zamanlanmış iş günde bir kez çalışır; hemen
-            görmek için &quot;Şimdi kontrol et&quot;.
+            {t("maintenance.images.neverRan")}
           </p>
         ) : outdated.length === 0 ? (
-          <p className="text-ok">Tüm image&apos;lar kayıt defterindeki sürümle aynı.</p>
+          <p className="text-ok">{t("maintenance.images.allCurrent")}</p>
         ) : (
           <ul className="space-y-2">
             {outdated.map((entry) => (
@@ -270,7 +264,7 @@ export function ImageUpdatePanel({
         {yeniSurum.length > 0 && (
           <div className="mt-3 rounded-md border border-brand/40 bg-brand/5 px-3 py-2">
             <p className="text-xs font-medium">
-              {yeniSurum.length} container için daha yeni bir sürüm etiketi var
+              {t("maintenance.images.newerTags", { count: yeniSurum.length })}
             </p>
             <ul className="mt-1 space-y-0.5 text-[11px]">
               {yeniSurum.map((entry) => (
@@ -279,16 +273,16 @@ export function ImageUpdatePanel({
                   <span className="font-mono text-subtle">{entry.image}</span> →{" "}
                   <span className="font-mono text-brand">{entry.newerTag.tag}</span>{" "}
                   <span className="text-subtle">
-                    ({BUMP_LABEL[entry.newerTag.bump] ?? entry.newerTag.bump})
+                    ({BUMP_LABEL[entry.newerTag.bump] ? t(BUMP_LABEL[entry.newerTag.bump]) : entry.newerTag.bump})
                   </span>
                 </li>
               ))}
             </ul>
             <p className="mt-1.5 text-[11px] text-subtle">
-              Bu tek tıkla uygulanmıyor: etiketi değiştirmek compose dosyasına dokunmak
-              demek. Docker ekranında container&apos;a tıklayıp{" "}
-              <strong>Compose</strong> sekmesinden imaj etiketini değiştir — panel
-              değişikliği önce gösterir, yedek alır ve dosya geçersizse geri alır.
+              <Rich
+                text={t("maintenance.images.newerTagsNote")}
+                values={{ tab: <strong>Compose</strong> }}
+              />
             </p>
           </div>
         )}
@@ -296,7 +290,7 @@ export function ImageUpdatePanel({
         {skipped.length > 0 && (
           <div className="mt-3 rounded-md border border-line bg-canvas px-3 py-2">
             <p className="text-xs font-medium text-subtle">
-              {skipped.length} container güncellenebilir ama panel dokunmuyor
+              {t("maintenance.images.skipped", { count: skipped.length })}
             </p>
             <ul className="mt-1 space-y-0.5 text-[11px] text-subtle">
               {skipped.map((entry) => (
@@ -307,8 +301,12 @@ export function ImageUpdatePanel({
               ))}
             </ul>
             <p className="mt-1.5 text-[11px] text-subtle">
-              Bunları sunucuda elle güncelle:{" "}
-              <code className="font-mono">docker compose pull && docker compose up -d</code>
+              <Rich
+                text={t("maintenance.images.manual")}
+                values={{
+                  cmd: <code className="font-mono">docker compose pull && docker compose up -d</code>,
+                }}
+              />
             </p>
           </div>
         )}
@@ -316,12 +314,12 @@ export function ImageUpdatePanel({
         {unknown.length > 0 && (
           <details className="mt-2">
             <summary className="cursor-pointer text-xs text-subtle">
-              {unknown.length} image kontrol edilemedi
+              {t("maintenance.images.unknown", { count: unknown.length })}
             </summary>
             <ul className="mt-1 space-y-0.5 text-xs text-subtle">
               {unknown.map((entry) => (
                 <li key={entry.container}>
-                  {entry.container}: {entry.note ?? "sebep bilinmiyor"}
+                  {entry.container}: {entry.note ?? t("maintenance.images.unknownReason")}
                 </li>
               ))}
             </ul>

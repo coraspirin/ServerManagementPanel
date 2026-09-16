@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { callHelper, helperConfigured, type HelperAction } from "@/lib/host/helper";
@@ -91,7 +92,7 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     return Response.json(
-      { error: error instanceof Error ? error.message : "yığınlar okunamadı" },
+      { error: error instanceof Error ? error.message : serverT("api.host.stacksUnreadable") },
       { status: 502 },
     );
   }
@@ -105,24 +106,24 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as typeof body;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const action = String(body.action ?? "") as HelperAction;
   const dir = String(body.dir ?? "");
 
   if (!ALLOWED.includes(action)) {
-    return Response.json({ error: "bilinmeyen eylem" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidAction") }, { status: 400 });
   }
   if (!dir.startsWith("/")) {
-    return Response.json({ error: "geçersiz yığın dizini" }, { status: 400 });
+    return Response.json({ error: serverT("api.host.invalidStackDir") }, { status: 400 });
   }
 
   if (!helperConfigured()) {
     return Response.json(
       {
         error:
-          "host-helper kurulu değil. `docker compose` bir CLI eklentisi olduğu için panel container'ından çağrılamaz; sunucuda `sudo host-helper/install.sh` çalıştırılmalı.",
+          serverT("api.host.helperMissingCompose"),
       },
       { status: 503 },
     );
@@ -148,7 +149,7 @@ export async function POST(request: Request) {
 
   if (!response.ok) {
     return Response.json(
-      { error: response.error ?? response.stderr ?? "komut başarısız" },
+      { error: response.error ?? response.stderr ?? serverT("api.host.commandFailed") },
       { status: 502 },
     );
   }

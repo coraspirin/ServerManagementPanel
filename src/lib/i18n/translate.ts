@@ -1,71 +1,64 @@
 /**
  * Çeviri çekirdeği — saf, bağımlılıksız, test edilebilir.
  *
- * Sözlükte gezinme dize anahtarla yapılıyor ("shell.logout"), ama anahtar tipi
- * sözlükten TÜRETİLİYOR: olmayan bir anahtar yazmak derleme hatası. Çevirinin
- * asıl riski budur — metin eksik kalırsa ekranda ancak gözle fark edilir.
+ * Anahtar tipi Türkçe dil dosyasından TÜRETİLİYOR: olmayan bir anahtar yazmak
+ * derleme hatası. Çevirinin asıl riski budur — metin eksik kalırsa ekranda
+ * ancak gözle fark edilir.
  */
 
-import { intlLocale, type Locale } from "./locales.ts";
-
-/** Çoğul biçimli metin. İngilizce "1 day"/"2 days" ayrımı için. */
-export type Plural = { one: string; other: string };
-
-export type DictNode = string | Plural | { [key: string]: DictNode };
+import { intlOf, type Dictionary } from "./locales.ts";
+// Yalnızca TİP: değer içe aktarmak dil dosyalarını istemci paketine taşırdı.
+import type { SourceKey } from "../../locales/index.ts";
 
 export type Params = Record<string, string | number>;
 
-/** Sözlükteki tüm yaprakların noktalı yolu: "shell.menu.close" gibi. */
-export type DotPath<T> = {
-  [K in keyof T & string]: T[K] extends string
-    ? K
-    : T[K] extends Plural
-      ? K
-      : `${K}.${DotPath<T[K]>}`;
-}[keyof T & string];
+/**
+ * Çoğul biçimler dosyada son eklerle duruyor ("common.duration.day.one" /
+ * ".other"); çağrı yerinde son eksiz yazılıyor: `t("common.duration.day")`.
+ */
+type StripPlural<K> = K extends `${infer Base}.one`
+  ? Base
+  : K extends `${infer Base}.other`
+    ? Base
+    : K;
 
-export type TFunction<D> = (key: DotPath<D>, params?: Params) => string;
+export type MessageKey = StripPlural<SourceKey>;
 
-function lookup(dict: unknown, key: string): DictNode | undefined {
-  let node: unknown = dict;
-  for (const part of key.split(".")) {
-    if (typeof node !== "object" || node === null) return undefined;
-    node = (node as Record<string, unknown>)[part];
-  }
-  return node as DictNode | undefined;
-}
+export type TFunction = (key: MessageKey, params?: Params) => string;
 
-/** `{name}` yer tutucularını doldurur; karşılığı olmayanı olduğu gibi bırakır. */
+/**
+ * Yer tutucu: `{name}`. Önünde `$` olan `${NAME}` yer tutucu DEĞİL — metnin
+ * kendisi (compose/kabuk değişkeni sözdizimi yardım metinlerinde geçiyor) ve
+ * olduğu gibi gösterilir. Denetleyici (`check.ts`) aynı kuralı kullanıyor.
+ */
+export const PLACEHOLDER = /(?<!\$)\{(\w+)\}/g;
+
+/** Yer tutucuları doldurur; karşılığı olmayanı olduğu gibi bırakır. */
 function interpolate(text: string, params?: Params): string {
   if (!params) return text;
-  return text.replace(/\{(\w+)\}/g, (whole, name: string) =>
+  return text.replace(PLACEHOLDER, (whole, name: string) =>
     name in params ? String(params[name]) : whole,
   );
 }
 
-function isPlural(node: DictNode): node is Plural {
-  return typeof node === "object" && node !== null && "other" in node;
-}
-
 /**
- * Tip denetimi olmayan sürüm — sözlüğü dışarıdan alan `format.ts` gibi
- * yardımcılar için. Uygulama kodu bunu DEĞİL, `createT`yi kullanır.
+ * Tip denetimi olmayan sürüm — anahtarı çalışma zamanında oluşan metinler
+ * (menü, ayar kategorileri) ve sözlüğü dışarıdan alan yardımcılar için.
+ * Uygulama kodu mümkün olduğunda `createT`yi kullanır.
  */
-export function translateLoose(
-  dict: unknown,
-  locale: Locale,
-  key: string,
-  params?: Params,
-): string {
-  const node = lookup(dict, key);
+export function translateLoose(dict: Dictionary, key: string, params?: Params): string {
+  const exact: string | undefined = dict[key];
+  if (exact !== undefined) return interpolate(exact, params);
 
-  if (typeof node === "string") return interpolate(node, params);
-
-  if (node !== undefined && isPlural(node)) {
+  // Çoğul: dilin kuralı kategoriyi seçer. Dosyada o kategori yoksa "other".
+  // Kategoriler dile göre değişiyor (Türkçede one/other, Lehçede few/many de
+  // var) — yeni bir dil kendi kategorilerini son ek olarak ekleyebilir.
+  const other: string | undefined = dict[`${key}.other`];
+  if (other !== undefined) {
     const count = Number(params?.count ?? 0);
-    const rule = new Intl.PluralRules(intlLocale(locale)).select(count);
-    const form = rule === "one" ? node.one : node.other;
-    return interpolate(form, params);
+    const category = new Intl.PluralRules(intlOf(dict)).select(count);
+    const form: string | undefined = dict[`${key}.${category}`];
+    return interpolate(form ?? other, params);
   }
 
   // Anahtar bulunamadı: ekranda anahtarın kendisi görünür. Boş dize döndürmek,
@@ -73,6 +66,6 @@ export function translateLoose(
   return key;
 }
 
-export function createT<D>(dict: D, locale: Locale): TFunction<D> {
-  return (key, params) => translateLoose(dict, locale, key as string, params);
+export function createT(dict: Dictionary): TFunction {
+  return (key, params) => translateLoose(dict, key, params);
 }

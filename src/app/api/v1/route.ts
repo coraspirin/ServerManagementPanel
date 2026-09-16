@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardV1 } from "@/lib/apiv1/guard";
 import { apiOk } from "@/lib/apiv1/respond";
 
@@ -42,7 +43,7 @@ export async function GET(request: Request) {
         path: "/api/v1/monitors/{id}",
         methods: ["GET", "PATCH", "DELETE"],
         permission: "metrics.view",
-        note: "yazma işlemleri monitors.manage ister; PATCH kısmi",
+        note: serverT("api.v1.note.monitors"),
       },
       { path: "/api/v1/events", methods: ["GET"], permission: "metrics.view" },
       { path: "/api/v1/apps", methods: ["GET", "POST"], permission: "panel.view" },
@@ -50,21 +51,21 @@ export async function GET(request: Request) {
         path: "/api/v1/apps/{id}",
         methods: ["GET", "PATCH", "DELETE"],
         permission: "panel.view",
-        note: "yazma işlemleri apps.manage ister; widget yapılandırması v1 dışı",
+        note: serverT("api.v1.note.apps"),
       },
       { path: "/api/v1/bookmarks", methods: ["GET", "POST"], permission: "panel.view" },
       {
         path: "/api/v1/bookmarks/{id}",
         methods: ["GET", "PATCH", "DELETE"],
         permission: "panel.view",
-        note: "yazma işlemleri apps.manage ister",
+        note: serverT("api.v1.note.bookmarks"),
       },
       { path: "/api/v1/maintenance", methods: ["GET", "POST"], permission: "metrics.view" },
       {
         path: "/api/v1/maintenance/{id}",
         methods: ["GET", "PATCH", "DELETE"],
         permission: "metrics.view",
-        note: "yazma işlemleri monitors.manage ister; PATCH kısmi",
+        note: serverT("api.v1.note.monitors"),
       },
       { path: "/metrics", methods: ["GET"], permission: "metrics.view" },
       {
@@ -76,7 +77,7 @@ export async function GET(request: Request) {
         path: "/api/v1/containers/{id}/update",
         methods: ["POST"],
         permission: "docker.action",
-        note: "202 + taskId; Idempotency-Key destekler",
+        note: `202 + taskId; ${serverT("api.v1.note.idempotency")}`,
       },
       { path: "/api/v1/tasks/{id}", methods: ["GET"], permission: null },
       { path: "/api/v1/monitors/{id}/check", methods: ["POST"], permission: "monitors.manage" },
@@ -84,19 +85,19 @@ export async function GET(request: Request) {
         path: "/api/v1/host/power",
         methods: ["POST"],
         permission: "host.power",
-        note: "Idempotency-Key destekler",
+        note: serverT("api.v1.note.idempotency"),
       },
       {
         path: "/api/v1/host/services/{unit}/actions",
         methods: ["POST"],
         permission: "host.service",
-        note: "Idempotency-Key destekler",
+        note: serverT("api.v1.note.idempotency"),
       },
       {
         path: "/api/v1/host/compose",
         methods: ["POST"],
         permission: "host.service",
-        note: "Idempotency-Key destekler",
+        note: serverT("api.v1.note.idempotency"),
       },
     ],
     actor: {

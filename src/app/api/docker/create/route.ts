@@ -4,6 +4,7 @@ import { createContainerFromSpec } from "@/lib/docker/create";
 import { dockerOverview } from "@/lib/docker/view";
 import { specProblem, type ContainerSpec } from "@/lib/docker/spec";
 import { isMockMode } from "@/lib/env";
+import { serverT } from "@/lib/i18n/runtime";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
 
   if (isMockMode()) {
     return Response.json(
-      { error: "MOCK_MODE açıkken container oluşturulamaz — gerçek bir Docker gerekiyor." },
+      { error: serverT("api.mock.create") },
       { status: 503 },
     );
   }
@@ -33,11 +34,11 @@ export async function POST(request: Request) {
   try {
     spec = (await request.json()) as ContainerSpec;
   } catch {
-    return Response.json({ error: "Geçersiz istek gövdesi." }, { status: 400 });
+    return Response.json({ error: serverT("common.errors.invalidBody") }, { status: 400 });
   }
 
   // Aynı doğrulama istemcide de çalışıyor; buradaki kopya doğruluk için.
-  const problem = specProblem(spec);
+  const problem = specProblem(spec, serverT);
   if (problem) return Response.json({ error: problem }, { status: 400 });
 
   const user = guard.session.user;
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
       targetId: result.name,
       detail:
         `image ${spec.image}` +
-        (result.started ? " · başlatıldı" : " · başlatılmadı") +
+        ` · ${serverT(result.started ? "api.docker.started" : "api.docker.notStarted")}` +
         (result.warnings.length > 0 ? ` · ${result.warnings.join(" · ")}` : ""),
       // Uyarı varsa işlem yarım kalmış demek; denetim kaydı bunu ayırabilmeli.
       result: result.warnings.length > 0 ? "error" : "ok",
@@ -61,7 +62,7 @@ export async function POST(request: Request) {
 
     return Response.json({ ...result, ...(await dockerOverview()) });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Container oluşturulamadı.";
+    const message = error instanceof Error ? error.message : serverT("api.docker.createFailed");
 
     audit({
       userId: user.id,

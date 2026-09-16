@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { jobStatuses, runJobNow } from "@/lib/jobs/runner";
@@ -20,11 +21,11 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   if (typeof body.key !== "string") {
-    return Response.json({ error: "key gerekli" }, { status: 400 });
+    return Response.json({ error: serverT("api.keyRequired") }, { status: 400 });
   }
 
   const result = await runJobNow(body.key);

@@ -3,6 +3,7 @@ import "server-only";
 import dns from "node:dns/promises";
 import net from "node:net";
 import tls from "node:tls";
+import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 import { getNumber, getString } from "@/lib/settings";
 import type { ProxyHost } from "./store";
@@ -66,7 +67,7 @@ async function checkDns(
   domain: string,
   lanServer: string | null,
 ): Promise<{ step: DiagnoseStep; address: string | null }> {
-  const label = "Alan adı çözümleme";
+  const label = serverT("proxyDiag.dns.label");
 
   try {
     const addresses = await dns.lookup(domain, { all: true });
@@ -95,10 +96,11 @@ async function checkDns(
           key: "dns",
           label,
           status: "ok",
-          detail:
-            `${domain} → ${addresses.join(", ")} (${lanServer} üzerinden)\n` +
-            "Panelin kendi çözümleyicisi bu adı bilmiyor — bu normaldir, container " +
-            "genel DNS'e bakar. Tarayıcın yerel DNS sunucusunu kullandığı sürece sorun yok.",
+          detail: serverT("proxyDiag.dns.viaLan", {
+            domain,
+            addresses: addresses.join(", "),
+            server: lanServer,
+          }),
           hint: null,
         },
       };
@@ -113,14 +115,10 @@ async function checkDns(
       key: "dns",
       label,
       status: "fail",
-      detail:
-        `${domain} hiçbir IP'ye çözülmüyor` +
-        (lanServer ? ` (${lanServer} da dahil denendi).` : "."),
-      hint:
-        "Tarayıcının 'DNS adresi bulunamadı' hatasının sebebi budur. Yerel DNS " +
-        "sunucuna (ör. Pi-hole → Settings → Local DNS Records) bu adı sunucunun " +
-        "IP'sine yönlendiren bir kayıt ekle. Alt alan adları TAM EŞLEŞMEDİR: " +
-        "'myserver.local' kaydı 'pihole.myserver.local' için yeterli değildir.",
+      detail: lanServer
+        ? serverT("proxyDiag.dns.failWithLan", { domain, server: lanServer })
+        : serverT("proxyDiag.dns.fail", { domain }),
+      hint: serverT("proxyDiag.dns.hint"),
     },
   };
 }
@@ -146,7 +144,7 @@ function checkConnect(domain: string, address: string, useTls: boolean): Promise
 
   return new Promise((resolve) => {
     const done = (step: Omit<DiagnoseStep, "key" | "label">) =>
-      resolve({ key: "connect", label: `Bağlantı (:${port})`, ...step });
+      resolve({ key: "connect", label: serverT("proxyDiag.connect.label", { port }), ...step });
 
     // `rejectUnauthorized: false` — `tls internal` kayıtlarında sertifika
     // Caddy'nin yerel CA'sından geliyor ve doğrulanamaz. Burada sorulan soru
@@ -159,12 +157,8 @@ function checkConnect(domain: string, address: string, useTls: boolean): Promise
       socket.destroy();
       done({
         status: "unknown",
-        detail: `${domain} (${address}):${port} panel container'ından cevap vermedi.`,
-        hint:
-          "Bu ADIM SINANAMADI, yayın bozuk demek değil. Sunucuda ufw etkinken " +
-          "container'dan host'un portlarına giden paketler düşürülür; bu, panele " +
-          "özgü olmayan bilinen bir Docker/ufw davranışıdır. Kendi bilgisayarından " +
-          `şunu dene: ${curl} — cevap geliyorsa yayın çalışıyordur.`,
+        detail: serverT("proxyDiag.connect.timeout", { domain, address, port }),
+        hint: serverT("proxyDiag.connect.timeoutHint", { curl }),
       });
     }, timeoutMs());
 
@@ -177,7 +171,9 @@ function checkConnect(domain: string, address: string, useTls: boolean): Promise
       socket.destroy();
       done({
         status: "ok",
-        detail: `${domain} (${address}):${port} cevap verdi${issuer ? ` · sertifika: ${issuer}` : ""}`,
+        detail:
+          serverT("proxyDiag.connect.ok", { domain, address, port }) +
+          (issuer ? serverT("proxyDiag.connect.certificate", { issuer: String(issuer) }) : ""),
         hint: null,
       });
     });
@@ -193,14 +189,19 @@ function checkConnect(domain: string, address: string, useTls: boolean): Promise
 
       done({
         status: refused ? "fail" : "unknown",
-        detail: `${domain} (${address}):${port} bağlanamadı: ${error.message}`,
+        detail: serverT("proxyDiag.connect.failed", {
+          domain,
+          address,
+          port,
+          error: error.message,
+        }),
         hint: refused
-          ? `O adreste ${port} portunu dinleyen kimse yok. Caddy ${
-              useTls ? "443" : "80"
-            }'i host'ta hangi porta bağladıysa adres o portu taşımalı; ` +
-            `değiştirmek istersen .env içindeki ${portVar} değerini düzenle.`
-          : `Bu adım sınanamadı (ağ ya da güvenlik duvarı engeli olabilir). Kendi ` +
-            `bilgisayarından dene: ${curl}`,
+          ? serverT("proxyDiag.connect.refusedHint", {
+              port,
+              caddyPort: useTls ? "443" : "80",
+              portVar,
+            })
+          : serverT("proxyDiag.connect.unknownHint", { curl }),
       });
     });
   });
@@ -210,7 +211,7 @@ function checkConnect(domain: string, address: string, useTls: boolean): Promise
 async function checkUpstream(host: ProxyHost): Promise<DiagnoseStep> {
   const caddyName = getString("proxy.caddy_container").trim() || "caddy";
   const target = `${host.target}:${host.port}`;
-  const label = `Hedef (${target})`;
+  const label = serverT("proxyDiag.upstream.label", { target });
 
   try {
     // wget Caddy'nin alpine imajında var; curl yok. `-S` başlıkları stderr'e
@@ -232,7 +233,7 @@ async function checkUpstream(host: ProxyHost): Promise<DiagnoseStep> {
         key: "upstream",
         label,
         status: "ok",
-        detail: `Caddy içinden ${target} → HTTP ${status[1]}`,
+        detail: serverT("proxyDiag.upstream.ok", { target, status: status[1] }),
         hint: null,
       };
     }
@@ -241,24 +242,24 @@ async function checkUpstream(host: ProxyHost): Promise<DiagnoseStep> {
       key: "upstream",
       label,
       status: "fail",
-      detail: `Caddy ${target} adresinden yanıt alamadı.\n${result.output.slice(-300)}`,
+      detail: serverT("proxyDiag.upstream.noResponse", {
+        target,
+        output: result.output.slice(-300),
+      }),
       hint:
         host.targetKind === "container"
-          ? `"${host.target}" bir container adı. Caddy onu ancak AYNI Docker ağındaysa ` +
-            "çözebilir. Hedefi sunucunun IP'si + yayınlanmış port olarak yaz " +
-            "(ör. 192.168.61.114:8081) ya da Caddy'yi o container'ın ağına bağla."
-          : "Hedef adres ya da port yanlış olabilir; container gerçekten o portu " +
-            "dinliyor mu kontrol et.",
+          ? serverT("proxyDiag.upstream.containerHint", { target: host.target })
+          : serverT("proxyDiag.upstream.urlHint"),
     };
   } catch (error) {
     return {
       key: "upstream",
       label,
       status: "fail",
-      detail: `Caddy container'ında komut çalıştırılamadı: ${
-        error instanceof Error ? error.message : "bilinmeyen hata"
-      }`,
-      hint: `Ayarlardaki Caddy container adı ("${caddyName}") doğru mu?`,
+      detail: serverT("proxyDiag.upstream.execFailed", {
+        error: error instanceof Error ? error.message : serverT("console.unknownError"),
+      }),
+      hint: serverT("proxyDiag.upstream.execHint", { name: caddyName }),
     };
   }
 }
@@ -295,16 +296,16 @@ export async function diagnoseProxyHost(
     // ikinci kez, daha anlaşılmaz bir kılıkta göstermek olurdu.
     steps.push({
       key: "connect",
-      label: "Bağlantı",
+      label: serverT("proxyDiag.connect.labelShort"),
       status: "skip",
-      detail: "Alan adı çözülmediği için denenmedi.",
+      detail: serverT("proxyDiag.skipped"),
       hint: null,
     });
     steps.push({
       key: "upstream",
-      label: "Hedef",
+      label: serverT("proxyDiag.upstream.labelShort"),
       status: "skip",
-      detail: "Alan adı çözülmediği için denenmedi.",
+      detail: serverT("proxyDiag.skipped"),
       hint: null,
     });
     return { domain: host.domain, url, steps, ok: false };

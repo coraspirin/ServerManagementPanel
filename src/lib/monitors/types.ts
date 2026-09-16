@@ -7,26 +7,17 @@
 export type MonitorType = "http" | "tcp" | "ping" | "dns" | "container";
 export type MonitorStatus = "up" | "down" | "bilinmiyor";
 
-export const MONITOR_TYPES: { value: MonitorType; label: string; hint: string }[] = [
-  {
-    value: "http",
-    label: "HTTP(S)",
-    hint: "Tam adres: https://192.168.61.114:8123 veya http://sunucu/health",
-  },
-  { value: "tcp", label: "TCP portu", hint: "sunucu:port — ör. 192.168.61.114:1883" },
-  { value: "ping", label: "Ping (ICMP)", hint: "IP ya da makine adı — ör. 192.168.61.1" },
-  { value: "dns", label: "DNS çözümleme", hint: "Alan adı — ör. google.com" },
-  { value: "container", label: "Docker container", hint: "Container adı — ör. homeassistant" },
+/**
+ * Metinler dil dosyasında: `monitorType.<value>.label` / `.hint` / `.expected`
+ * (`expected` alanının tipe göre anlamı — arayüzde yardım metni).
+ */
+export const MONITOR_TYPES: { value: MonitorType }[] = [
+  { value: "http" },
+  { value: "tcp" },
+  { value: "ping" },
+  { value: "dns" },
+  { value: "container" },
 ];
-
-/** `expected` alanının tipe göre anlamı — arayüzde yardım metni olarak gösterilir. */
-export const EXPECTED_HINTS: Record<MonitorType, string> = {
-  http: "Boş: 400'ün altındaki her durum kodu başarılı. '200' ya da '200,204': tam eşleşme. 'metin:hazır': gövde bu metni içermeli.",
-  tcp: "Kullanılmıyor — bağlantı kurulabiliyorsa başarılı.",
-  ping: "Kullanılmıyor — yanıt geliyorsa başarılı.",
-  dns: "Boş: herhangi bir kayıt yeterli. Değer verilirse çözümlenen kayıtlardan biri bunu içermeli.",
-  container: "Boş: container çalışıyor olmalı. 'healthy': Docker sağlık kontrolü de geçmeli.",
-};
 
 export type Monitor = {
   id: number;

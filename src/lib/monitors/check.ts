@@ -6,6 +6,7 @@ import https from "node:https";
 import net from "node:net";
 import { execFile } from "node:child_process";
 import { isMockMode } from "@/lib/env";
+import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 import type { Monitor } from "./types";
 
@@ -54,7 +55,7 @@ function evaluateHttp(
     const needle = rule.slice(6).trim();
     if (status >= 400) return { ok: false, error: `HTTP ${status}` };
     if (!body.includes(needle)) {
-      return { ok: false, error: `yanıtta "${needle}" bulunamadı` };
+      return { ok: false, error: serverT("monitorCheck.notInResponse", { needle }) };
     }
     return { ok: true };
   }
@@ -77,7 +78,7 @@ function httpCheck(monitor: Monitor, timeoutMs: number): Promise<CheckResult> {
   try {
     url = new URL(monitor.target);
   } catch {
-    return Promise.resolve(fail(started, "geçersiz adres"));
+    return Promise.resolve(fail(started, serverT("monitorCheck.invalidUrl")));
   }
 
   const secure = url.protocol === "https:";
@@ -122,7 +123,7 @@ function httpCheck(monitor: Monitor, timeoutMs: number): Promise<CheckResult> {
 
     request.on("timeout", () => {
       request.destroy();
-      resolve(fail(started, "zaman aşımı"));
+      resolve(fail(started, serverT("monitorCheck.timeout")));
     });
 
     request.on("error", (error: NodeJS.ErrnoException) => {
@@ -132,14 +133,14 @@ function httpCheck(monitor: Monitor, timeoutMs: number): Promise<CheckResult> {
 
       const reason =
         error.code === "ECONNREFUSED"
-          ? "bağlantı reddedildi"
+          ? serverT("monitorCheck.refused")
           : error.code === "ENOTFOUND"
-            ? "adres çözümlenemedi"
+            ? serverT("monitorCheck.notFound")
             : error.code === "CERT_HAS_EXPIRED"
-              ? "sertifika süresi dolmuş"
+              ? serverT("monitorCheck.certExpired")
               : error.code === "DEPTH_ZERO_SELF_SIGNED_CERT" ||
                   error.code === "SELF_SIGNED_CERT_IN_CHAIN"
-                ? "self-signed sertifika (monitörde TLS doğrulamasını kapatabilirsin)"
+                ? serverT("monitorCheck.selfSigned")
                 : error.message;
       resolve(fail(started, reason));
     });
@@ -154,7 +155,7 @@ function tcpCheck(monitor: Monitor, timeoutMs: number): Promise<CheckResult> {
   const started = performance.now();
 
   const match = monitor.target.trim().match(/^(.+):(\d+)$/);
-  if (!match) return Promise.resolve(fail(started, "hedef 'sunucu:port' biçiminde olmalı"));
+  if (!match) return Promise.resolve(fail(started, serverT("monitorCheck.tcpFormat")));
 
   const [, host, portText] = match;
   const port = Number(portText);
@@ -169,15 +170,15 @@ function tcpCheck(monitor: Monitor, timeoutMs: number): Promise<CheckResult> {
     };
 
     socket.on("connect", () => done(pass(started)));
-    socket.on("timeout", () => done(fail(started, "zaman aşımı")));
+    socket.on("timeout", () => done(fail(started, serverT("monitorCheck.timeout"))));
     socket.on("error", (error: NodeJS.ErrnoException) =>
       done(
         fail(
           started,
           error.code === "ECONNREFUSED"
-            ? "bağlantı reddedildi"
+            ? serverT("monitorCheck.refused")
             : error.code === "ENOTFOUND"
-              ? "adres çözümlenemedi"
+              ? serverT("monitorCheck.notFound")
               : error.message,
         ),
       ),
@@ -212,10 +213,10 @@ function pingCheck(monitor: Monitor, timeoutMs: number): Promise<CheckResult> {
 
         const reason =
           (error as NodeJS.ErrnoException).code === "ENOENT"
-            ? "ping komutu bulunamadı (imajda iputils-ping eksik)"
+            ? serverT("monitorCheck.noPing")
             : /unknown host|Name or service not known/i.test(stdout + error.message)
-              ? "adres çözümlenemedi"
-              : "yanıt yok";
+              ? serverT("monitorCheck.notFound")
+              : serverT("monitorCheck.noResponse");
         resolve(fail(started, reason));
       },
     );
@@ -231,15 +232,15 @@ async function dnsCheck(monitor: Monitor, timeoutMs: number): Promise<CheckResul
     const records = await Promise.race([
       dns.resolve4(monitor.target.trim()),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("zaman aşımı")), timeoutMs),
+        setTimeout(() => reject(new Error(serverT("monitorCheck.timeout"))), timeoutMs),
       ),
     ]);
 
-    if (records.length === 0) return fail(started, "kayıt dönmedi");
+    if (records.length === 0) return fail(started, serverT("monitorCheck.noRecords"));
 
     const expected = monitor.expected.trim();
     if (expected && !records.some((record) => record.includes(expected))) {
-      return fail(started, `beklenen kayıt yok (${records.join(", ")})`);
+      return fail(started, serverT("monitorCheck.expectedMissing", { records: records.join(", ") }));
     }
 
     return pass(started);
@@ -248,10 +249,10 @@ async function dnsCheck(monitor: Monitor, timeoutMs: number): Promise<CheckResul
     return fail(
       started,
       code === "ENOTFOUND" || code === "ENODATA"
-        ? "alan adı çözümlenemedi"
+        ? serverT("monitorCheck.domainNotFound")
         : error instanceof Error
           ? error.message
-          : "bilinmeyen hata",
+          : serverT("api.unknownError"),
     );
   }
 }
@@ -263,19 +264,21 @@ async function containerCheck(monitor: Monitor): Promise<CheckResult> {
 
   try {
     const state = await getDockerProvider().inspect(monitor.target.trim());
-    if (!state) return fail(started, "container bulunamadı");
-    if (!state.running) return fail(started, `durum: ${state.status}`);
+    if (!state) return fail(started, serverT("monitorCheck.containerMissing"));
+    if (!state.running) return fail(started, serverT("monitorCheck.containerState", { status: state.status }));
 
     if (monitor.expected.trim().toLowerCase() === "healthy") {
       if (state.health === null) {
-        return fail(started, "container'da Docker sağlık kontrolü tanımlı değil");
+        return fail(started, serverT("monitorCheck.noHealthcheck"));
       }
-      if (state.health !== "healthy") return fail(started, `sağlık: ${state.health}`);
+      if (state.health !== "healthy") {
+        return fail(started, serverT("monitorCheck.health", { health: state.health }));
+      }
     }
 
     return pass(started);
   } catch (error) {
-    return fail(started, error instanceof Error ? error.message : "Docker'a erişilemedi");
+    return fail(started, error instanceof Error ? error.message : serverT("monitorCheck.dockerUnreachable"));
   }
 }
 
@@ -320,6 +323,6 @@ export async function runCheck(monitor: Monitor, timeoutSeconds: number): Promis
     case "container":
       return containerCheck(monitor);
     default:
-      return { ok: false, latencyMs: 0, error: `bilinmeyen monitör tipi: ${monitor.type}` };
+      return { ok: false, latencyMs: 0, error: serverT("monitorCheck.unknownType", { type: monitor.type }) };
   }
 }

@@ -5,6 +5,8 @@ import { Download } from "lucide-react";
 import { readCsrfToken } from "./detail/shared";
 import { CSRF_HEADER } from "@/lib/auth/types";
 import { specFromImage, type ContainerSpec } from "@/lib/docker/spec";
+import { useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 /**
  * Image çekme sekmesi (M3.46).
@@ -36,6 +38,7 @@ export function ImagePullPanel({
   /** Çekme bitti — form bu spec ile açılacak. */
   onReady: (spec: ContainerSpec) => void;
 }) {
+  const t = useT();
   const [reference, setReference] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +70,7 @@ export function ImagePullPanel({
       // Yetki/mock gibi hatalar akıştan ÖNCE, düz JSON olarak geliyor.
       if (!response.ok || !response.body) {
         const payload = await response.json().catch(() => ({}) as { error?: string });
-        setError(payload.error ?? "Image çekilemedi.");
+        setError(payload.error ?? t("docker.imagePull.failed"));
         return;
       }
 
@@ -96,7 +99,7 @@ export function ImagePullPanel({
           if (event === "adim") {
             setLines((prev) => [...prev.slice(-200), String(data)]);
           } else if (event === "hata") {
-            setError(String((data as { message?: string }).message ?? "Image çekilemedi."));
+            setError(String((data as { message?: string }).message ?? t("docker.imagePull.failed")));
           } else if (event === "bitti") {
             const payload = data as { reference: string; inspect: unknown };
             onReady(specFromImage(payload.reference, payload.inspect));
@@ -104,7 +107,7 @@ export function ImagePullPanel({
         }
       }
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
@@ -113,7 +116,7 @@ export function ImagePullPanel({
   return (
     <div className="space-y-3">
       <label className="block text-sm">
-        <span className="text-subtle">Image adı</span>
+        <span className="text-subtle">{t("docker.imagePull.name")}</span>
         <div className="mt-1 flex flex-wrap gap-2">
           <input
             value={reference}
@@ -132,13 +135,17 @@ export function ImagePullPanel({
             className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             <Download className="size-4" aria-hidden />
-            {busy ? "Çekiliyor…" : "Çek"}
+            {busy ? t("docker.imagePull.pulling") : t("docker.imagePull.pull")}
           </button>
         </div>
         <span className="mt-1 block text-xs text-subtle">
-          Etiket yazılmazsa <code className="font-mono">latest</code> çekilir. Özel kayıt
-          defteri için tam adres:{" "}
-          <code className="font-mono">ghcr.io/kullanici/uygulama:1.2</code>
+          <Rich
+            text={t("docker.imagePull.help")}
+            values={{
+              latest: <code className="font-mono">latest</code>,
+              example: <code className="font-mono">{t("docker.imagePull.example")}</code>,
+            }}
+          />
         </span>
       </label>
 
@@ -158,9 +165,8 @@ export function ImagePullPanel({
       )}
 
       <p className="rounded-md bg-brand/5 px-3 py-2 text-xs leading-relaxed text-subtle">
-        Çekme bittiğinde container ayrıntıları formu açılır ve imajın kendi
-        yapılandırmasıyla (açık portlar, ortam değişkenleri, volume&apos;ler) doldurulur.
-        <strong> Container yalnızca &quot;Konteyner oluştur&quot; düğmesine basınca oluşur.</strong>
+        {t("docker.imagePull.note")}{" "}
+        <strong>{t("docker.composeImport.onlyOnCreate")}</strong>
       </p>
     </div>
   );

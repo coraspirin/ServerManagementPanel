@@ -11,6 +11,7 @@ import {
 import type { FailedLogin } from "@/lib/security/fail2ban";
 import type { PortForward } from "@/lib/security/upnp";
 import type { ScanRow } from "@/lib/security/vuln";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * M3.7 / M3.8 — güvenlik izleyicileri.
@@ -34,19 +35,20 @@ export function SecurityScreen({
   initialFailedLogins: FailedLogin[];
   canManage: boolean;
 }) {
+  const t = useT();
   return (
     <div className="space-y-5">
       <section className="grid gap-3 sm:grid-cols-2">
         <NavCard
           href="/firewall"
-          title="Güvenlik duvarı"
-          description="ufw kuralları, varsayılan politika, açma/kapama."
+          title={t("securityScreen.firewall")}
+          description={t("securityScreen.firewallDesc")}
           icon={<ShieldCheck className="size-4 text-subtle" aria-hidden />}
         />
         <NavCard
           href="/ports"
-          title="Port Haritası"
-          description="Portu kim tutuyor, çakışmalar ve boş port bulucu."
+          title={t("securityScreen.ports")}
+          description={t("securityScreen.portsDesc")}
           icon={<Waypoints className="size-4 text-subtle" aria-hidden />}
         />
       </section>

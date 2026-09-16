@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { readLogo } from "@/lib/apps/logos";
 
@@ -20,7 +21,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
   if (!guard.ok) return guard.response;
 
   const logo = readLogo((await params).file);
-  if (!logo) return new Response("bulunamadı", { status: 404 });
+  if (!logo) return new Response(serverT("api.notFound.generic"), { status: 404 });
 
   return new Response(new Uint8Array(logo.bytes), {
     headers: {

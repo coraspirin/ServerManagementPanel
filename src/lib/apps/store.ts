@@ -2,6 +2,7 @@ import "server-only";
 
 import { decryptSecret, encryptSecret, type EncryptedValue } from "@/lib/crypto";
 import { getDb } from "@/lib/db/client";
+import { serverT } from "@/lib/i18n/runtime";
 import { isInMaintenance } from "@/lib/monitors/maintenance";
 import { listMonitors } from "@/lib/monitors/store";
 import { getString } from "@/lib/settings";
@@ -222,7 +223,7 @@ export function publicAppGroups(browserHost = ""): PublicAppGroup[] {
 
     // Sorgu kategoriye göre sıralı geldiği için son grubu kontrol etmek
     // yeterli; ayrı bir harita kurmaya gerek yok.
-    const name = row.category_name ?? "Diğer";
+    const name = row.category_name ?? serverT("common.uncategorized");
     const last = groups[groups.length - 1];
     if (last && last.name === name) last.cards.push(card);
     else groups.push({ name, cards: [card] });
@@ -291,7 +292,7 @@ export function welcomeAppGroups(browserHost = ""): PublicAppGroup[] {
       inMaintenance: monitor ? isInMaintenance(monitor.id, now) : false,
     };
 
-    const name = row.category_name ?? "Diğer";
+    const name = row.category_name ?? serverT("common.uncategorized");
     const last = groups[groups.length - 1];
     if (last && last.name === name) last.cards.push(card);
     else groups.push({ name, cards: [card] });
@@ -383,12 +384,12 @@ function plausibleHost(hostname: string): boolean {
 }
 
 export function validateApp(input: AppInput): string | null {
-  if (!input.name.trim()) return "Ad boş olamaz.";
-  if (!input.url.trim()) return "Adres boş olamaz.";
+  if (!input.name.trim()) return serverT("appsStore.nameEmpty");
+  if (!input.url.trim()) return serverT("appsStore.urlEmpty");
 
   for (const [label, value] of [
-    ["Adres", input.url],
-    ["Panel içi adres", input.internalUrl],
+    [serverT("appsStore.urlLabel"), input.url],
+    [serverT("appsStore.internalUrlLabel"), input.internalUrl],
   ] as const) {
     if (!value.trim()) continue;
 
@@ -399,23 +400,23 @@ export function validateApp(input: AppInput): string | null {
 
     try {
       if (!plausibleHost(new URL(probe).hostname)) {
-        return `${label} geçerli değil (ör. http://192.168.61.114:8123).`;
+        return serverT("appsStore.invalidUrl", { label });
       }
     } catch {
-      return `${label} geçerli değil (ör. http://192.168.61.114:8123).`;
+      return serverT("appsStore.invalidUrl", { label });
     }
   }
 
   if (input.color.trim() && !/^#[0-9a-f]{6}$/i.test(input.color.trim())) {
-    return "Renk #rrggbb biçiminde olmalı.";
+    return serverT("appsStore.invalidColor");
   }
 
   if (input.categoryId !== null && !categoryExists(input.categoryId)) {
-    return "Seçilen kategori artık yok.";
+    return serverT("appsStore.categoryGone");
   }
 
   if (input.monitorId !== null && !monitorExists(input.monitorId)) {
-    return "Seçilen servis izleyicisi artık yok.";
+    return serverT("appsStore.monitorGone");
   }
 
   return null;
@@ -653,7 +654,7 @@ export function parseAppInput(
   body: Record<string, unknown>,
 ): { ok: true; input: AppInput } | { ok: false; error: string } {
   if (typeof body.name !== "string" || typeof body.url !== "string") {
-    return { ok: false, error: "ad ve adres gerekli" };
+    return { ok: false, error: serverT("appsStore.nameUrlRequired") };
   }
 
   const input: AppInput = {

@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardV1 } from "@/lib/apiv1/guard";
 import { LIMITS, clampedNumber, optionalTimestamp } from "@/lib/apiv1/paginate";
 import { apiError, apiText } from "@/lib/apiv1/respond";
@@ -44,14 +45,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   } catch (error) {
     return apiError(
       "upstream_error",
-      error instanceof Error ? error.message : "Docker'a erişilemedi",
+      error instanceof Error ? error.message : serverT("api.docker.unreachable"),
     );
   }
 
   const target = summaries.find(
     (item) => item.id === id || item.name === id || item.id.startsWith(id),
   );
-  if (!target) return apiError("not_found", "container bulunamadı");
+  if (!target) return apiError("not_found", serverT("api.notFound.container"));
 
   // `follow: false` ile üretici sonlu; yine de bir iptal sinyali ZORUNLU
   // (arayüz sözleşmesi) ve istemci bağlantıyı koparırsa akış boşuna
@@ -75,7 +76,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   } catch (error) {
     return apiError(
       "upstream_error",
-      error instanceof Error ? error.message : "loglar okunamadı",
+      error instanceof Error ? error.message : serverT("api.v1.logsUnreadable"),
     );
   } finally {
     controller.abort();

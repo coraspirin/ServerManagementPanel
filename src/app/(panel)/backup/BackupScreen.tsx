@@ -19,14 +19,27 @@ import { Modal } from "@/components/Modal";
 import { CronEditor } from "@/components/settings/CronEditor";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import {
-  REPO_LABEL,
-  SOURCE_LABEL,
   type BackupJob,
   type BackupRepo,
   type BackupRun,
   type Snapshot,
   type SourceKind,
 } from "@/lib/backup/types";
+import { useFormat, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
+import type { MessageKey } from "@/lib/i18n/translate";
+
+const SOURCE_LABEL: Record<SourceKind, MessageKey> = {
+  volume: "backup.source.volume",
+  host_dir: "backup.source.host_dir",
+  panel_db: "backup.source.panel_db",
+};
+
+const REPO_LABEL: Record<BackupRepo["kind"], MessageKey> = {
+  local: "backup.repoKind.local",
+  rclone: "backup.repoKind.rclone",
+  s3: "backup.repoKind.s3",
+};
 
 /**
  * M3.4 — yedekleme motoru arayüzü.
@@ -56,9 +69,6 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[index]}`;
 }
 
-function when(ts: number | null): string {
-  return ts === null ? "hiç" : new Date(ts * 1000).toLocaleString("tr-TR");
-}
 
 const SOURCE_ICON: Record<SourceKind, typeof Database> = {
   volume: HardDrive,
@@ -78,6 +88,9 @@ export function BackupScreen({
   volumes: string[];
   containers: string[];
 }) {
+  const t = useT();
+  const f = useFormat();
+  const when = (ts: number | null) => (ts === null ? t("users.never") : f.dateTime(ts * 1000));
   const [data, setData] = useState(initial);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -106,19 +119,19 @@ export function BackupScreen({
         });
       }
       if (!response.ok) {
-        setError(String(payload.error ?? "İşlem başarısız."));
+        setError(String(payload.error ?? t("common.errors.actionFailed")));
         return false;
       }
       if (payload.message) setNotice(String(payload.message));
       // `ok: false` HTTP 200 ile de gelebilir: yedekleme çalıştı ama başarısız
       // oldu. Bu bir istek hatası değil, bir sonuç.
       if (payload.ok === false) {
-        setError(String(payload.message ?? "Başarısız."));
+        setError(String(payload.message ?? t("backup.failed")));
         return false;
       }
       return true;
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
       return false;
     } finally {
       setBusy(false);
@@ -131,9 +144,10 @@ export function BackupScreen({
     <div className="space-y-5">
       {unreadable.length > 0 && (
         <p className="rounded-lg bg-danger/10 px-4 py-3 text-sm text-danger">
-          <strong>{unreadable.map((repo) => repo.name).join(", ")}</strong> deposunun parolası
-          çözülemiyor: MASTER_KEY, parola kaydedildiğindekinden farklı. Bu depoya yedek
-          alınamaz ve geri yükleme yapılamaz. Parolayı biliyorsan depoyu düzenleyip yeniden gir.
+          <Rich
+            text={t("backup.unreadable")}
+            values={{ names: <strong>{unreadable.map((repo) => repo.name).join(", ")}</strong> }}
+          />
         </p>
       )}
       {error && (
@@ -150,7 +164,7 @@ export function BackupScreen({
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
             <Archive className="size-4 text-subtle" aria-hidden />
-            Depolar
+            {t("backup.repos.title")}
             <span className="font-normal text-subtle">{data.repos.length}</span>
           </h2>
           <button
@@ -158,13 +172,13 @@ export function BackupScreen({
             onClick={() => setRepoDraft({ kind: "local", name: "", location: "", password: "", env: "" })}
             className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand"
           >
-            <Plus className="size-4" /> Depo ekle
+            <Plus className="size-4" /> {t("backup.repos.add")}
           </button>
         </div>
 
         {data.repos.length === 0 ? (
           <p className="px-5 py-8 text-center text-sm text-subtle">
-            Henüz depo yok. Yedeklerin nereye yazılacağını tanımlayarak başla.
+            {t("backup.repos.empty")}
           </p>
         ) : (
           <ul className="divide-y divide-line">
@@ -174,15 +188,15 @@ export function BackupScreen({
                   <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
                     {repo.name}
                     <span className="rounded border border-line px-1 text-[10px] font-normal text-subtle">
-                      {REPO_LABEL[repo.kind]}
+                      {t(REPO_LABEL[repo.kind])}
                     </span>
                     {repo.initialized ? (
                       <span className="flex items-center gap-1 text-[11px] font-normal text-ok">
-                        <CheckCircle2 className="size-3" aria-hidden /> hazır
+                        <CheckCircle2 className="size-3" aria-hidden /> {t("backup.repos.ready")}
                       </span>
                     ) : (
                       <span className="flex items-center gap-1 text-[11px] font-normal text-warn">
-                        <AlertTriangle className="size-3" aria-hidden /> oluşturulmadı
+                        <AlertTriangle className="size-3" aria-hidden /> {t("backup.repos.notInitialized")}
                       </span>
                     )}
                   </div>
@@ -190,7 +204,7 @@ export function BackupScreen({
                     {repo.location}
                   </code>
                   <span className="text-[11px] text-subtle">
-                    {repo.jobCount} iş · son kontrol {when(repo.lastCheckAt)}
+                    {t("backup.repos.meta", { jobs: repo.jobCount, when: when(repo.lastCheckAt) })}
                     {repo.lastError && ` · ${repo.lastError}`}
                   </span>
                 </div>
@@ -201,7 +215,7 @@ export function BackupScreen({
                     onClick={() => void call("/api/backup/repos", "POST", { action: "check", id: repo.id })}
                     className="rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand disabled:opacity-50"
                   >
-                    Sına
+                    {t("backup.repos.test")}
                   </button>
                   {!repo.initialized && (
                     <button
@@ -210,7 +224,7 @@ export function BackupScreen({
                       onClick={() => void call("/api/backup/repos", "POST", { action: "init", id: repo.id })}
                       className="rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand disabled:opacity-50"
                     >
-                      Depoyu oluştur
+                      {t("backup.repos.init")}
                     </button>
                   )}
                   <button
@@ -218,13 +232,13 @@ export function BackupScreen({
                     onClick={() => setRepoDraft({ ...repo, password: "", env: "" })}
                     className="rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand"
                   >
-                    Düzenle
+                    {t("common.actions.edit")}
                   </button>
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => {
-                      if (confirm(`"${repo.name}" kaydı silinsin mi? Diskteki yedeklere dokunulmaz.`)) {
+                      if (confirm(t("backup.repos.confirmDelete", { name: repo.name }))) {
                         void call(`/api/backup/repos?id=${repo.id}`, "DELETE");
                       }
                     }}
@@ -244,13 +258,13 @@ export function BackupScreen({
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
             <HardDrive className="size-4 text-subtle" aria-hidden />
-            Yedekleme işleri
+            {t("backup.jobs.title")}
             <span className="font-normal text-subtle">{data.jobs.length}</span>
           </h2>
           <button
             type="button"
             disabled={data.repos.length === 0}
-            title={data.repos.length === 0 ? "Önce bir depo tanımla" : undefined}
+            title={data.repos.length === 0 ? t("backup.jobs.needRepo") : undefined}
             onClick={() =>
               setJobDraft({
                 name: "",
@@ -268,13 +282,13 @@ export function BackupScreen({
             }
             className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
           >
-            <Plus className="size-4" /> İş ekle
+            <Plus className="size-4" /> {t("backup.jobs.add")}
           </button>
         </div>
 
         {data.jobs.length === 0 ? (
           <p className="px-5 py-8 text-center text-sm text-subtle">
-            Henüz yedekleme işi yok.
+            {t("backup.jobs.empty")}
           </p>
         ) : (
           <ul className="divide-y divide-line">
@@ -288,7 +302,7 @@ export function BackupScreen({
                       {job.name}
                       {!job.enabled && (
                         <span className="rounded border border-line px-1 text-[10px] font-normal text-subtle">
-                          kapalı
+                          {t("backup.jobs.disabled")}
                         </span>
                       )}
                       {job.lastStatus === "ok" && (
@@ -299,45 +313,49 @@ export function BackupScreen({
                       )}
                     </div>
                     <span className="text-[11px] text-subtle">
-                      {SOURCE_LABEL[job.sourceKind]}
+                      {t(SOURCE_LABEL[job.sourceKind])}
                       {job.source && `: ${job.source}`} → {job.repoName} ·{" "}
-                      {job.scheduleCron || "zamanlanmamış"} · saklama {job.keepDaily}g/
-                      {job.keepWeekly}h/{job.keepMonthly}a
-                      {job.quiesce && ` · ${job.quiesce} durdurulur`}
+                      {job.scheduleCron || t("backup.jobs.unscheduled")} ·{" "}
+                      {t("backup.jobs.retention", {
+                        d: job.keepDaily,
+                        w: job.keepWeekly,
+                        m: job.keepMonthly,
+                      })}
+                      {job.quiesce && t("backup.jobs.quiesce", { name: job.quiesce })}
                     </span>
                     <span className="block text-[11px] text-subtle">
-                      son çalışma: {when(job.lastRunAt)}
+                      {t("backup.jobs.lastRun", { when: when(job.lastRunAt) })}
                     </span>
                   </div>
                   <div className="flex gap-1">
                     <button
                       type="button"
                       disabled={busy}
-                      title="Şimdi yedekle"
+                      title={t("backup.jobs.runNow")}
                       onClick={() => void call("/api/backup/jobs", "POST", { action: "run", id: job.id })}
                       className="flex items-center gap-1 rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand disabled:opacity-50"
                     >
-                      <Play className="size-3.5" /> Yedekle
+                      <Play className="size-3.5" /> {t("backup.jobs.run")}
                     </button>
                     <button
                       type="button"
                       onClick={() => setSnapshotsFor(job)}
                       className="rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand"
                     >
-                      Snapshot&apos;lar
+                      {t("backup.jobs.snapshots")}
                     </button>
                     <button
                       type="button"
                       onClick={() => setJobDraft(job)}
                       className="rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand"
                     >
-                      Düzenle
+                      {t("common.actions.edit")}
                     </button>
                     <button
                       type="button"
                       disabled={busy}
                       onClick={() => {
-                        if (confirm(`"${job.name}" işi silinsin mi? Depodaki snapshot'lar kalır.`)) {
+                        if (confirm(t("backup.jobs.confirmDelete", { name: job.name }))) {
                           void call(`/api/backup/jobs?id=${job.id}`, "DELETE");
                         }
                       }}
@@ -358,17 +376,17 @@ export function BackupScreen({
         <div className="border-b border-line px-5 py-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
             <History className="size-4 text-subtle" aria-hidden />
-            Çalışma geçmişi
+            {t("backup.runs.title")}
           </h2>
         </div>
         {data.runs.length === 0 ? (
-          <p className="px-5 py-8 text-center text-sm text-subtle">Henüz çalışma yok.</p>
+          <p className="px-5 py-8 text-center text-sm text-subtle">{t("backup.runs.empty")}</p>
         ) : (
           <ul className="divide-y divide-line">
             {data.runs.slice(0, 20).map((run) => (
               <li key={run.id} className="flex flex-wrap items-baseline gap-x-3 px-5 py-2 text-xs">
                 <span className="w-36 shrink-0 tabular-nums text-subtle">
-                  {new Date(run.startedAt * 1000).toLocaleString("tr-TR")}
+                  {f.dateTime(run.startedAt * 1000)}
                 </span>
                 <span className="w-32 shrink-0 truncate font-medium">{run.jobName}</span>
                 <span
@@ -385,7 +403,8 @@ export function BackupScreen({
                 <span className="min-w-0 flex-1 text-subtle">{run.detail}</span>
                 <span className="shrink-0 tabular-nums text-subtle">
                   {run.bytesAdded > 0 && formatBytes(run.bytesAdded)}
-                  {run.durationMs > 0 && ` · ${(run.durationMs / 1000).toFixed(1)} sn`}
+                  {run.durationMs > 0 &&
+                    t("backup.runs.seconds", { value: f.number(run.durationMs / 1000, { maximumFractionDigits: 1, minimumFractionDigits: 1 }) })}
                 </span>
               </li>
             ))}
@@ -444,15 +463,20 @@ function RepoModal({
 }) {
   // Taslak `key` ile bileşene bağlı: yeni bir depo açılınca bileşen yeniden
   // kurulur ve form kendiliğinden doğru değerlerle başlar.
+  const t = useT();
   const [form, setForm] = useState(draft);
   const isNew = !form?.id;
 
   return (
-    <Modal open={draft !== null} title={isNew ? "Depo ekle" : "Depoyu düzenle"} onClose={onClose}>
+    <Modal
+      open={draft !== null}
+      title={isNew ? t("backup.repoModal.add") : t("backup.repoModal.edit")}
+      onClose={onClose}
+    >
       {form && (
         <div className="space-y-3">
           <label className="block text-sm">
-            <span className="text-subtle">Ad</span>
+            <span className="text-subtle">{t("users.roles.name")}</span>
             <input
               value={form.name ?? ""}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -461,21 +485,21 @@ function RepoModal({
           </label>
 
           <label className="block text-sm">
-            <span className="text-subtle">Tür</span>
+            <span className="text-subtle">{t("backup.repoModal.kind")}</span>
             <select
               value={form.kind ?? "local"}
               onChange={(e) => setForm({ ...form, kind: e.target.value as BackupRepo["kind"] })}
               className={inputClass}
             >
-              <option value="local">Yerel dizin</option>
-              <option value="rclone">rclone (off-site)</option>
-              <option value="s3">S3 uyumlu</option>
+              <option value="local">{t("backup.repoKind.local")}</option>
+              <option value="rclone">{t("backup.repoKind.rclone")}</option>
+              <option value="s3">{t("backup.repoKind.s3")}</option>
             </select>
           </label>
 
           <label className="block text-sm">
             <span className="text-subtle">
-              {form.kind === "local" ? "Host üzerindeki yol" : "restic deposu adresi"}
+              {form.kind === "local" ? t("backup.repoModal.hostPath") : t("backup.repoModal.resticUrl")}
             </span>
             <input
               value={form.location ?? ""}
@@ -491,15 +515,14 @@ function RepoModal({
             />
             {form.kind === "local" && (
               <span className="mt-1 block text-xs text-subtle">
-                Yedeği yedeklenen verinin durduğu diske koymak, tek bir arızada ikisini birden
-                kaybetmek demektir. Mümkünse ayrı bir disk ya da ağ paylaşımı seç.
+                {t("backup.repoModal.sameDiskWarning")}
               </span>
             )}
           </label>
 
           <label className="block text-sm">
             <span className="text-subtle">
-              Depo parolası {isNew ? "" : "(değiştirmek istemiyorsan boş bırak)"}
+              {t("backup.repoModal.password")} {isNew ? "" : t("backup.repoModal.passwordKeep")}
             </span>
             <input
               type="text"
@@ -511,14 +534,15 @@ function RepoModal({
           </label>
 
           <p className="rounded-md bg-warn/10 px-3 py-2 text-xs text-warn">
-            <strong>Bu parolayı panelin dışında da sakla.</strong> Panel onu MASTER_KEY ile
-            şifreliyor; anahtar kaybolursa panel parolayı çözemez ve yedeklerine buradan
-            ulaşamazsın. Parola elindeyse restic deposu panel olmadan da açılır.
+            <Rich
+              text={t("backup.repoModal.passwordWarning")}
+              values={{ strong: <strong>{t("backup.repoModal.passwordWarningStrong")}</strong> }}
+            />
           </p>
 
           {form.kind !== "local" && (
             <label className="block text-sm">
-              <span className="text-subtle">Ek ortam değişkenleri</span>
+              <span className="text-subtle">{t("backup.repoModal.env")}</span>
               <textarea
                 rows={3}
                 value={form.env ?? ""}
@@ -527,7 +551,10 @@ function RepoModal({
                 className={`${inputClass} font-mono`}
               />
               <span className="mt-1 block text-xs text-subtle">
-                Satır başına bir <code>ANAHTAR=değer</code>. Şifreli saklanır.
+                <Rich
+                  text={t("backup.repoModal.envHelp")}
+                  values={{ example: <code>{t("backup.repoModal.envExample")}</code> }}
+                />
               </span>
             </label>
           )}
@@ -538,7 +565,7 @@ function RepoModal({
               onClick={onClose}
               className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
             >
-              Vazgeç
+              {t("common.actions.cancel")}
             </button>
             <button
               type="button"
@@ -546,7 +573,7 @@ function RepoModal({
               onClick={() => onSubmit({ ...form }, isNew)}
               className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              Kaydet
+              {t("common.actions.save")}
             </button>
           </div>
         </div>
@@ -572,13 +599,14 @@ function JobModal({
   onClose: () => void;
   onSubmit: (payload: Record<string, unknown>, isNew: boolean) => void;
 }) {
+  const t = useT();
   const [form, setForm] = useState(draft);
   const isNew = !form?.id;
 
   return (
     <Modal
       open={draft !== null}
-      title={isNew ? "Yedekleme işi ekle" : "İşi düzenle"}
+      title={isNew ? t("backup.jobModal.add") : t("backup.jobModal.edit")}
       onClose={onClose}
       wide
     >
@@ -586,7 +614,7 @@ function JobModal({
         <div className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm">
-              <span className="text-subtle">İş adı</span>
+              <span className="text-subtle">{t("backup.jobModal.name")}</span>
               <input
                 value={form.name ?? ""}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -594,7 +622,7 @@ function JobModal({
               />
             </label>
             <label className="block text-sm">
-              <span className="text-subtle">Depo</span>
+              <span className="text-subtle">{t("backup.jobModal.repo")}</span>
               <select
                 value={form.repoId ?? 0}
                 onChange={(e) => setForm({ ...form, repoId: Number(e.target.value) })}
@@ -611,7 +639,7 @@ function JobModal({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm">
-              <span className="text-subtle">Kaynak türü</span>
+              <span className="text-subtle">{t("backup.jobModal.sourceKind")}</span>
               <select
                 value={form.sourceKind ?? "volume"}
                 onChange={(e) =>
@@ -623,9 +651,9 @@ function JobModal({
                 }
                 className={inputClass}
               >
-                <option value="volume">Docker volume</option>
-                <option value="host_dir">Host dizini</option>
-                <option value="panel_db">Panel veritabanı</option>
+                <option value="volume">{t("backup.source.volume")}</option>
+                <option value="host_dir">{t("backup.source.host_dir")}</option>
+                <option value="panel_db">{t("backup.source.panel_db")}</option>
               </select>
             </label>
 
@@ -648,7 +676,7 @@ function JobModal({
 
             {form.sourceKind === "host_dir" && (
               <label className="block text-sm">
-                <span className="text-subtle">Host yolu</span>
+                <span className="text-subtle">{t("backup.jobModal.hostPath")}</span>
                 <input
                   value={form.source ?? ""}
                   onChange={(e) => setForm({ ...form, source: e.target.value })}
@@ -661,16 +689,19 @@ function JobModal({
 
           {form.sourceKind === "panel_db" && (
             <p className="rounded-md bg-brand/5 px-3 py-2 text-xs text-subtle">
-              Panel veritabanının <code>VACUUM INTO</code> ile tutarlı bir kopyası alınıp panel
-              veri volume&apos;üyle birlikte yedeklenir. Canlı <code>panel.db</code> dosyaları
-              dışarıda bırakılır — WAL yüzünden yarım kopyalanabilirler.
-              <strong> .env ve MASTER_KEY yedeğe girmez</strong>; girseydi şifreleme anlamsız
-              olurdu.
+              <Rich
+                text={t("backup.jobModal.panelDbNote")}
+                values={{
+                  vacuum: <code>VACUUM INTO</code>,
+                  db: <code>panel.db</code>,
+                  strong: <strong>{t("backup.jobModal.panelDbStrong")}</strong>,
+                }}
+              />
             </p>
           )}
 
           <div>
-            <span className="text-sm text-subtle">Sıklık</span>
+            <span className="text-sm text-subtle">{t("backup.jobModal.schedule")}</span>
             <div className="mt-1">
               <CronEditor
                 value={form.scheduleCron ?? "0 3 * * *"}
@@ -681,13 +712,13 @@ function JobModal({
           </div>
 
           <label className="block text-sm">
-            <span className="text-subtle">Yedek alınırken durdurulacak container</span>
+            <span className="text-subtle">{t("backup.jobModal.quiesce")}</span>
             <select
               value={form.quiesce ?? ""}
               onChange={(e) => setForm({ ...form, quiesce: e.target.value })}
               className={inputClass}
             >
-              <option value="">Durdurma (canlı kopyala)</option>
+              <option value="">{t("backup.jobModal.noQuiesce")}</option>
               {containers.map((container) => (
                 <option key={container} value={container}>
                   {container}
@@ -695,18 +726,16 @@ function JobModal({
               ))}
             </select>
             <span className="mt-1 block text-xs text-subtle">
-              SQLite kullanan servisler (Home Assistant, Vaultwarden…) çalışırken kopyalanırsa
-              yedek bozuk çıkabilir. Durdurma yalnızca yedek süresince geçerli — iş başarısız
-              olsa bile container geri açılır.
+              {t("backup.jobModal.quiesceHelp")}
             </span>
           </label>
 
           <div className="grid gap-3 sm:grid-cols-3">
             {(
               [
-                ["keepDaily", "Günlük saklanacak"],
-                ["keepWeekly", "Haftalık saklanacak"],
-                ["keepMonthly", "Aylık saklanacak"],
+                ["keepDaily", t("backup.jobModal.keepDaily")],
+                ["keepWeekly", t("backup.jobModal.keepWeekly")],
+                ["keepMonthly", t("backup.jobModal.keepMonthly")],
               ] as const
             ).map(([key, label]) => (
               <label key={key} className="block text-sm">
@@ -724,7 +753,7 @@ function JobModal({
           </div>
 
           <label className="block text-sm">
-            <span className="text-subtle">Hariç tutulacaklar</span>
+            <span className="text-subtle">{t("backup.jobModal.excludes")}</span>
             <textarea
               rows={2}
               value={form.excludes ?? ""}
@@ -741,7 +770,7 @@ function JobModal({
               onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
               className="size-4 accent-[var(--brand)]"
             />
-            Zamanlanmış olarak çalışsın
+            {t("backup.jobModal.enabled")}
           </label>
 
           <div className="flex justify-end gap-2 pt-2">
@@ -750,7 +779,7 @@ function JobModal({
               onClick={onClose}
               className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
             >
-              Vazgeç
+              {t("common.actions.cancel")}
             </button>
             <button
               type="button"
@@ -758,7 +787,7 @@ function JobModal({
               onClick={() => onSubmit({ ...form }, isNew)}
               className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              Kaydet
+              {t("common.actions.save")}
             </button>
           </div>
         </div>
@@ -768,6 +797,8 @@ function JobModal({
 }
 
 function SnapshotsModal({ job, onClose }: { job: BackupJob | null; onClose: () => void }) {
+  const t = useT();
+  const f = useFormat();
   const [snapshots, setSnapshots] = useState<Snapshot[] | null>(null);
   const [target, setTarget] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
@@ -803,7 +834,7 @@ function SnapshotsModal({ job, onClose }: { job: BackupJob | null; onClose: () =
       } catch {
         if (!ignore) {
           setSnapshots([]);
-          setMessage("Depo okunamadı.");
+          setMessage(t("backup.snapshots.readFailed"));
         }
       }
     })();
@@ -811,7 +842,7 @@ function SnapshotsModal({ job, onClose }: { job: BackupJob | null; onClose: () =
     return () => {
       ignore = true;
     };
-  }, [jobId]);
+  }, [jobId, t]);
 
   async function restore() {
     if (!job || !selected) return;
@@ -824,9 +855,9 @@ function SnapshotsModal({ job, onClose }: { job: BackupJob | null; onClose: () =
         body: JSON.stringify({ jobId: job.id, snapshotId: selected, target }),
       });
       const data = (await response.json()) as { ok?: boolean; error?: string; message?: string };
-      setMessage(data.error ?? data.message ?? "Tamamlandı.");
+      setMessage(data.error ?? data.message ?? t("backup.snapshots.done"));
     } catch {
-      setMessage("Sunucuya ulaşılamadı.");
+      setMessage(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
@@ -835,15 +866,15 @@ function SnapshotsModal({ job, onClose }: { job: BackupJob | null; onClose: () =
   return (
     <Modal
       open={job !== null}
-      title={`Snapshot'lar — ${job?.name ?? ""}`}
+      title={t("backup.snapshots.title", { name: job?.name ?? "" })}
       onClose={onClose}
       wide
     >
       {snapshots === null ? (
-        <p className="py-6 text-center text-sm text-subtle">Depo okunuyor…</p>
+        <p className="py-6 text-center text-sm text-subtle">{t("backup.snapshots.reading")}</p>
       ) : snapshots.length === 0 ? (
         <p className="py-6 text-center text-sm text-subtle">
-          Bu işe ait snapshot yok. Önce bir yedek al.
+          {t("backup.snapshots.empty")}
         </p>
       ) : (
         <ul className="divide-y divide-line rounded-md border border-line">
@@ -859,7 +890,7 @@ function SnapshotsModal({ job, onClose }: { job: BackupJob | null; onClose: () =
                 />
                 <span className="font-mono text-xs">{snapshot.shortId}</span>
                 <span className="flex-1">
-                  {new Date(snapshot.time * 1000).toLocaleString("tr-TR")}
+                  {f.dateTime(snapshot.time * 1000)}
                 </span>
                 <span className="text-xs text-subtle">
                   {snapshot.sizeBytes !== null && formatBytes(snapshot.sizeBytes)}
@@ -873,12 +904,13 @@ function SnapshotsModal({ job, onClose }: { job: BackupJob | null; onClose: () =
       {snapshots !== null && snapshots.length > 0 && (
         <div className="mt-4 space-y-2 rounded-md border border-warn/40 bg-warn/5 p-3">
           <p className="flex items-center gap-1.5 text-sm font-medium text-warn">
-            <RotateCcw className="size-4" aria-hidden /> Geri yükleme
+            <RotateCcw className="size-4" aria-hidden /> {t("backup.snapshots.restore")}
           </p>
           <p className="text-xs text-subtle">
-            Dosyalar seçtiğin <strong>boş</strong> klasöre açılır — kaynağın üzerine
-            YAZILMAZ. Ne geldiğine bakıp istediğini kendin taşırsın. Sistem dizinleri hedef
-            olarak kabul edilmez.
+            <Rich
+              text={t("backup.snapshots.restoreNote")}
+              values={{ empty: <strong>{t("backup.snapshots.emptyWord")}</strong> }}
+            />
           </p>
           <div className="flex flex-wrap gap-2">
             <input
@@ -893,7 +925,7 @@ function SnapshotsModal({ job, onClose }: { job: BackupJob | null; onClose: () =
               onClick={() => void restore()}
               className="rounded-md bg-warn px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              {busy ? "Açılıyor…" : "Geri yükle"}
+              {busy ? t("backup.snapshots.extracting") : t("backup.snapshots.restoreButton")}
             </button>
           </div>
         </div>

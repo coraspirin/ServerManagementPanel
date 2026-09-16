@@ -1,6 +1,6 @@
 "use client";
 
-import { WEEKDAY_NAMES } from "@/lib/cron/friendly";
+import { useFormat, useT } from "@/lib/i18n/client";
 import type { MaintenanceKind, MaintenanceWindow, Monitor } from "@/lib/monitors/types";
 
 /**
@@ -100,6 +100,8 @@ export function MaintenanceForm({
   onSubmit: () => void;
   onCancel: () => void;
 }) {
+  const t = useT();
+  const f = useFormat();
   const crossesMidnight =
     values.kind === "weekly" &&
     (timeToMinute(values.startTime) ?? 0) > (timeToMinute(values.endTime) ?? 0);
@@ -113,12 +115,12 @@ export function MaintenanceForm({
       }}
     >
       <label className="block">
-        <span className="text-xs font-medium">Ad</span>
+        <span className="text-xs font-medium">{t("users.roles.name")}</span>
         <input
           type="text"
           value={values.name}
           onChange={(e) => onChange({ name: e.target.value })}
-          placeholder="Haftalık yedekleme"
+          placeholder={t("maintenanceForm.namePlaceholder")}
           className={`mt-1 ${inputClass}`}
           autoFocus
         />
@@ -126,25 +128,25 @@ export function MaintenanceForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
-          <span className="text-xs font-medium">Tekrar</span>
+          <span className="text-xs font-medium">{t("maintenanceForm.repeat")}</span>
           <select
             value={values.kind}
             onChange={(e) => onChange({ kind: e.target.value as MaintenanceKind })}
             className={`mt-1 ${inputClass}`}
           >
-            <option value="once">Tek seferlik</option>
-            <option value="weekly">Her hafta</option>
+            <option value="once">{t("maintenanceForm.once")}</option>
+            <option value="weekly">{t("maintenanceForm.weekly")}</option>
           </select>
         </label>
 
         <label className="block">
-          <span className="text-xs font-medium">Kapsam</span>
+          <span className="text-xs font-medium">{t("maintenanceForm.scope")}</span>
           <select
             value={values.monitorId}
             onChange={(e) => onChange({ monitorId: e.target.value })}
             className={`mt-1 ${inputClass}`}
           >
-            <option value="">Tüm servisler</option>
+            <option value="">{t("maintenanceForm.allServices")}</option>
             {monitors.map((monitor) => (
               <option key={monitor.id} value={monitor.id}>
                 {monitor.name}
@@ -157,7 +159,7 @@ export function MaintenanceForm({
       {values.kind === "once" ? (
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block">
-            <span className="text-xs font-medium">Başlangıç</span>
+            <span className="text-xs font-medium">{t("maintenanceForm.start")}</span>
             <input
               type="datetime-local"
               value={values.startsAtLocal}
@@ -166,7 +168,7 @@ export function MaintenanceForm({
             />
           </label>
           <label className="block">
-            <span className="text-xs font-medium">Bitiş</span>
+            <span className="text-xs font-medium">{t("maintenanceForm.end")}</span>
             <input
               type="datetime-local"
               value={values.endsAtLocal}
@@ -178,13 +180,13 @@ export function MaintenanceForm({
       ) : (
         <div className="space-y-3">
           <div>
-            <span className="text-xs font-medium">Günler</span>
+            <span className="text-xs font-medium">{t("maintenanceForm.days")}</span>
             <div className="mt-1 flex flex-wrap gap-1">
-              {WEEKDAY_NAMES.map((name, index) => {
+              {[0, 1, 2, 3, 4, 5, 6].map((index) => {
                 const selected = values.weekdays.includes(index);
                 return (
                   <button
-                    key={name}
+                    key={index}
                     type="button"
                     onClick={() =>
                       onChange({
@@ -199,7 +201,7 @@ export function MaintenanceForm({
                         : "border-line text-subtle hover:text-ink"
                     }`}
                   >
-                    {name.slice(0, 3)}
+                    {f.weekday(index, "short")}
                   </button>
                 );
               })}
@@ -208,7 +210,7 @@ export function MaintenanceForm({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="text-xs font-medium">Başlangıç saati</span>
+              <span className="text-xs font-medium">{t("maintenanceForm.startTime")}</span>
               <input
                 type="time"
                 value={values.startTime}
@@ -217,7 +219,7 @@ export function MaintenanceForm({
               />
             </label>
             <label className="block">
-              <span className="text-xs font-medium">Bitiş saati</span>
+              <span className="text-xs font-medium">{t("maintenanceForm.endTime")}</span>
               <input
                 type="time"
                 value={values.endTime}
@@ -229,8 +231,7 @@ export function MaintenanceForm({
 
           {crossesMidnight && (
             <p className="text-[11px] text-subtle">
-              Bitiş saati başlangıçtan küçük — pencere gece yarısını aşıyor kabul
-              edilecek (seçilen günde başlar, ertesi gün biter).
+              {t("maintenanceForm.crossesMidnight")}
             </p>
           )}
         </div>
@@ -243,7 +244,7 @@ export function MaintenanceForm({
           onChange={(e) => onChange({ enabled: e.target.checked })}
           className="size-4 accent-[var(--brand)]"
         />
-        Etkin
+        {t("proxy.form.enabled")}
       </label>
 
       {error && <p className="text-sm text-danger">{error}</p>}
@@ -254,14 +255,14 @@ export function MaintenanceForm({
           onClick={onCancel}
           className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink"
         >
-          Vazgeç
+          {t("common.actions.cancel")}
         </button>
         <button
           type="submit"
           disabled={busy}
           className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity disabled:opacity-50"
         >
-          {busy ? "Kaydediliyor…" : "Kaydet"}
+          {busy ? t("common.states.saving") : t("common.actions.save")}
         </button>
       </div>
     </form>

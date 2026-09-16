@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { unusedResources } from "@/lib/docker/graph";
@@ -44,7 +45,7 @@ export async function GET(request: Request) {
         provider.imageHistory(id),
         provider.inspectImageRaw(id),
       ]);
-      if (raw === null) return Response.json({ error: "image bulunamadı" }, { status: 404 });
+      if (raw === null) return Response.json({ error: serverT("api.notFound.image") }, { status: 404 });
       return Response.json({ layers, raw });
     }
 
@@ -92,7 +93,7 @@ export async function GET(request: Request) {
 
     if (detail === "volume") {
       const raw = await getDockerProvider().inspectVolumeRaw(id);
-      if (raw === null) return Response.json({ error: "volume bulunamadı" }, { status: 404 });
+      if (raw === null) return Response.json({ error: serverT("api.notFound.volume") }, { status: 404 });
       return Response.json({ raw });
     }
 
@@ -114,7 +115,7 @@ export async function GET(request: Request) {
       // Boyut sınırı için imajın kendi boyutu gerekiyor; liste zaten elde.
       const images = await getDockerProvider().images();
       const image = images.find((entry) => entry.id === id || entry.tags.includes(id));
-      if (!image) return Response.json({ error: "image bulunamadı" }, { status: 404 });
+      if (!image) return Response.json({ error: serverT("api.notFound.image") }, { status: 404 });
 
       const ad = (image.tags[0] ?? image.id.replace(/^sha256:/, "").slice(0, 12))
         .replace(/[^a-zA-Z0-9._-]+/g, "-")
@@ -165,7 +166,7 @@ export async function GET(request: Request) {
     return Response.json(await collect());
   } catch (error) {
     return Response.json(
-      { error: error instanceof Error ? error.message : "Docker'a ulaşılamadı" },
+      { error: error instanceof Error ? error.message : serverT("api.docker.unreachable") },
       { status: 502 },
     );
   }
@@ -195,7 +196,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as typeof body;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   /*
@@ -226,7 +227,7 @@ export async function POST(request: Request) {
           tamamen kaldırmak olurdu.
         */
         if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$/.test(name)) {
-          return Response.json({ error: "Ağ adı geçersiz." }, { status: 400 });
+          return Response.json({ error: serverT("api.docker.networkName") }, { status: 400 });
         }
 
         /*
@@ -240,9 +241,7 @@ export async function POST(request: Request) {
           return Response.json(
             {
               error:
-                `"${driver}" sürücüsü panelden oluşturulamıyor. macvlan ve ipvlan bir ` +
-                "parent arayüz gerektiriyor ve panel bunu henüz soramıyor; parent'sız " +
-                "yaratılan böyle bir ağ sorunsuz görünür ama dışarıya çıkamaz.",
+                serverT("api.docker.driverUnsupported", { driver }),
             },
             { status: 400 },
           );
@@ -267,7 +266,7 @@ export async function POST(request: Request) {
         await provider.disconnectNetwork(id, container, false);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "bilinmeyen hata";
+      const message = error instanceof Error ? error.message : serverT("api.unknownError");
       audit({
         userId: actor.userId,
         username: actor.username,
@@ -352,13 +351,13 @@ export async function POST(request: Request) {
   const kind = body.kind as ResourceKind;
   const id = typeof body.id === "string" ? body.id : "";
   if (!KINDS.includes(kind) || id === "") {
-    return Response.json({ error: "geçersiz kaynak" }, { status: 400 });
+    return Response.json({ error: serverT("api.docker.invalidResource") }, { status: 400 });
   }
 
   try {
     await getDockerProvider().removeResource(kind, id, body.force === true);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "bilinmeyen hata";
+    const message = error instanceof Error ? error.message : serverT("api.unknownError");
     audit({
       userId: guard.session.user.id,
       username: guard.session.user.username,

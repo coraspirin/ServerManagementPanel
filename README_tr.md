@@ -20,6 +20,7 @@ Ev sunucusu (homelab) ölçeği düşünülerek tasarlandı: tek container, göm
 - [Güncelleme ve geri alma](#güncelleme-ve-geri-alma)
 - [Docker etiketleri](#docker-etiketleri)
 - [Dış API, Prometheus ve MQTT](#dış-api-prometheus-ve-mqtt)
+- [Dil desteği](#dil-desteği)
 - [Geliştirme](#geliştirme)
 - [Proje yapısı](#proje-yapısı)
 - [Bilinen sınırlar](#bilinen-sınırlar)
@@ -358,6 +359,45 @@ Kullanılabilen alanlar: `panel.name`, `.url`, `.port`, `.scheme`, `.path`, `.de
 - **`/api/v1`:** kendi betiklerinden, Home Assistant'tan ya da n8n'den çağırmak için sürümlenmiş, `Authorization: Bearer` ile çalışan bir HTTP API. **Varsayılan olarak kapalıdır;** kapalıyken her uç `404` döner. Açmak için **Ayarlar → Dış API**, anahtar üretmek için **Hesabım → API Anahtarları**. Anahtar bir kullanıcıya bağlıdır ve o kullanıcının izinlerinin bir alt kümesini taşır. Ayrıntılar [`docs/API.md`](docs/API.md) dosyasında, makine okunur şema [`docs/openapi.yaml`](docs/openapi.yaml) dosyasında.
 - **Prometheus:** `/metrics` ucu sistem ve isteğe bağlı olarak container metriklerini yayınlar (**Ayarlar → Dış Entegrasyon**).
 - **MQTT:** metrikler ve olaylar bir MQTT broker'ına yayınlanabilir. Home Assistant MQTT Discovery desteklenir; sensörler Home Assistant'ta kendiliğinden belirir.
+
+---
+
+## Dil desteği
+
+Arayüz dili **Ayarlar → Genel → Dil** altından seçilir; ayar kurulum genelindedir ve değiştirilince sayfa yeniden yüklenir. Türkçe ve İngilizce hazır gelir.
+
+Her dil `src/locales/` altında tek bir JSON dosyasıdır. Anahtarlar düz ve bağlamlıdır, yani metnin nerede kullanıldığını söyler:
+
+```json
+{
+  "_meta.name": "Türkçe",
+  "_meta.intl": "tr-TR",
+  "nav.items.host": "Sunucu",
+  "nav.items.uptime": "Servis Durumu",
+  "common.duration.day.one": "{count} gün",
+  "common.duration.day.other": "{count} gün"
+}
+```
+
+- **Türkçe (`tr.json`) kaynak dildir.** Bir dilde çevirisi olmayan metin ekranda Türkçe görünür, ham anahtar olarak görünmez.
+- `{count}`, `{name}` gibi yer tutucular çeviride korunmalıdır. `${DEĞİŞKEN}` biçimindeki metin yer tutucu değildir, olduğu gibi gösterilir.
+- Çoğul biçimler son ekle yazılır (`.one`, `.other`). Dilin gerektirdiği diğer kategoriler (`.few`, `.many` vb.) eklenebilir.
+
+### Yeni dil ekleme
+
+1. Taslağı üret. Türkçe dosyadan türetilir ve kayda eklenir:
+   ```bash
+   npm run i18n:new -- fr "Français" fr-FR
+   ```
+   Dil, Ayarlar'da "Français (taslak)" olarak hemen seçilebilir hâle gelir.
+2. `src/locales/fr.json` içindeki **değerleri** çevir. Anahtarlara ve yer tutuculara dokunma. Dosya bir çevirmene, bir LLM'e ya da Crowdin/Weblate gibi bir araca doğrudan verilebilir.
+3. İlerlemeyi denetle. Eksik, fazla ve yer tutucusu bozuk metinleri listeler:
+   ```bash
+   npm run i18n:check
+   ```
+4. Çeviri bitince dosyadaki `"_meta.status": "draft"` satırını sil. Dil tamamlanmış sayılır; bundan sonra eksik metin testlerde ve `i18n:check`te hata verir.
+
+> Panelin bir kısmı henüz çeviri dosyalarına taşınmadı. Bu ekranlar seçili dilden bağımsız olarak Türkçe görünür.
 
 ---
 

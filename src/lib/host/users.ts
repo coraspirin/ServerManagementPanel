@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -116,9 +117,7 @@ export async function hostAccounts(): Promise<HostAccounts> {
     return {
       users: [],
       groups: [],
-      error:
-        `Host kullanıcı listesi okunamadı (${root}/etc/passwd). Host kökü panel ` +
-        "container'ına bağlı değilse bu beklenen bir durum; değeri elle girebilirsin.",
+      error: serverT("hostUsers.unreadable", { path: `${root}/etc/passwd` }),
     };
   }
 }

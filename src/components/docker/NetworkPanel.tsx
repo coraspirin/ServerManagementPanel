@@ -8,6 +8,8 @@ import { readCsrfToken } from "./detail/shared";
 import { CSRF_HEADER } from "@/lib/auth/types";
 import type { DockerNetwork } from "@/lib/providers/types";
 import type { ContainerView } from "@/lib/docker/types";
+import { useFormat, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 /**
  * Ağ sekmesi (M3.41).
@@ -54,6 +56,9 @@ type Props = {
  */
 const DRIVERS = ["bridge", "overlay"];
 
+/** Cümle içindeki komut ve teknik adlar — çevrilmez, olduğu gibi yazılır. */
+const mono = (text: string) => <span className="font-mono">{text}</span>;
+
 async function post(body: Record<string, unknown>) {
   const response = await fetch("/api/docker/resources", {
     method: "POST",
@@ -71,18 +76,19 @@ export function NetworkPanel({
   onChanged,
   onOpenContainer,
 }: Props) {
+  const t = useT();
+  const f = useFormat();
   const [busy, setBusy] = useState<string | null>(null);
   const [sonuc, setSonuc] = useState<{ ok: boolean; text: string } | null>(null);
   const [detay, setDetay] = useState<DockerNetwork | null>(null);
   const [olustur, setOlustur] = useState<{ base: DockerNetwork | null } | null>(null);
   const [baglanacak, setBaglanacak] = useState<DockerNetwork | null>(null);
 
-  const q = query.trim().toLocaleLowerCase("tr");
+  const q = f.lower(query.trim());
   const rows = q
     ? networks.filter(
         (network) =>
-          network.name.toLocaleLowerCase("tr").includes(q) ||
-          network.driver.toLocaleLowerCase("tr").includes(q),
+          f.lower(network.name).includes(q) || f.lower(network.driver).includes(q),
       )
     : networks;
 
@@ -95,11 +101,11 @@ export function NetworkPanel({
         setSonuc({ ok: true, text: basarili });
         onChanged(payload);
       } else {
-        setSonuc({ ok: false, text: payload.error ?? "İşlem başarısız." });
+        setSonuc({ ok: false, text: payload.error ?? t("common.errors.actionFailed") });
       }
       return ok;
     } catch {
-      setSonuc({ ok: false, text: "Sunucuya ulaşılamadı." });
+      setSonuc({ ok: false, text: t("common.errors.network") });
       return false;
     } finally {
       setBusy(null);
@@ -107,11 +113,11 @@ export function NetworkPanel({
   }
 
   async function sil(network: DockerNetwork) {
-    if (!confirm(`"${network.name}" ağı silinsin mi?`)) return;
+    if (!confirm(t("docker.network.confirmDelete", { name: network.name }))) return;
     await calistir(
       network.id,
       { kind: "network", id: network.id },
-      `${network.name} silindi.`,
+      t("docker.network.deleted", { name: network.name }),
     );
   }
 
@@ -119,7 +125,7 @@ export function NetworkPanel({
     return calistir(
       network.id,
       { action: "network-connect", id: network.id, container },
-      `${container} → ${network.name} bağlandı.`,
+      t("docker.network.connected", { container, network: network.name }),
     );
   }
 
@@ -131,12 +137,14 @@ export function NetworkPanel({
    * sormak gereksiz bir adım. Geriye yalnızca onay kalıyor.
    */
   async function ayir(network: DockerNetwork, container: string) {
-    if (!confirm(`"${container}" ${network.name} ağından çıkarılsın mı?`)) return;
+    if (!confirm(t("docker.network.confirmDisconnect", { container, network: network.name }))) {
+      return;
+    }
 
     await calistir(
       network.id,
       { action: "network-disconnect", id: network.id, container },
-      `${container} ağdan çıkarıldı.`,
+      t("docker.network.disconnected", { container }),
     );
   }
 
@@ -149,7 +157,7 @@ export function NetworkPanel({
           className="inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1.5 text-xs text-subtle transition-colors hover:border-brand hover:text-brand"
         >
           <Plus className="size-3.5" aria-hidden />
-          Yeni ağ
+          {t("docker.network.newNetwork")}
         </button>
       )}
 
@@ -159,20 +167,22 @@ export function NetworkPanel({
 
       {rows.length === 0 ? (
         <p className="rounded-lg border border-dashed border-line bg-surface px-5 py-8 text-center text-sm text-subtle">
-          {networks.length === 0 ? "Ağ yok." : "Eşleşen ağ yok."}
+          {networks.length === 0 ? t("docker.network.none") : t("docker.network.noMatch")}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-line bg-surface">
           <table className="rtable w-full min-w-[48rem] text-sm">
             <thead>
               <tr className="border-b border-line text-left text-xs text-subtle">
-                <th className="px-4 py-2.5 font-medium">Ad</th>
-                <th className="px-4 py-2.5 font-medium">Sürücü</th>
-                <th className="px-4 py-2.5 font-medium">Kapsam</th>
-                <th className="px-4 py-2.5 font-medium">Subnet</th>
-                <th className="px-4 py-2.5 font-medium">Gateway</th>
-                <th className="px-4 py-2.5 font-medium">Container</th>
-                <th className="px-4 py-2.5 text-right font-medium">İşlem</th>
+                <th className="px-4 py-2.5 font-medium">{t("docker.network.name")}</th>
+                <th className="px-4 py-2.5 font-medium">{t("docker.network.driver")}</th>
+                <th className="px-4 py-2.5 font-medium">{t("docker.network.scope")}</th>
+                <th className="px-4 py-2.5 font-medium">{t("docker.network.subnet")}</th>
+                <th className="px-4 py-2.5 font-medium">{t("docker.network.gateway")}</th>
+                <th className="px-4 py-2.5 font-medium">{t("docker.network.containers")}</th>
+                <th className="px-4 py-2.5 text-right font-medium">
+                  {t("docker.network.actions")}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -187,28 +197,43 @@ export function NetworkPanel({
                       {network.name}
                     </button>
                     <div className="flex flex-wrap gap-1.5 text-[10px] text-subtle">
-                      {network.builtin && <span>Docker&apos;ın kendi ağı — silinemez</span>}
+                      {network.builtin && <span>{t("docker.network.builtin")}</span>}
                       {network.internal && <span>internal</span>}
                       {network.attachable && <span>attachable</span>}
-                      {network.composeProject && <span>compose: {network.composeProject}</span>}
+                      {network.composeProject && (
+                        <span>
+                          {t("docker.network.composeTag", { project: network.composeProject })}
+                        </span>
+                      )}
                     </div>
                   </td>
 
-                  <td data-label="Sürücü" className="px-4 py-3 text-xs">{network.driver}</td>
-                  <td data-label="Kapsam" className="px-4 py-3 text-xs text-subtle">
+                  <td data-label={t("docker.network.driver")} className="px-4 py-3 text-xs">
+                    {network.driver}
+                  </td>
+                  <td
+                    data-label={t("docker.network.scope")}
+                    className="px-4 py-3 text-xs text-subtle"
+                  >
                     {network.scope}
                   </td>
-                  <td data-label="Subnet" className="px-4 py-3 font-mono text-[11px]">
+                  <td
+                    data-label={t("docker.network.subnet")}
+                    className="px-4 py-3 font-mono text-[11px]"
+                  >
                     {network.subnet ?? <span className="text-subtle">—</span>}
                   </td>
-                  <td data-label="Gateway" className="px-4 py-3 font-mono text-[11px]">
+                  <td
+                    data-label={t("docker.network.gateway")}
+                    className="px-4 py-3 font-mono text-[11px]"
+                  >
                     {network.gateway ?? <span className="text-subtle">—</span>}
                   </td>
 
-                  <td data-label="Container" className="px-4 py-3 text-xs">
+                  <td data-label={t("docker.network.containers")} className="px-4 py-3 text-xs">
                     {network.attached.length === 0 ? (
                       <span className="rounded bg-warn/15 px-1.5 py-0.5 text-[10px] font-medium text-warn">
-                        kullanılmıyor
+                        {t("docker.network.unused")}
                       </span>
                     ) : (
                       <button
@@ -224,15 +249,18 @@ export function NetworkPanel({
 
                   <td data-label="" className="px-4 py-3 text-right max-md:text-left">
                     <div className="flex flex-wrap items-center justify-end gap-1 max-md:justify-start">
-                      <Islem title="Detay" onClick={() => setDetay(network)}>
+                      <Islem title={t("docker.network.detail")} onClick={() => setDetay(network)}>
                         <Info className="size-3.5" />
                       </Islem>
 
                       <Islem
-                        title="Ağ kimliğini kopyala"
+                        title={t("docker.network.copyId")}
                         onClick={() => {
                           void navigator.clipboard?.writeText(network.id);
-                          setSonuc({ ok: true, text: `${network.name} kimliği kopyalandı.` });
+                          setSonuc({
+                            ok: true,
+                            text: t("docker.network.idCopied", { name: network.name }),
+                          });
                         }}
                       >
                         <Copy className="size-3.5" />
@@ -241,7 +269,7 @@ export function NetworkPanel({
                       {canAct && (
                         <>
                           <Islem
-                            title="Container bağla"
+                            title={t("docker.network.connectContainer")}
                             disabled={busy === network.id || network.builtin}
                             onClick={() => setBaglanacak(network)}
                           >
@@ -256,7 +284,7 @@ export function NetworkPanel({
                           */}
                           {network.attached.length > 0 && (
                             <Islem
-                              title="Bağlı container'lar — çıkarmak için detayı aç"
+                              title={t("docker.network.attachedHint")}
                               onClick={() => setDetay(network)}
                             >
                               <Unlink className="size-3.5" />
@@ -264,7 +292,7 @@ export function NetworkPanel({
                           )}
 
                           <Islem
-                            title="Ağı çoğalt — aynı ayarlarla yeni bir ağ"
+                            title={t("docker.network.duplicate")}
                             onClick={() => setOlustur({ base: network })}
                           >
                             <Copy className="size-3.5 rotate-180" />
@@ -280,10 +308,12 @@ export function NetworkPanel({
                           <Islem
                             title={
                               network.builtin
-                                ? "Docker'ın kendi ağı — silinemez"
+                                ? t("docker.network.builtin")
                                 : network.attached.length > 0
-                                  ? `Silinemez — bağlı: ${network.attached.join(", ")}. Önce onları çıkarman gerekiyor.`
-                                  : "Ağı sil"
+                                  ? t("docker.network.cannotDeleteAttached", {
+                                      list: network.attached.join(", "),
+                                    })
+                                  : t("docker.network.delete")
                             }
                             danger
                             disabled={
@@ -305,11 +335,10 @@ export function NetworkPanel({
       )}
 
       <p className="text-[11px] text-subtle">
-        Yalnızca hiçbir container&apos;ın bağlı olmadığı ağlar silinebilir; Docker&apos;ın
-        kendi ağları (<span className="font-mono">bridge</span>,{" "}
-        <span className="font-mono">host</span>, <span className="font-mono">none</span>) hiç
-        silinemez. Bir yığının ağını silmek, yığın yeniden kurulunca Docker tarafından
-        yeniden yaratılır.
+        <Rich
+          text={t("docker.network.footnote")}
+          values={{ bridge: mono("bridge"), host: mono("host"), none: mono("none") }}
+        />
       </p>
 
       {detay && (
@@ -342,7 +371,7 @@ export function NetworkPanel({
             const ok = await calistir(
               "create",
               { action: "network-create", spec },
-              `${spec.name} ağı oluşturuldu.`,
+              t("docker.network.created", { name: spec.name }),
             );
             if (ok) setOlustur(null);
           }}
@@ -394,38 +423,42 @@ function NetworkDetail({
   onDisconnect: (container: string) => void;
   onClose: () => void;
 }) {
+  const t = useT();
+
   return (
     <Modal open title={network.name} onClose={onClose} wide>
       <div className="space-y-4">
         <dl className="space-y-1.5 text-sm">
-          <Satir label="ID">
+          <Satir label={t("docker.network.id")}>
             <span className="break-all font-mono text-[11px]">{network.id}</span>
           </Satir>
-          <Satir label="Sürücü">{network.driver}</Satir>
-          <Satir label="Kapsam">{network.scope}</Satir>
-          <Satir label="Subnet">
+          <Satir label={t("docker.network.driver")}>{network.driver}</Satir>
+          <Satir label={t("docker.network.scope")}>{network.scope}</Satir>
+          <Satir label={t("docker.network.subnet")}>
             <span className="font-mono text-[11px]">{network.subnet ?? "—"}</span>
           </Satir>
-          <Satir label="Gateway">
+          <Satir label={t("docker.network.gateway")}>
             <span className="font-mono text-[11px]">{network.gateway ?? "—"}</span>
           </Satir>
-          <Satir label="Internal">
-            {network.internal ? "evet — dış dünyaya çıkışı yok" : "hayır"}
+          <Satir label={t("docker.network.internal")}>
+            {network.internal ? t("docker.network.internalYes") : t("docker.network.no")}
           </Satir>
-          <Satir label="Attachable">{network.attachable ? "evet" : "hayır"}</Satir>
-          <Satir label="Compose">{network.composeProject ?? "—"}</Satir>
+          <Satir label={t("docker.network.attachable")}>
+            {network.attachable ? t("docker.network.yes") : t("docker.network.no")}
+          </Satir>
+          <Satir label={t("docker.network.compose")}>{network.composeProject ?? "—"}</Satir>
         </dl>
 
         <section className="rounded-lg border border-line px-3 py-2.5">
           <h3 className="mb-1.5 text-sm font-semibold">
-            Bağlı container&apos;lar
+            {t("docker.network.attachedTitle")}
             <span className="ml-1.5 text-xs font-normal text-subtle">
               {network.attached.length}
             </span>
           </h3>
 
           {network.attached.length === 0 ? (
-            <p className="text-sm text-subtle">Hiçbir container bağlı değil.</p>
+            <p className="text-sm text-subtle">{t("docker.network.noneAttached")}</p>
           ) : (
             <ul className="space-y-1 text-xs">
               {network.attached.map((name) => (
@@ -445,11 +478,11 @@ function NetworkDetail({
                     <button
                       type="button"
                       onClick={() => onDisconnect(name)}
-                      title={`${name} container'ını bu ağdan çıkar`}
+                      title={t("docker.network.disconnectTitle", { name })}
                       className="inline-flex shrink-0 items-center gap-1 rounded border border-line px-1.5 py-0.5 text-[11px] text-subtle transition-colors hover:border-danger hover:text-danger"
                     >
                       <Unlink className="size-3" aria-hidden />
-                      Çıkar
+                      {t("docker.network.disconnect")}
                     </button>
                   )}
                 </li>
@@ -460,7 +493,7 @@ function NetworkDetail({
 
         {Object.keys(network.labels).length > 0 && (
           <section className="rounded-lg border border-line px-3 py-2.5">
-            <h3 className="mb-1.5 text-sm font-semibold">Etiketler</h3>
+            <h3 className="mb-1.5 text-sm font-semibold">{t("docker.network.labels")}</h3>
             <ul className="space-y-0.5 break-all font-mono text-[11px]">
               {Object.entries(network.labels).map(([key, value]) => (
                 <li key={key}>
@@ -497,19 +530,19 @@ function NetworkDialog({
   onSubmit: (spec: NetworkFormSpec) => void | Promise<void>;
   onClose: () => void;
 }) {
+  const t = useT();
+
   /*
     Alanlar VARSAYILANLARLA doluyor (M3.44). Boş bir form kullanıcıya "buraya ne
     yazmalıyım" sorusunu soruyor; dolu bir form ise hem çalışan bir örnek
     veriyor hem de biçimi gösteriyor. İstenirse hepsi değiştirilebilir.
   */
-  const [name, setName] = useState(base ? `${base.name}-kopya` : "uygulama-agi");
+  const [name, setName] = useState(
+    base ? t("docker.network.copyName", { name: base.name }) : t("docker.network.defaultName"),
+  );
   const [driver, setDriver] = useState(base?.driver ?? "bridge");
   const [internal, setInternal] = useState(base?.internal ?? false);
   const [attachable, setAttachable] = useState(base?.attachable ?? false);
-  /*
-    Çoğaltmada subnet BİLEREK boş geliyor: aynı subnet'e sahip iki ağ
-    yaratılamaz ve kopyalamak kullanıcıyı kesin bir hataya sürüklerdi.
-  */
   /*
     Çoğaltmada subnet kaynağınkinden KOPYALANMIYOR: aynı subnet'e sahip iki ağ
     yaratılamaz ve kopyalamak kullanıcıyı kesin bir hataya sürüklerdi. Onun
@@ -534,20 +567,28 @@ function NetworkDialog({
   const gecerliAd = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$/.test(name.trim());
 
   return (
-    <Modal open title={base ? `${base.name} ağını çoğalt` : "Yeni ağ"} onClose={onClose}>
+    <Modal
+      open
+      title={
+        base
+          ? t("docker.network.duplicateTitle", { name: base.name })
+          : t("docker.network.newNetwork")
+      }
+      onClose={onClose}
+    >
       <div className="space-y-3">
         <label className="block text-sm">
-          <span className="text-subtle">Ağ adı</span>
+          <span className="text-subtle">{t("docker.network.networkName")}</span>
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="uygulama-agi"
+            placeholder={t("docker.network.defaultName")}
             className="mt-1 w-full rounded-md border border-line bg-canvas px-3 py-1.5 font-mono text-sm outline-none focus:border-brand"
           />
         </label>
 
         <label className="block text-sm">
-          <span className="text-subtle">Sürücü</span>
+          <span className="text-subtle">{t("docker.network.driver")}</span>
           <select
             value={driver}
             onChange={(event) => setDriver(event.target.value)}
@@ -569,7 +610,7 @@ function NetworkDialog({
               onChange={(event) => setInternal(event.target.checked)}
               className="size-3.5 accent-[var(--brand)]"
             />
-            Internal
+            {t("docker.network.internal")}
           </label>
           <label className="flex items-center gap-1.5 text-sm">
             <input
@@ -578,27 +619,31 @@ function NetworkDialog({
               onChange={(event) => setAttachable(event.target.checked)}
               className="size-3.5 accent-[var(--brand)]"
             />
-            Attachable
+            {t("docker.network.attachable")}
           </label>
         </div>
 
         <p className="text-[11px] text-subtle">
-          <strong>Internal:</strong> ağdaki container&apos;lar birbirini görür ama dış
-          dünyaya çıkamaz — veritabanı ağları için doğru seçim.{" "}
-          <strong>Attachable:</strong> compose dışından{" "}
-          <span className="font-mono">docker network connect</span> ile bağlanılabilir.
+          <Rich
+            text={t("docker.network.flagsHelp")}
+            values={{
+              internal: <strong>{t("docker.network.internal")}:</strong>,
+              attachable: <strong>{t("docker.network.attachable")}:</strong>,
+              cmd: mono("docker network connect"),
+            }}
+          />
         </p>
 
         <fieldset className="space-y-2 rounded-lg border border-line px-3 py-2.5">
-          <legend className="px-1 text-xs text-subtle">IPAM — hepsi isteğe bağlı</legend>
+          <legend className="px-1 text-xs text-subtle">{t("docker.network.ipamLegend")}</legend>
           {(
             [
-              ["Subnet", subnet, setSubnet, "172.30.0.0/16"],
-              ["Gateway", gateway, setGateway, "172.30.0.1"],
-              ["IP aralığı", ipRange, setIpRange, "172.30.5.0/24"],
+              ["subnet", t("docker.network.subnet"), subnet, setSubnet, "172.30.0.0/16"],
+              ["gateway", t("docker.network.gateway"), gateway, setGateway, "172.30.0.1"],
+              ["ipRange", t("docker.network.ipRange"), ipRange, setIpRange, "172.30.5.0/24"],
             ] as const
-          ).map(([label, value, setter, placeholder]) => (
-            <label key={label} className="block text-sm">
+          ).map(([id, label, value, setter, placeholder]) => (
+            <label key={id} className="block text-sm">
               <span className="text-subtle">{label}</span>
               <input
                 value={value}
@@ -608,14 +653,11 @@ function NetworkDialog({
               />
             </label>
           ))}
-          <p className="text-[11px] text-subtle">
-            Boş bırakılanlar Docker&apos;a hiç gönderilmez ve adresleme Docker&apos;ın
-            kendi havuzundan yapılır.
-          </p>
+          <p className="text-[11px] text-subtle">{t("docker.network.ipamHelp")}</p>
         </fieldset>
 
         <label className="block text-sm">
-          <span className="text-subtle">Etiketler — satır başına `anahtar=değer`</span>
+          <span className="text-subtle">{t("docker.network.labelsField")}</span>
           <textarea
             value={labels}
             onChange={(event) => setLabels(event.target.value)}
@@ -631,12 +673,12 @@ function NetworkDialog({
             onClick={onClose}
             className="rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand"
           >
-            Vazgeç
+            {t("common.actions.cancel")}
           </button>
           <button
             type="button"
             disabled={!gecerliAd}
-            title={gecerliAd ? undefined : "Ad harf ya da rakamla başlamalı."}
+            title={gecerliAd ? undefined : t("docker.network.invalidName")}
             onClick={() =>
               void onSubmit({
                 name: name.trim(),
@@ -662,7 +704,7 @@ function NetworkDialog({
             }
             className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            Oluştur
+            {t("common.actions.create")}
           </button>
         </div>
       </div>
@@ -701,23 +743,25 @@ function ConnectDialog({
   onSubmit: (container: string) => void | Promise<void>;
   onClose: () => void;
 }) {
+  const t = useT();
   const adaylar = containers.filter(
     (container) => !network.attached.includes(container.name),
   );
   const [secim, setSecim] = useState(adaylar[0]?.name ?? "");
 
   return (
-    <Modal open title={`${network.name} ağına container bağla`} onClose={onClose}>
+    <Modal
+      open
+      title={t("docker.network.connectTitle", { network: network.name })}
+      onClose={onClose}
+    >
       <div className="space-y-3">
         {adaylar.length === 0 ? (
-          <p className="text-sm text-subtle">
-            Bağlanabilecek container yok — çalışan ve durmuş tüm container&apos;lar zaten
-            bu ağda.
-          </p>
+          <p className="text-sm text-subtle">{t("docker.network.noCandidates")}</p>
         ) : (
           <>
             <label className="block text-sm">
-              <span className="text-subtle">Container</span>
+              <span className="text-subtle">{t("docker.network.container")}</span>
               <select
                 value={secim}
                 onChange={(event) => setSecim(event.target.value)}
@@ -733,10 +777,7 @@ function ConnectDialog({
             </label>
 
             <p className="text-[11px] text-subtle">
-              Bağlama anında geçerli olur; container&apos;ı yeniden başlatmak gerekmez.
-              Ama compose ile yönetilen bir container&apos;da bir sonraki{" "}
-              <span className="font-mono">compose up</span> bunu geri alır — kalıcı olması
-              için ağı compose dosyasına da yazman gerekiyor.
+              <Rich text={t("docker.network.connectHelp")} values={{ cmd: mono("compose up") }} />
             </p>
           </>
         )}
@@ -747,7 +788,7 @@ function ConnectDialog({
             onClick={onClose}
             className="rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand"
           >
-            Vazgeç
+            {t("common.actions.cancel")}
           </button>
           <button
             type="button"
@@ -755,7 +796,7 @@ function ConnectDialog({
             onClick={() => void onSubmit(secim)}
             className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            Bağla
+            {t("docker.network.connect")}
           </button>
         </div>
       </div>

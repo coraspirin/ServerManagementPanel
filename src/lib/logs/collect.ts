@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { announce } from "@/lib/alerts/announce";
 import { callHelper, helperConfigured } from "@/lib/host/helper";
@@ -54,7 +55,7 @@ export async function collectLogs(): Promise<CollectOutcome> {
   };
 
   if (!getBool("logs.enabled")) {
-    outcome.skipped.push("toplama kapalı");
+    outcome.skipped.push(serverT("logCollect.disabled"));
     return outcome;
   }
 
@@ -81,7 +82,7 @@ async function collectContainers(outcome: CollectOutcome): Promise<IncomingLine[
   try {
     containers = await provider.list(false);
   } catch (error) {
-    outcome.errors.push(`docker listesi alınamadı: ${message(error)}`);
+    outcome.errors.push(serverT("logCollect.dockerList", { error: message(error) }));
     return lines;
   }
 
@@ -172,7 +173,7 @@ async function collectJournald(outcome: CollectOutcome): Promise<IncomingLine[]>
   if (!getBool("logs.journald_enabled")) return [];
 
   if (!helperConfigured()) {
-    outcome.skipped.push("journald: host-helper yapılandırılmamış");
+    outcome.skipped.push(serverT("logCollect.noHelper"));
     return [];
   }
 
@@ -295,10 +296,12 @@ async function matchPatterns(lines: IncomingLine[]): Promise<number> {
       alertKey: `log.pattern.${pattern.id}`,
       source: "system",
       severity: pattern.severity,
-      title: `Log kuralı eşleşti: ${pattern.name}`,
-      detail:
-        `${hits.length} satır (${sources.join(", ")})\n` +
-        `İlk eşleşme: ${first.message.slice(0, 300)}`,
+      title: serverT("logCollect.matchTitle", { name: pattern.name }),
+      detail: serverT("logCollect.matchDetail", {
+        count: hits.length,
+        sources: sources.join(", "),
+        first: first.message.slice(0, 300),
+      }),
     });
   }
 

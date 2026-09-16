@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { deleteLogo } from "@/lib/apps/logos";
@@ -15,13 +16,13 @@ export async function PATCH(request: Request, { params }: Context) {
 
   const id = Number((await params).id);
   const existing = getApp(id);
-  if (!existing) return Response.json({ error: "kart bulunamadı" }, { status: 404 });
+  if (!existing) return Response.json({ error: serverT("api.notFound.card") }, { status: 404 });
 
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const parsed = parseAppInput(body);
@@ -55,7 +56,7 @@ export async function DELETE(request: Request, { params }: Context) {
 
   const id = Number((await params).id);
   const existing = getApp(id);
-  if (!existing) return Response.json({ error: "kart bulunamadı" }, { status: 404 });
+  if (!existing) return Response.json({ error: serverT("api.notFound.card") }, { status: 404 });
 
   deleteApp(id);
   deleteLogo(existing.icon);

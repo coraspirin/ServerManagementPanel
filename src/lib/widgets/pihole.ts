@@ -1,5 +1,6 @@
 import "server-only";
 
+import { serverT } from "@/lib/i18n/runtime";
 import type { WidgetContext, WidgetData, WidgetProvider } from "./types";
 
 /**
@@ -33,7 +34,7 @@ type AuthPayload = {
 
 async function login(context: WidgetContext): Promise<Session> {
   const password = context.config.password ?? "";
-  if (!password.trim()) throw new Error("Pi-hole parolası girilmemiş.");
+  if (!password.trim()) throw new Error(serverT("widget.pihole.noPassword"));
 
   const response = await fetch(`${context.baseUrl}/api/auth`, {
     method: "POST",
@@ -50,8 +51,8 @@ async function login(context: WidgetContext): Promise<Session> {
     // "Unauthorized" demek kullanıcıyı parolayı defalarca kontrol etmeye iter.
     throw new Error(
       /seat|session/i.test(String(reason))
-        ? `Pi-hole oturum havuzu dolu (${reason}). Pi-hole arayüzünden açık oturumları kapatabilirsin.`
-        : `Pi-hole girişi reddedildi: ${reason}`,
+        ? serverT("widget.pihole.seatsFull", { reason: String(reason) })
+        : serverT("widget.pihole.loginRejected", { reason: String(reason) }),
     );
   }
 
@@ -127,32 +128,34 @@ type BlockingPayload = { blocking?: string; timer?: number | null };
 
 function formatCount(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 10_000) return `${Math.round(value / 1000)}B`;
-  if (value >= 1000) return `${(value / 1000).toFixed(1)}B`;
+  if (value >= 10_000) return `${Math.round(value / 1000)}${serverT("widget.thousand")}`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}${serverT("widget.thousand")}`;
   return String(value);
 }
 
 export const piholeWidget: WidgetProvider = {
   def: {
     key: "pihole",
-    label: "Pi-hole",
-    help: "Pi-hole v6 gerekiyor. Parola olarak web arayüzü parolasını ya da Pi-hole'da ürettiğin bir uygulama parolasını gir.",
+    // Görünen metinler (label/help/confirm) dil dosyasından: `widget.pihole.*`
+    // — `widgetDefs()` çeviriyor. Buradakiler yalnızca yapı.
+    label: "",
+    help: "",
     fields: [
       {
         key: "password",
-        label: "Pi-hole parolası",
+        label: "",
         type: "secret",
         required: true,
-        help: "Şifrelenerek saklanır (T3). Uygulama parolası kullanmak yeğdir: iptal edildiğinde web girişin etkilenmez.",
+        help: "",
       },
     ],
     actions: [
       {
         key: "disable",
-        label: "5 dk devre dışı bırak",
-        confirm: "Pi-hole engellemesi 5 dakika kapatılsın mı? Bu süre boyunca reklam ve izleyici alan adları engellenmez.",
+        label: "",
+        confirm: "",
       },
-      { key: "enable", label: "Engellemeyi aç" },
+      { key: "enable", label: "" },
     ],
   },
 
@@ -185,18 +188,25 @@ export const piholeWidget: WidgetProvider = {
       ],
       lines: [
         ...(topDomain?.domain
-          ? [{ label: "En çok engellenen", value: `${topDomain.domain} (${topDomain.count ?? 0})` }]
+          ? [
+              {
+                label: serverT("widget.pihole.topBlocked"),
+                value: `${topDomain.domain} (${topDomain.count ?? 0})`,
+              },
+            ]
           : []),
         {
-          label: "Engel listesi",
-          value: `${formatCount(summary.gravity?.domains_being_blocked ?? 0)} alan adı`,
+          label: serverT("widget.pihole.blocklist"),
+          value: serverT("widget.pihole.domains", {
+            count: formatCount(summary.gravity?.domains_being_blocked ?? 0),
+          }),
         },
       ],
       note: enabled
         ? null
         : blocking.timer
-          ? `Engelleme kapalı — ${Math.ceil(blocking.timer / 60)} dk sonra kendiliğinden açılacak.`
-          : "Engelleme SÜRESİZ kapalı.",
+          ? serverT("widget.pihole.disabledTimer", { minutes: Math.ceil(blocking.timer / 60) })
+          : serverT("widget.pihole.disabledForever"),
       availableActions: enabled ? ["disable"] : ["enable"],
     };
   },
@@ -207,7 +217,7 @@ export const piholeWidget: WidgetProvider = {
         method: "POST",
         body: { blocking: false, timer: DISABLE_SECONDS },
       });
-      return `Pi-hole engellemesi ${DISABLE_SECONDS / 60} dakika kapatıldı.`;
+      return serverT("widget.pihole.disabled", { minutes: DISABLE_SECONDS / 60 });
     }
 
     if (action === "enable") {
@@ -217,9 +227,9 @@ export const piholeWidget: WidgetProvider = {
         method: "POST",
         body: { blocking: true, timer: null },
       });
-      return "Pi-hole engellemesi açıldı.";
+      return serverT("widget.pihole.enabled");
     }
 
-    throw new Error(`Bilinmeyen aksiyon: ${action}`);
+    throw new Error(serverT("widgetsLib.unknownAction", { action }));
   },
 };

@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { beginIdempotent } from "@/lib/apiv1/action";
 import { guardV1 } from "@/lib/apiv1/guard";
 import { runHelperAction } from "@/lib/apiv1/host";
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
   if (!action) {
     return apiError(
       "invalid_request",
-      `geçersiz eylem. Geçerli değerler: ${Object.keys(ACTIONS).join(", ")}`,
+      serverT("api.v1.invalidValue", { field: serverT("api.v1.field.action"), values: Object.keys(ACTIONS).join(", ") }),
     );
   }
 
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
   // Mutlak yol zorunlu — göreli bir yol helper'ın çalışma dizinine göre
   // çözülür ve o dizin panelin bildiği bir şey değil.
   if (!dir.startsWith("/")) {
-    return apiError("invalid_request", "dir mutlak bir yol olmalı");
+    return apiError("invalid_request", serverT("api.v1.dirAbsolute"));
   }
 
   return runHelperAction({

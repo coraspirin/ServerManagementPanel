@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { Columns3 } from "lucide-react";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * Container tablosunun sütun seçicisi (M3.24).
@@ -127,11 +128,13 @@ export function ColumnPicker({
   onToggle: (id: string) => void;
   onReset: () => void;
 }) {
+  const t = useT();
+
   return (
     <details className="relative">
       <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md border border-line bg-surface px-2 py-1.5 text-xs text-subtle transition-colors hover:text-ink">
         <Columns3 className="size-3.5" aria-hidden />
-        Sütunlar
+        {t("docker.columnPicker.title")}
       </summary>
 
       <div className="absolute right-0 z-20 mt-1 w-52 rounded-lg border border-line bg-surface p-2 shadow-lg">
@@ -156,7 +159,7 @@ export function ColumnPicker({
           onClick={onReset}
           className="mt-1.5 w-full rounded border border-line px-2 py-1 text-[11px] text-subtle transition-colors hover:text-ink"
         >
-          Varsayılana dön
+          {t("docker.columnPicker.reset")}
         </button>
       </div>
     </details>

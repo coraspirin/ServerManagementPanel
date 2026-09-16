@@ -2,6 +2,7 @@ import "server-only";
 
 import { readCache, writeCache } from "@/lib/db/cache";
 import { isMockMode } from "@/lib/env";
+import { serverT } from "@/lib/i18n/runtime";
 import { getNumber, getString } from "@/lib/settings";
 
 /**
@@ -39,16 +40,16 @@ export type Weather = {
  * karşılığı yok.
  */
 function describe(code: number): string {
-  if (code === 0) return "Açık";
-  if (code <= 2) return "Az bulutlu";
-  if (code === 3) return "Kapalı";
-  if (code <= 48) return "Sisli";
-  if (code <= 57) return "Çiseliyor";
-  if (code <= 67) return "Yağmurlu";
-  if (code <= 77) return "Karlı";
-  if (code <= 82) return "Sağanak";
-  if (code <= 86) return "Kar sağanağı";
-  return "Fırtınalı";
+  if (code === 0) return serverT("weather.clear");
+  if (code <= 2) return serverT("weather.partlyCloudy");
+  if (code === 3) return serverT("weather.overcast");
+  if (code <= 48) return serverT("weather.fog");
+  if (code <= 57) return serverT("weather.drizzle");
+  if (code <= 67) return serverT("weather.rain");
+  if (code <= 77) return serverT("weather.snow");
+  if (code <= 82) return serverT("weather.showers");
+  if (code <= 86) return serverT("weather.snowShowers");
+  return serverT("weather.storm");
 }
 
 type Payload = {
@@ -65,7 +66,7 @@ export function weatherEnabled(): boolean {
 export async function currentWeather(): Promise<
   { ok: true; weather: Weather; updatedAt: number } | { ok: false; error: string }
 > {
-  if (!weatherEnabled()) return { ok: false, error: "konum ayarlanmamış" };
+  if (!weatherEnabled()) return { ok: false, error: serverT("weather.noLocation") };
 
   const cached = readCache<Weather>(CACHE_KEY);
   const now = Math.floor(Date.now() / 1000);

@@ -8,6 +8,10 @@
  * Tarayıcıda da çalışması gerektiği için bağımlılık kullanmıyor.
  */
 
+import { formatMonth, formatWeekday } from "../i18n/format.ts";
+import type { Dictionary } from "../i18n/locales.ts";
+import type { TFunction } from "../i18n/translate.ts";
+
 export type CronMode =
   | "minutes"
   | "hourly"
@@ -38,31 +42,6 @@ export type CronParts = {
   /** "custom" modunda ham ifade */
   raw: string;
 };
-
-export const WEEKDAY_NAMES = [
-  "Pazar",
-  "Pazartesi",
-  "Salı",
-  "Çarşamba",
-  "Perşembe",
-  "Cuma",
-  "Cumartesi",
-];
-
-export const MONTH_NAMES = [
-  "Ocak",
-  "Şubat",
-  "Mart",
-  "Nisan",
-  "Mayıs",
-  "Haziran",
-  "Temmuz",
-  "Ağustos",
-  "Eylül",
-  "Ekim",
-  "Kasım",
-  "Aralık",
-];
 
 const DEFAULT_PARTS: CronParts = {
   mode: "daily",
@@ -186,30 +165,35 @@ function hhmm(hour: number, minute: number): string {
 }
 
 /** "Her gün saat 04:23'te" gibi bir cümle üretir. */
-export function describeCron(expression: string): string {
+export function describeCron(expression: string, t: TFunction, dict: Dictionary): string {
   const parts = parseCron(expression);
+  const time = hhmm(parts.hour, parts.minute);
 
   switch (parts.mode) {
     case "minutes":
       return parts.everyMinutes === 1
-        ? "Her dakika"
-        : `Her ${parts.everyMinutes} dakikada bir`;
+        ? t("cron.describe.everyMinute")
+        : t("cron.describe.everyMinutes", { count: parts.everyMinutes });
     case "hourly":
       return parts.minute === 0
-        ? "Her saat başı"
-        : `Her saat, ${parts.minute}. dakikada`;
+        ? t("cron.describe.hourTop")
+        : t("cron.describe.hourly", { minute: parts.minute });
     case "daily":
-      return `Her gün saat ${hhmm(parts.hour, parts.minute)}`;
+      return t("cron.describe.daily", { time });
     case "days":
-      return `Her ${parts.everyDays} günde bir saat ${hhmm(parts.hour, parts.minute)}`;
+      return t("cron.describe.days", { count: parts.everyDays, time });
     case "yearly":
-      return `Her yıl ${MONTH_NAMES[parts.month - 1] ?? parts.month} ayının ${parts.monthday}. günü saat ${hhmm(parts.hour, parts.minute)}`;
+      return t("cron.describe.yearly", {
+        month: formatMonth(parts.month, dict),
+        day: parts.monthday,
+        time,
+      });
     case "weekly":
-      return `Her ${WEEKDAY_NAMES[parts.weekday]} saat ${hhmm(parts.hour, parts.minute)}`;
+      return t("cron.describe.weekly", { weekday: formatWeekday(parts.weekday, dict), time });
     case "monthly":
-      return `Her ayın ${parts.monthday}. günü saat ${hhmm(parts.hour, parts.minute)}`;
+      return t("cron.describe.monthly", { day: parts.monthday, time });
     default:
-      return "Özel zamanlama";
+      return t("cron.describe.custom");
   }
 }
 

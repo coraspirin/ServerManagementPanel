@@ -3,8 +3,6 @@
 import { useMemo, useState } from "react";
 import { CalendarClock } from "lucide-react";
 import {
-  MONTH_NAMES,
-  WEEKDAY_NAMES,
   buildCron,
   describeCron,
   nextRuns,
@@ -12,6 +10,9 @@ import {
   type CronMode,
   type CronParts,
 } from "@/lib/cron/friendly";
+import { useDict, useFormat, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
+import type { MessageKey } from "@/lib/i18n/translate";
 
 /**
  * Zamanlama seçici.
@@ -21,15 +22,15 @@ import {
  * yalnızca depolama biçimidir; "Özel" modunda isteyen doğrudan yazabilir.
  */
 
-const MODES: { value: CronMode; label: string }[] = [
-  { value: "minutes", label: "Belirli dakikada bir" },
-  { value: "hourly", label: "Saatte bir" },
-  { value: "daily", label: "Günde bir" },
-  { value: "days", label: "Belirli gün aralığında" },
-  { value: "weekly", label: "Haftada bir" },
-  { value: "monthly", label: "Ayda bir" },
-  { value: "yearly", label: "Yılda bir" },
-  { value: "custom", label: "Özel (cron)" },
+const MODES: { value: CronMode; label: MessageKey }[] = [
+  { value: "minutes", label: "cron.mode.minutes" },
+  { value: "hourly", label: "cron.mode.hourly" },
+  { value: "daily", label: "cron.mode.daily" },
+  { value: "days", label: "cron.mode.days" },
+  { value: "weekly", label: "cron.mode.weekly" },
+  { value: "monthly", label: "cron.mode.monthly" },
+  { value: "yearly", label: "cron.mode.yearly" },
+  { value: "custom", label: "cron.mode.custom" },
 ];
 
 /** "Belirli gün aralığında" için sunulan aralıklar. */
@@ -65,6 +66,9 @@ export function CronEditor({
    */
   allowCustom?: boolean;
 }) {
+  const t = useT();
+  const dict = useDict();
+  const f = useFormat();
   const [parts, setParts] = useState<CronParts>(() => parseCron(value));
   const [rawDraft, setRawDraft] = useState(value);
 
@@ -111,14 +115,14 @@ export function CronEditor({
         >
           {modes.map((m) => (
             <option key={m.value} value={m.value}>
-              {m.label}
+              {t(m.label)}
             </option>
           ))}
         </select>
 
         {parts.mode === "minutes" && (
           <label className="flex items-center gap-1.5 text-sm">
-            <span className="text-subtle">her</span>
+            <span className="text-subtle">{t("cron.editor.every")}</span>
             <select
               value={parts.everyMinutes}
               disabled={disabled}
@@ -131,7 +135,7 @@ export function CronEditor({
                 </option>
               ))}
             </select>
-            <span className="text-subtle">dakikada</span>
+            <span className="text-subtle">{t("cron.editor.minutesSuffix")}</span>
           </label>
         )}
 
@@ -149,13 +153,13 @@ export function CronEditor({
                 </option>
               ))}
             </select>
-            <span className="text-subtle">. dakikada</span>
+            <span className="text-subtle">{t("cron.editor.minuteSuffix")}</span>
           </label>
         )}
 
         {parts.mode === "days" && (
           <label className="flex items-center gap-1.5 text-sm">
-            <span className="text-subtle">her</span>
+            <span className="text-subtle">{t("cron.editor.every")}</span>
             <select
               value={parts.everyDays}
               disabled={disabled}
@@ -168,7 +172,7 @@ export function CronEditor({
                 </option>
               ))}
             </select>
-            <span className="text-subtle">günde bir, saat</span>
+            <span className="text-subtle">{t("cron.editor.daysSuffix")}</span>
           </label>
         )}
 
@@ -180,9 +184,9 @@ export function CronEditor({
               onChange={(e) => update({ month: Number(e.target.value) })}
               className={selectClass}
             >
-              {MONTH_NAMES.map((name, index) => (
-                <option key={name} value={index + 1}>
-                  {name}
+              {range(1, 12).map((month) => (
+                <option key={month} value={month}>
+                  {f.month(month)}
                 </option>
               ))}
             </select>
@@ -198,7 +202,7 @@ export function CronEditor({
                 </option>
               ))}
             </select>
-            <span className="text-subtle">. günü</span>
+            <span className="text-subtle">{t("cron.editor.daySuffix")}</span>
           </label>
         )}
 
@@ -209,9 +213,9 @@ export function CronEditor({
             onChange={(e) => update({ weekday: Number(e.target.value) })}
             className={selectClass}
           >
-            {WEEKDAY_NAMES.map((name, index) => (
-              <option key={name} value={index}>
-                {name}
+            {range(0, 6).map((index) => (
+              <option key={index} value={index}>
+                {f.weekday(index)}
               </option>
             ))}
           </select>
@@ -219,7 +223,7 @@ export function CronEditor({
 
         {parts.mode === "monthly" && (
           <label className="flex items-center gap-1.5 text-sm">
-            <span className="text-subtle">ayın</span>
+            <span className="text-subtle">{t("cron.editor.monthPrefix")}</span>
             <select
               value={parts.monthday}
               disabled={disabled}
@@ -232,7 +236,7 @@ export function CronEditor({
                 </option>
               ))}
             </select>
-            <span className="text-subtle">. günü</span>
+            <span className="text-subtle">{t("cron.editor.daySuffix")}</span>
           </label>
         )}
 
@@ -285,12 +289,14 @@ export function CronEditor({
               if (e.key === "Enter") e.currentTarget.blur();
               if (e.key === "Escape") setRawDraft(value);
             }}
-            placeholder="dk sa gün ay hafta"
+            placeholder={t("cron.editor.placeholder")}
             className={`w-full font-mono ${selectClass}`}
           />
           <p className="text-[11px] text-subtle">
-            Beş alan: dakika, saat, ayın günü, ay, haftanın günü. Örnek:{" "}
-            <code className="font-mono">30 2 * * 0</code> → her Pazar 02:30.
+            <Rich
+              text={t("cron.editor.help")}
+              values={{ example: <code className="font-mono">30 2 * * 0</code> }}
+            />
           </p>
         </div>
       )}
@@ -298,23 +304,19 @@ export function CronEditor({
       <div className="flex items-start gap-1.5 text-xs">
         <CalendarClock className="mt-px size-3.5 shrink-0 text-subtle" aria-hidden />
         <div className="min-w-0">
-          <p className="font-medium">{describeCron(expression)}</p>
+          <p className="font-medium">{describeCron(expression, t, dict)}</p>
           {upcoming.length > 0 ? (
             <p className="text-subtle">
-              Sonraki:{" "}
-              {upcoming
-                .map((d) =>
-                  d.toLocaleString("tr-TR", {
-                    day: "2-digit",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  }),
-                )
-                .join(" · ")}
+              {t("cron.editor.next", {
+                list: upcoming
+                  .map((d) =>
+                    f.dateTime(d, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }),
+                  )
+                  .join(" · "),
+              })}
             </p>
           ) : (
-            <p className="text-danger">Bu ifade hiç çalışmayacak — kontrol et.</p>
+            <p className="text-danger">{t("cron.editor.never")}</p>
           )}
         </div>
       </div>

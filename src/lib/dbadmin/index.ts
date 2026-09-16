@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getNumber } from "@/lib/settings";
+import { serverT } from "@/lib/i18n/runtime";
 import {
   mysqlQuery,
   mysqlStructure,
@@ -53,7 +54,7 @@ export async function runQuery(
   options: RunOptions = {},
 ): Promise<RunOutcome> {
   const trimmed = sql.trim();
-  if (trimmed.length === 0) return { ok: false, error: "Sorgu boş." };
+  if (trimmed.length === 0) return { ok: false, error: serverT("dbadmin.emptyQuery") };
 
   const analysis = analyzeSql(trimmed);
 
@@ -63,7 +64,7 @@ export async function runQuery(
   if (analysis.statementCount > 1) {
     return {
       ok: false,
-      error: "Tek seferde yalnızca bir ifade çalıştırılabilir. Noktalı virgülleri ayır.",
+      error: serverT("dbadmin.singleStatement"),
     };
   }
 
@@ -72,16 +73,14 @@ export async function runQuery(
   if (writes && !connection.writable) {
     return {
       ok: false,
-      error:
-        `"${connection.name}" bağlantısı salt-okunur. Yazma için bağlantı ayarlarından ` +
-        "'yazılabilir' işaretlenmeli — izin tek başına yetmiyor, bu bilinçli bir çift kapı.",
+      error: serverT("dbadmin.readOnly", { name: connection.name }),
     };
   }
 
   if (analysis.dangers.length > 0 && !options.confirmed) {
     return {
       ok: false,
-      error: "Bu ifade ek onay istiyor.",
+      error: serverT("dbadmin.needsConfirm"),
       needsConfirmation: true,
       dangers: analysis.dangers,
     };
@@ -112,7 +111,7 @@ export async function runQuery(
         return { ok: true, result: toQueryResult(raw, Date.now() - started, limit) };
       }
       default:
-        return { ok: false, error: "Bilinmeyen motor." };
+        return { ok: false, error: serverT("dbadmin.unknownEngine") };
     }
   } catch (error) {
     return { ok: false, error: describe(error) };
@@ -169,7 +168,7 @@ export async function testConnection(
     const tables = await listTables(connection);
     return {
       ok: true,
-      message: `Bağlantı başarılı — ${tables.length} tablo/anahtar alanı görüldü.`,
+      message: serverT("dbadmin.testOk", { count: tables.length }),
     };
   } catch (error) {
     return { ok: false, message: describe(error) };
@@ -216,13 +215,13 @@ export async function readTable(
 function describe(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (message.includes("ECONNREFUSED")) {
-    return "Bağlantı reddedildi — sunucu çalışmıyor ya da port yanlış.";
+    return serverT("dbadmin.refused");
   }
   if (message.includes("ETIMEDOUT") || message.includes("timeout")) {
-    return "Bağlantı zaman aşımına uğradı.";
+    return serverT("dbadmin.timeout");
   }
   if (message.includes("ENOTFOUND") || message.includes("EAI_AGAIN")) {
-    return "Sunucu adresi çözümlenemedi.";
+    return serverT("dbadmin.notFound");
   }
   return message.slice(0, 600);
 }

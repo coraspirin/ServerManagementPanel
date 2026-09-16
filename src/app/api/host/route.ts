@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import {
@@ -40,12 +41,12 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as typeof body;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const action = String(body.action ?? "") as HelperAction;
   const permission = PERMISSION[action];
-  if (!permission) return Response.json({ error: "bilinmeyen eylem" }, { status: 400 });
+  if (!permission) return Response.json({ error: serverT("api.invalidAction") }, { status: 400 });
 
   const guard = await guardApi(request, permission);
   if (!guard.ok) return guard.response;
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
     return Response.json(
       {
         error:
-          "host-helper kurulu değil. Sunucuda `sudo host-helper/install.sh` çalıştırıp HELPER_SECRET'i .env'e ekle.",
+          serverT("apiv1.helperMissing"),
       },
       { status: 503 },
     );

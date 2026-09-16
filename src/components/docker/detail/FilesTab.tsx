@@ -16,6 +16,8 @@ import {
 
 import { CSRF_HEADER } from "@/lib/auth/types";
 import type { FileEntry } from "@/lib/docker/listing";
+import { useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 import { bytes, readCsrfToken, Section } from "./shared";
 
@@ -37,6 +39,7 @@ export function FilesTab({
   containerId: string;
   canAct: boolean;
 }) {
+  const t = useT();
   const [cwd, setCwd] = useState("/");
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +66,7 @@ export function FilesTab({
    */
   const apply = useCallback((payload: Record<string, unknown>, ok: boolean) => {
     if (!ok || payload.ok === false) {
-      setError((payload.error as string) ?? "Dizin okunamadı.");
+      setError((payload.error as string) ?? t("docker.files.dirFailed"));
       setEntries([]);
       return;
     }
@@ -71,7 +74,7 @@ export function FilesTab({
     setEntries(payload.entries as FileEntry[]);
     setMaxBytes((payload.maxBytes as number) ?? 0);
     setYazmaKapali(Boolean(payload.writeBlocked));
-  }, []);
+  }, [t]);
 
   const load = useCallback(
     async (target: string) => {
@@ -82,12 +85,12 @@ export function FilesTab({
         });
         apply(await response.json(), response.ok);
       } catch {
-        setError("Sunucuya ulaşılamadı.");
+        setError(t("common.errors.network"));
       } finally {
         setBusy(false);
       }
     },
-    [base, apply],
+    [base, apply, t],
   );
 
   useEffect(() => {
@@ -101,12 +104,12 @@ export function FilesTab({
         });
         apply(await response.json(), response.ok);
       } catch (fetchError) {
-        if ((fetchError as Error)?.name !== "AbortError") setError("Sunucuya ulaşılamadı.");
+        if ((fetchError as Error)?.name !== "AbortError") setError(t("common.errors.network"));
       }
     })();
 
     return () => controller.abort();
-  }, [base, cwd, apply]);
+  }, [base, cwd, apply, t]);
 
   async function ac(entry: FileEntry) {
     setNotice(null);
@@ -116,7 +119,7 @@ export function FilesTab({
       });
       const payload = await response.json();
       if (!response.ok) {
-        setError(payload.error ?? "Dosya açılamadı.");
+        setError(payload.error ?? t("docker.files.openFailed"));
         return;
       }
       setError(null);
@@ -128,7 +131,7 @@ export function FilesTab({
         size: payload.size,
       });
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     }
   }
 
@@ -143,15 +146,15 @@ export function FilesTab({
       });
       const payload = await response.json();
       if (!response.ok || payload.ok === false) {
-        setError(payload.error ?? "Kaydedilemedi.");
+        setError(payload.error ?? t("common.errors.notSaved"));
         return;
       }
       setError(null);
-      setNotice(`${editing.path} yazıldı.`);
+      setNotice(t("docker.files.written", { path: editing.path }));
       setEditing({ ...editing, original: editing.text });
       await load(cwd);
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
@@ -160,7 +163,11 @@ export function FilesTab({
   async function yukle(file: File) {
     if (maxBytes > 0 && file.size > maxBytes) {
       setError(
-        `${file.name} ${Math.round(maxBytes / 1024)} KB sınırını aşıyor (${file.size} bayt).`,
+        t("docker.files.tooLarge", {
+          name: file.name,
+          limit: Math.round(maxBytes / 1024),
+          size: file.size,
+        }),
       );
       return;
     }
@@ -179,14 +186,14 @@ export function FilesTab({
       });
       const payload = await response.json();
       if (!response.ok || payload.ok === false) {
-        setError(payload.error ?? "Yüklenemedi.");
+        setError(payload.error ?? t("docker.files.uploadFailed"));
         return;
       }
       setError(null);
-      setNotice(`${file.name} yüklendi.`);
+      setNotice(t("docker.files.uploaded", { name: file.name }));
       await load(cwd);
     } catch {
-      setError("Dosya okunamadı.");
+      setError(t("docker.files.readFailed"));
     } finally {
       setBusy(false);
     }
@@ -196,13 +203,13 @@ export function FilesTab({
 
   return (
     <Section
-      title="Dosyalar"
+      title={t("docker.files.title")}
       action={
         <button
           type="button"
           onClick={() => void load(cwd)}
           disabled={busy}
-          title="Yenile"
+          title={t("common.actions.refresh")}
           className="rounded border border-line p-1.5 text-subtle transition-colors hover:text-brand disabled:opacity-50"
         >
           <RotateCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />
@@ -214,7 +221,7 @@ export function FilesTab({
           type="button"
           onClick={() => setCwd("/")}
           className="rounded p-1 text-subtle transition-colors hover:text-brand"
-          title="Kök"
+          title={t("docker.files.root")}
         >
           <Home className="size-3.5" />
         </button>
@@ -237,10 +244,14 @@ export function FilesTab({
 
       {yazmaKapali && (
         <p className="mb-2 rounded border border-warn/40 bg-warn/10 px-2.5 py-1.5 text-xs text-warn">
-          Bu dal yazmaya kapalı. <code className="font-mono">/proc</code>,{" "}
-          <code className="font-mono">/sys</code> ve <code className="font-mono">/dev</code>{" "}
-          çekirdeğin sanal dosya sistemleri — okunabilir, ama oraya yazmak dosya düzenlemek
-          değil çekirdeğe komut vermektir.
+          <Rich
+            text={t("docker.files.writeBlocked")}
+            values={{
+              proc: <code className="font-mono">/proc</code>,
+              sys: <code className="font-mono">/sys</code>,
+              dev: <code className="font-mono">/dev</code>,
+            }}
+          />
         </p>
       )}
 
@@ -253,7 +264,7 @@ export function FilesTab({
               <button
                 type="button"
                 onClick={() => setEditing(null)}
-                title="Kapat"
+                title={t("common.actions.close")}
                 className="rounded border border-line p-1 text-subtle transition-colors hover:text-ink"
               >
                 <X className="size-3.5" />
@@ -263,8 +274,10 @@ export function FilesTab({
 
           {editing.binary ? (
             <p className="px-3 py-3 text-sm text-subtle">
-              Bu bir <strong>ikili dosya</strong> — metin olarak gösterilse kaydettiğinde
-              bozulurdu. İndirip yerel bir düzenleyiciyle açabilirsin.
+              <Rich
+                text={t("docker.files.binary")}
+                values={{ binary: <strong>{t("docker.files.binaryWord")}</strong> }}
+              />
             </p>
           ) : (
             <textarea
@@ -282,7 +295,7 @@ export function FilesTab({
               href={`${base}?mode=download&path=${encodeURIComponent(editing.path)}`}
               className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-xs transition-colors hover:border-brand"
             >
-              <Download className="size-3.5" /> İndir
+              <Download className="size-3.5" /> {t("docker.files.download")}
             </a>
 
             {canAct && !editing.binary && (
@@ -292,19 +305,19 @@ export function FilesTab({
                 disabled={busy || editing.text === editing.original}
                 className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
               >
-                <Save className="size-3.5" /> Kaydet
+                <Save className="size-3.5" /> {t("common.actions.save")}
               </button>
             )}
 
             {editing.text !== editing.original && (
-              <span className="text-[11px] text-warn">kaydedilmemiş değişiklik var</span>
+              <span className="text-[11px] text-warn">{t("docker.files.unsaved")}</span>
             )}
           </div>
         </div>
       ) : (
         <>
           {entries.length === 0 && !error && (
-            <p className="text-sm text-subtle">Bu dizin boş.</p>
+            <p className="text-sm text-subtle">{t("docker.files.emptyDir")}</p>
           )}
 
           {entries.length > 0 && (
@@ -350,7 +363,7 @@ export function FilesTab({
                   {entry.type === "dosya" && (
                     <a
                       href={`${base}?mode=download&path=${encodeURIComponent(entry.path)}`}
-                      title="İndir"
+                      title={t("docker.files.download")}
                       className="shrink-0 rounded border border-line p-1 text-subtle transition-colors hover:text-brand"
                     >
                       <Download className="size-3" />
@@ -364,7 +377,7 @@ export function FilesTab({
           {canAct && !yazmaKapali && (
             <label className="mt-2 flex w-fit cursor-pointer items-center gap-1.5 rounded border border-line px-2 py-1 text-xs transition-colors hover:border-brand">
               <Upload className="size-3" />
-              Bu dizine dosya yükle
+              {t("docker.files.upload")}
               <input
                 type="file"
                 className="hidden"
@@ -381,11 +394,16 @@ export function FilesTab({
       )}
 
       <p className="mt-3 text-xs text-subtle">
-        Buradaki değişiklikler <strong>container katmanına</strong> yazılır. Container yeniden
-        yaratılırsa (imaj güncellemesi, <code className="font-mono">compose up</code>) volume
-        ya da bind mount üzerinde OLMAYAN dosyalar kaybolur — kalıcı olmasını istediğin bir
-        yapılandırmayı mount edilmiş bir yola yaz.
-        {maxBytes > 0 && <> Boyut sınırı: {Math.round(maxBytes / 1024)} KB.</>}
+        <Rich
+          text={t("docker.files.layerNote")}
+          values={{
+            layer: <strong>{t("docker.files.layerWord")}</strong>,
+            cmd: <code className="font-mono">compose up</code>,
+          }}
+        />
+        {maxBytes > 0 && (
+          <> {t("docker.files.sizeLimit", { limit: Math.round(maxBytes / 1024) })}</>
+        )}
       </p>
     </Section>
   );

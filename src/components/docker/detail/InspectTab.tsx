@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { Check, Copy } from "lucide-react";
 
 import { Section } from "./shared";
+import { useFormat, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 /**
  * Ham `docker inspect` çıktısı (M3.20).
@@ -14,6 +16,8 @@ import { Section } from "./shared";
  * ve bir aramayı hak ediyor.
  */
 export function InspectTab({ raw }: { raw: unknown }) {
+  const t = useT();
+  const f = useFormat();
   const [filter, setFilter] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -21,10 +25,10 @@ export function InspectTab({ raw }: { raw: unknown }) {
 
   const lines = useMemo(() => {
     const all = text.split("\n");
-    const query = filter.trim().toLowerCase();
+    const query = f.lower(filter.trim());
     if (!query) return all;
-    return all.filter((line) => line.toLowerCase().includes(query));
-  }, [text, filter]);
+    return all.filter((line) => f.lower(line).includes(query));
+  }, [text, filter, f]);
 
   async function copy() {
     try {
@@ -38,7 +42,7 @@ export function InspectTab({ raw }: { raw: unknown }) {
 
   return (
     <Section
-      title="Ham inspect çıktısı"
+      title={t("docker.inspect.title")}
       action={
         <button
           type="button"
@@ -46,7 +50,7 @@ export function InspectTab({ raw }: { raw: unknown }) {
           className="flex items-center gap-1 text-xs text-subtle transition-colors hover:text-brand"
         >
           {copied ? <Check className="size-3.5 text-ok" /> : <Copy className="size-3.5" />}
-          {copied ? "kopyalandı" : "kopyala"}
+          {copied ? t("docker.inspect.copied") : t("docker.inspect.copy")}
         </button>
       }
     >
@@ -54,14 +58,16 @@ export function InspectTab({ raw }: { raw: unknown }) {
         type="search"
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
-        placeholder="satır filtrele — örn. Mounts, Healthcheck, IPAddress"
+        placeholder={t("docker.inspect.filter")}
         className="mb-2 w-full rounded-md border border-line bg-canvas px-2.5 py-1.5 text-sm outline-none focus:border-brand"
       />
 
       {filter.trim() && (
         <p className="mb-1.5 text-[11px] text-subtle">
-          {lines.length} satır eşleşti — bu bir <strong>satır süzgeci</strong>, JSON yapısı
-          bozulmuş görünebilir.
+          <Rich
+            text={t("docker.inspect.matched", { count: lines.length })}
+            values={{ strong: <strong>{t("docker.inspect.lineFilter")}</strong> }}
+          />
         </p>
       )}
 

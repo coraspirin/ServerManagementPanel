@@ -17,6 +17,8 @@ import type { Fail2banState, FailedLogin } from "@/lib/security/fail2ban";
 import type { SshAudit } from "@/lib/security/sshkeys";
 import type { PortForward } from "@/lib/security/upnp";
 import type { ScanRow } from "@/lib/security/vuln";
+import { useFormat, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 /** M3.8 — güvenlik izleme panelleri. Her biri kendi verisini kendi çekiyor. */
 
@@ -34,9 +36,6 @@ async function api(body: Record<string, unknown>) {
   return { response, data: (await response.json()) as Record<string, unknown> };
 }
 
-function when(ts: number): string {
-  return new Date(ts * 1000).toLocaleString("tr-TR");
-}
 
 /* ---------------- CVE taraması ---------------- */
 
@@ -47,6 +46,8 @@ export function VulnPanel({
   initial: ScanRow[];
   canManage: boolean;
 }) {
+  const t = useT();
+  const f = useFormat();
   const [scans, setScans] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -54,9 +55,9 @@ export function VulnPanel({
 
   async function scan() {
     setBusy(true);
-    setNotice("Taranıyor… ilk turda açık veritabanı indiriliyor, dakikalar sürebilir.");
+    setNotice(t("secmon.vuln.scanning"));
     const { data } = await api({ action: "scan-vuln" });
-    setNotice(String(data.message ?? "Tamamlandı."));
+    setNotice(String(data.message ?? t("logsScreen.done")));
     if (data.scans) setScans(data.scans as ScanRow[]);
     setBusy(false);
   }
@@ -68,10 +69,10 @@ export function VulnPanel({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <Bug className="size-4 text-subtle" aria-hidden />
-          Image güvenlik açıkları
+          {t("secmon.vuln.title")}
           {scans.length > 0 && (
             <span className={`font-normal ${totalCritical > 0 ? "text-danger" : "text-ok"}`}>
-              {totalCritical} kritik
+              {t("secmon.vuln.critical", { count: totalCritical })}
             </span>
           )}
         </h2>
@@ -82,7 +83,8 @@ export function VulnPanel({
             disabled={busy}
             className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
           >
-            <RotateCw className={`size-4 ${busy ? "animate-spin" : ""}`} /> Şimdi tara
+            <RotateCw className={`size-4 ${busy ? "animate-spin" : ""}`} />{" "}
+            {t("networkScreen.scanNow")}
           </button>
         )}
       </div>
@@ -90,14 +92,15 @@ export function VulnPanel({
       {notice && <p className="border-b border-line px-5 py-2 text-xs text-subtle">{notice}</p>}
 
       <p className="border-b border-line bg-brand/5 px-5 py-2 text-xs text-subtle">
-        Bir bulgu yargı değil envanter: çoğu CVE, o container&apos;da hiç çalışmayan bir kod
-        yolunda. Yalnızca <strong>düzeltmesi olan</strong> açıklar listeleniyor — kapatılamayan
-        bir açık için yapılacak bir şey yok.
+        <Rich
+          text={t("secmon.vuln.intro")}
+          values={{ strong: <strong>{t("secmon.vuln.fixable")}</strong> }}
+        />
       </p>
 
       {scans.length === 0 ? (
         <p className="px-5 py-8 text-center text-sm text-subtle">
-          Henüz tarama yapılmadı. Haftalık iş kendiliğinden çalışır.
+          {t("secmon.vuln.empty")}
         </p>
       ) : (
         <ul className="divide-y divide-line">
@@ -113,27 +116,27 @@ export function VulnPanel({
                   <span className="flex gap-2 text-xs">
                     {scan.critical > 0 && (
                       <span className="rounded bg-danger/15 px-1.5 py-0.5 font-medium text-danger">
-                        {scan.critical} kritik
+                        {t("secmon.vuln.critical", { count: scan.critical })}
                       </span>
                     )}
                     {scan.high > 0 && (
                       <span className="rounded bg-warn/15 px-1.5 py-0.5 font-medium text-warn">
-                        {scan.high} yüksek
+                        {t("secmon.vuln.high", { count: scan.high })}
                       </span>
                     )}
                     {scan.medium > 0 && (
                       <span className="rounded bg-line px-1.5 py-0.5 text-subtle">
-                        {scan.medium} orta
+                        {t("secmon.vuln.medium", { count: scan.medium })}
                       </span>
                     )}
                     {scan.critical + scan.high + scan.medium === 0 && (
-                      <span className="text-ok">temiz</span>
+                      <span className="text-ok">{t("secmon.vuln.clean")}</span>
                     )}
                   </span>
                 ) : (
                   <span className="text-xs text-danger">{scan.error.slice(0, 80)}</span>
                 )}
-                <span className="shrink-0 text-[11px] text-subtle">{when(scan.ts)}</span>
+                <span className="shrink-0 text-[11px] text-subtle">{f.dateTime(scan.ts * 1000)}</span>
               </button>
 
               {open === scan.image && scan.findings.length > 0 && (
@@ -142,10 +145,10 @@ export function VulnPanel({
                     <thead className="text-left text-subtle">
                       <tr>
                         <th className="py-1 pr-3 font-medium">CVE</th>
-                        <th className="py-1 pr-3 font-medium">Önem</th>
-                        <th className="py-1 pr-3 font-medium">Paket</th>
-                        <th className="py-1 pr-3 font-medium">Kurulu</th>
-                        <th className="py-1 pr-3 font-medium">Düzeltilmiş</th>
+                        <th className="py-1 pr-3 font-medium">{t("secmon.vuln.col.severity")}</th>
+                        <th className="py-1 pr-3 font-medium">{t("secmon.vuln.col.package")}</th>
+                        <th className="py-1 pr-3 font-medium">{t("secmon.vuln.col.installed")}</th>
+                        <th className="py-1 pr-3 font-medium">{t("secmon.vuln.col.fixed")}</th>
                       </tr>
                     </thead>
                     <tbody className="font-mono">
@@ -153,16 +156,16 @@ export function VulnPanel({
                         <tr key={finding.id + finding.package}>
                           <td data-label="" className="py-0.5 pr-3">{finding.id}</td>
                           <td
-                            data-label="Önem"
+                            data-label={t("secmon.vuln.col.severity")}
                             className={`py-0.5 pr-3 ${
                               finding.severity === "CRITICAL" ? "text-danger" : "text-warn"
                             }`}
                           >
                             {finding.severity}
                           </td>
-                          <td data-label="Paket" className="py-0.5 pr-3">{finding.package}</td>
-                          <td data-label="Kurulu" className="py-0.5 pr-3">{finding.installed}</td>
-                          <td data-label="Düzeltilmiş" className="py-0.5 pr-3 text-ok">{finding.fixed}</td>
+                          <td data-label={t("secmon.vuln.col.package")} className="py-0.5 pr-3">{finding.package}</td>
+                          <td data-label={t("secmon.vuln.col.installed")} className="py-0.5 pr-3">{finding.installed}</td>
+                          <td data-label={t("secmon.vuln.col.fixed")} className="py-0.5 pr-3 text-ok">{finding.fixed}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -186,6 +189,8 @@ export function IntrusionPanel({
   initialFailed: FailedLogin[];
   canManage: boolean;
 }) {
+  const t = useT();
+  const f = useFormat();
   const [state, setState] = useState<Fail2banState | null>(null);
   const [failed, setFailed] = useState(initialFailed);
   const [busy, setBusy] = useState(false);
@@ -210,7 +215,7 @@ export function IntrusionPanel({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <Ban className="size-4 text-subtle" aria-hidden />
-          Yasaklar ve başarısız girişler
+          {t("secmon.bans.title")}
           {state && <span className="font-normal text-subtle">{state.message}</span>}
         </h2>
         <button
@@ -220,7 +225,7 @@ export function IntrusionPanel({
           className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
         >
           <RotateCw className={`size-4 ${busy ? "animate-spin" : ""}`} />
-          {state ? "Yenile" : "fail2ban'ı oku"}
+          {state ? t("common.actions.refresh") : t("secmon.bans.read")}
         </button>
       </div>
 
@@ -240,8 +245,11 @@ export function IntrusionPanel({
               <div className="flex flex-wrap items-center gap-3 text-sm">
                 <span className="font-medium">{jail.name}</span>
                 <span className="text-xs text-subtle">
-                  şu an {jail.currentlyBanned} yasaklı · toplam {jail.totalBanned} · başarısız{" "}
-                  {jail.totalFailed}
+                  {t("secmon.bans.jail", {
+                    current: jail.currentlyBanned,
+                    total: jail.totalBanned,
+                    failed: jail.totalFailed,
+                  })}
                 </span>
               </div>
               {jail.bannedIps.length > 0 && (
@@ -255,9 +263,9 @@ export function IntrusionPanel({
                       {canManage && (
                         <button
                           type="button"
-                          title="Yasağı kaldır"
+                          title={t("secmon.bans.unban")}
                           onClick={async () => {
-                            if (confirm(`${ip} yasağı kaldırılsın mı? (${jail.name})`)) {
+                            if (confirm(t("secmon.bans.confirmUnban", { ip, jail: jail.name }))) {
                               const { data } = await api({ action: "unban", jail: jail.name, ip });
                               if (data.fail2ban) setState(data.fail2ban as Fail2banState);
                             }
@@ -278,23 +286,23 @@ export function IntrusionPanel({
 
       <div className="border-t border-line px-5 py-3">
         <h3 className="text-xs font-semibold text-subtle">
-          Panel giriş denemeleri (son 7 gün)
+          {t("secmon.bans.panelLogins")}
         </h3>
         <p className="mt-0.5 text-[11px] text-subtle">
-          fail2ban SSH&apos;ı izliyor; panelin web girişi ayrı bir yüzey ve kaydı yalnızca burada.
+          {t("secmon.bans.panelNote")}
         </p>
         {failed.length === 0 ? (
-          <p className="mt-2 text-sm text-ok">Başarısız giriş denemesi yok.</p>
+          <p className="mt-2 text-sm text-ok">{t("secmon.bans.noFailed")}</p>
         ) : (
           <ul className="mt-2 space-y-1">
             {failed.map((entry) => (
               <li key={`${entry.username}-${entry.ip}`} className="flex flex-wrap gap-3 text-xs">
-                <span className="w-32 truncate font-mono">{entry.username || "(boş)"}</span>
+                <span className="w-32 truncate font-mono">{entry.username || t("secmon.bans.emptyUser")}</span>
                 <span className="w-32 font-mono text-subtle">{entry.ip || "—"}</span>
                 <span className={entry.attempts >= 5 ? "text-warn" : "text-subtle"}>
-                  {entry.attempts} deneme
+                  {t("secmon.bans.attempts", { count: entry.attempts })}
                 </span>
-                <span className="text-subtle">{when(entry.lastAt)}</span>
+                <span className="text-subtle">{f.dateTime(entry.lastAt * 1000)}</span>
                 <span className="min-w-0 flex-1 truncate text-subtle">{entry.lastDetail}</span>
               </li>
             ))}
@@ -308,6 +316,7 @@ export function IntrusionPanel({
 /* ---------------- SSH anahtar denetimi ---------------- */
 
 export function SshPanel() {
+  const t = useT();
   const [audit, setAudit] = useState<SshAudit | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -327,8 +336,12 @@ export function SshPanel() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <KeyRound className="size-4 text-subtle" aria-hidden />
-          SSH yetkili anahtarları
-          {audit && <span className="font-normal text-subtle">{audit.keys.length} anahtar</span>}
+          {t("secmon.ssh.title")}
+          {audit && (
+            <span className="font-normal text-subtle">
+              {t("secmon.ssh.keys", { count: audit.keys.length })}
+            </span>
+          )}
         </h2>
         <button
           type="button"
@@ -337,14 +350,13 @@ export function SshPanel() {
           className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
         >
           <RotateCw className={`size-4 ${busy ? "animate-spin" : ""}`} />
-          {audit ? "Yenile" : "Denetle"}
+          {audit ? t("common.actions.refresh") : t("secmon.ssh.audit")}
         </button>
       </div>
 
       {audit === null ? (
         <p className="px-5 py-8 text-center text-sm text-subtle">
-          Bu sunucuya parolasız girebilen anahtarları listeler. Anahtarların kendisi değil,
-          parmak izleri gösterilir.
+          {t("secmon.ssh.intro")}
         </p>
       ) : audit.error ? (
         <p className="px-5 py-6 text-sm text-danger">{audit.error}</p>
@@ -352,16 +364,18 @@ export function SshPanel() {
         <>
           <div className="border-b border-line px-5 py-2.5 text-xs">
             <span className="text-subtle">sshd: </span>
-            parola girişi{" "}
+            {t("secmon.ssh.passwordLogin")}{" "}
             <strong
               className={
                 audit.sshd.passwordAuthentication?.toLowerCase() === "yes" ? "text-warn" : "text-ok"
               }
             >
-              {audit.sshd.passwordAuthentication ?? "varsayılan"}
+              {audit.sshd.passwordAuthentication ?? t("secmon.ssh.default")}
             </strong>
-            {" · "}root girişi <strong>{audit.sshd.permitRootLogin ?? "varsayılan"}</strong>
-            {audit.sshd.port && ` · port ${audit.sshd.port}`}
+            {" · "}
+            {t("secmon.ssh.rootLogin")}{" "}
+            <strong>{audit.sshd.permitRootLogin ?? t("secmon.ssh.default")}</strong>
+            {audit.sshd.port && t("secmon.ssh.port", { port: audit.sshd.port })}
           </div>
 
           {audit.notes.length > 0 && (
@@ -379,34 +393,34 @@ export function SshPanel() {
             <table className="rtable w-full min-w-[40rem] text-xs">
               <thead className="border-b border-line text-left text-subtle">
                 <tr>
-                  <th className="px-5 py-2 font-medium">Hesap</th>
-                  <th className="px-4 py-2 font-medium">Tür</th>
-                  <th className="px-4 py-2 font-medium">Parmak izi</th>
-                  <th className="px-4 py-2 font-medium">Yorum</th>
-                  <th className="px-4 py-2 font-medium">Kısıt</th>
+                  <th className="px-5 py-2 font-medium">{t("secmon.ssh.col.account")}</th>
+                  <th className="px-4 py-2 font-medium">{t("secmon.ssh.col.type")}</th>
+                  <th className="px-4 py-2 font-medium">{t("secmon.ssh.col.fingerprint")}</th>
+                  <th className="px-4 py-2 font-medium">{t("secmon.ssh.col.comment")}</th>
+                  <th className="px-4 py-2 font-medium">{t("secmon.ssh.col.restriction")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {audit.keys.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-5 py-6 text-center text-subtle">
-                      Yetkili anahtar bulunamadı.
+                      {t("secmon.ssh.none")}
                     </td>
                   </tr>
                 )}
                 {audit.keys.map((key) => (
                   <tr key={key.fingerprint + key.owner}>
-                    <td data-label="Hesap" className="px-5 py-1.5 font-mono">{key.owner}</td>
-                    <td data-label="Tür" className="px-4 py-1.5 text-subtle">{key.type}</td>
-                    <td data-label="Parmak izi" className="px-4 py-1.5 font-mono text-[11px]">{key.fingerprint}</td>
-                    <td data-label="Yorum" className="max-w-xs truncate px-4 py-1.5 text-subtle">
+                    <td data-label={t("secmon.ssh.col.account")} className="px-5 py-1.5 font-mono">{key.owner}</td>
+                    <td data-label={t("secmon.ssh.col.type")} className="px-4 py-1.5 text-subtle">{key.type}</td>
+                    <td data-label={t("secmon.ssh.col.fingerprint")} className="px-4 py-1.5 font-mono text-[11px]">{key.fingerprint}</td>
+                    <td data-label={t("secmon.ssh.col.comment")} className="max-w-xs truncate px-4 py-1.5 text-subtle">
                       {key.comment || "—"}
                     </td>
-                    <td data-label="Kısıt" className="px-4 py-1.5">
+                    <td data-label={t("secmon.ssh.col.restriction")} className="px-4 py-1.5">
                       {key.restricted ? (
-                        <span className="text-ok">komuta kısıtlı</span>
+                        <span className="text-ok">{t("secmon.ssh.restricted")}</span>
                       ) : (
-                        <span className="text-subtle">tam erişim</span>
+                        <span className="text-subtle">{t("secmon.ssh.full")}</span>
                       )}
                     </td>
                   </tr>
@@ -429,13 +443,15 @@ export function ForwardsPanel({
   initial: PortForward[];
   canManage: boolean;
 }) {
+  const t = useT();
+  const f = useFormat();
   const [forwards, setForwards] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   async function scan() {
     setBusy(true);
-    setNotice("Yönlendiriciye soruluyor…");
+    setNotice(t("secmon.upnp.asking"));
     const { data } = await api({ action: "scan-upnp" });
     setNotice(String(data.message ?? ""));
     if (data.forwards) setForwards(data.forwards as PortForward[]);
@@ -447,7 +463,7 @@ export function ForwardsPanel({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <Router className="size-4 text-subtle" aria-hidden />
-          Router port yönlendirmeleri
+          {t("secmon.upnp.title")}
           <span className="font-normal text-subtle">{forwards.length}</span>
         </h2>
         {canManage && (
@@ -457,7 +473,8 @@ export function ForwardsPanel({
             disabled={busy}
             className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
           >
-            <RotateCw className={`size-4 ${busy ? "animate-spin" : ""}`} /> Router&apos;a sor
+            <RotateCw className={`size-4 ${busy ? "animate-spin" : ""}`} />{" "}
+            {t("secmon.upnp.ask")}
           </button>
         )}
       </div>
@@ -465,14 +482,15 @@ export function ForwardsPanel({
       {notice && <p className="border-b border-line px-5 py-2 text-xs text-subtle">{notice}</p>}
 
       <p className="border-b border-line bg-brand/5 px-5 py-2 text-xs text-subtle">
-        Yalnızca <strong>UPnP ile açılmış</strong> yönlendirmeler görünür. Router arayüzünden
-        elle eklenmiş bir yönlendirme burada çıkmayabilir — boş liste &quot;hiç yönlendirme
-        yok&quot; anlamına gelmez.
+        <Rich
+          text={t("secmon.upnp.intro")}
+          values={{ strong: <strong>{t("secmon.upnp.viaUpnp")}</strong> }}
+        />
       </p>
 
       {forwards.length === 0 ? (
         <p className="px-5 py-8 text-center text-sm text-subtle">
-          Kayıtlı yönlendirme yok.
+          {t("secmon.upnp.empty")}
         </p>
       ) : (
         <ul className="divide-y divide-line">
@@ -488,17 +506,19 @@ export function ForwardsPanel({
               {entry.note && <span className="text-xs text-brand">{entry.note}</span>}
               {!entry.acknowledged && (
                 <span className="flex items-center gap-1 rounded bg-warn/15 px-1.5 py-0.5 text-[10px] font-medium text-warn">
-                  <ShieldAlert className="size-3" aria-hidden /> onaylanmadı
+                  <ShieldAlert className="size-3" aria-hidden /> {t("secmon.upnp.unacknowledged")}
                 </span>
               )}
-              <span className="text-[11px] text-subtle">ilk görülme {when(entry.firstSeen)}</span>
+              <span className="text-[11px] text-subtle">
+                {t("secmon.upnp.firstSeen", { when: f.dateTime(entry.firstSeen * 1000) })}
+              </span>
               {canManage && (
                 <div className="flex gap-1">
                   <button
                     type="button"
-                    title="Not ekle / bunu tanıyorum işaretle"
+                    title={t("secmon.upnp.noteTitle")}
                     onClick={async () => {
-                      const note = prompt("Bu yönlendirme ne için? (boş bırakılabilir)", entry.note);
+                      const note = prompt(t("secmon.upnp.notePrompt"), entry.note);
                       if (note !== null) {
                         const { data } = await api({
                           action: "annotate-forward",
@@ -511,13 +531,13 @@ export function ForwardsPanel({
                     }}
                     className="rounded border border-line px-2 py-1 text-[11px] text-subtle transition-colors hover:text-ink"
                   >
-                    Not
+                    {t("secmon.upnp.note")}
                   </button>
                   <button
                     type="button"
-                    title="Kaydı unut (router'daki yönlendirmeye dokunulmaz)"
+                    title={t("secmon.upnp.forgetTitle")}
                     onClick={async () => {
-                      if (confirm(`${entry.key} kaydı listeden silinsin mi? Router'daki yönlendirmeye dokunulmaz.`)) {
+                      if (confirm(t("secmon.upnp.confirmForget", { key: entry.key }))) {
                         const { data } = await api({ action: "forget-forward", key: entry.key });
                         if (data.forwards) setForwards(data.forwards as PortForward[]);
                       }

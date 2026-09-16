@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { auditAction } from "@/lib/apiv1/action";
 import { appPatchBase, mergePatch, parseId } from "@/lib/apiv1/crud";
 import { guardV1 } from "@/lib/apiv1/guard";
@@ -18,10 +19,10 @@ export async function GET(request: Request, { params }: Context) {
   if (!guard.ok) return guard.response;
 
   const id = parseId((await params).id);
-  if (id === null) return apiError("invalid_request", "geçersiz kart kimliği");
+  if (id === null) return apiError("invalid_request", serverT("api.v1.invalidCardId"));
 
   const card = getApp(id);
-  if (!card) return apiError("not_found", "kart bulunamadı");
+  if (!card) return apiError("not_found", serverT("api.notFound.card"));
 
   return apiOk({ app: serializeApp(card) });
 }
@@ -40,10 +41,10 @@ export async function PATCH(request: Request, { params }: Context) {
   if (!guard.ok) return guard.response;
 
   const id = parseId((await params).id);
-  if (id === null) return apiError("invalid_request", "geçersiz kart kimliği");
+  if (id === null) return apiError("invalid_request", serverT("api.v1.invalidCardId"));
 
   const existing = getApp(id);
-  if (!existing) return apiError("not_found", "kart bulunamadı");
+  if (!existing) return apiError("not_found", serverT("api.notFound.card"));
 
   const body = await readJsonBody(request, getNumber("api.max_body_bytes"));
   if (!body.ok) return body.response;
@@ -75,10 +76,10 @@ export async function DELETE(request: Request, { params }: Context) {
   if (!guard.ok) return guard.response;
 
   const id = parseId((await params).id);
-  if (id === null) return apiError("invalid_request", "geçersiz kart kimliği");
+  if (id === null) return apiError("invalid_request", serverT("api.v1.invalidCardId"));
 
   const existing = getApp(id);
-  if (!existing) return apiError("not_found", "kart bulunamadı");
+  if (!existing) return apiError("not_found", serverT("api.notFound.card"));
 
   deleteApp(id);
   // İç uçla AYNI temizlik: logo dosyası ve widget önbelleği kartla birlikte

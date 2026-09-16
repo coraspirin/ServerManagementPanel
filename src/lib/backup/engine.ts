@@ -8,6 +8,7 @@ import { CronExpressionParser } from "cron-parser";
 import { announce } from "@/lib/alerts/announce";
 import { dataDir, getDb } from "@/lib/db/client";
 import { panelDataVolume } from "@/lib/host/self";
+import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 import { getNumber } from "@/lib/settings";
 import {
@@ -73,7 +74,13 @@ export type RunOutcome = {
 export async function runBackupJob(jobId: number, actor: string): Promise<RunOutcome> {
   const job = getJob(jobId);
   if (!job) {
-    return { ok: false, runId: 0, detail: "İş bulunamadı.", snapshotId: "", bytesAdded: 0 };
+    return {
+      ok: false,
+      runId: 0,
+      detail: serverT("backupEngine.jobMissing"),
+      snapshotId: "",
+      bytesAdded: 0,
+    };
   }
 
   const secrets = repoSecrets(job.repoId);
@@ -81,9 +88,7 @@ export async function runBackupJob(jobId: number, actor: string): Promise<RunOut
     return {
       ok: false,
       runId: 0,
-      detail:
-        `"${job.repoName}" deposunun parolası çözülemedi. MASTER_KEY, parola ` +
-        "kaydedildiğindekinden farklı olabilir; parolayı yeniden gir.",
+      detail: serverT("backupEngine.passwordUnreadable", { repo: job.repoName }),
       snapshotId: "",
       bytesAdded: 0,
     };
@@ -102,8 +107,10 @@ export async function runBackupJob(jobId: number, actor: string): Promise<RunOut
     if (!check.ok && !check.initialized) {
       const created = await initRepo(secrets);
       markRepoChecked(secrets.id, created.initialized, created.ok ? "" : created.message);
-      if (!created.ok) throw new Error(`Depo oluşturulamadı: ${created.message}`);
-      notes.push("depo oluşturuldu");
+      if (!created.ok) {
+        throw new Error(serverT("backupEngine.initFailed", { message: created.message }));
+      }
+      notes.push(serverT("backupEngine.repoCreated"));
     } else if (!check.ok) {
       markRepoChecked(secrets.id, check.initialized, check.message);
       throw new Error(check.message);
@@ -117,12 +124,10 @@ export async function runBackupJob(jobId: number, actor: string): Promise<RunOut
     if (job.sourceKind === "panel_db") {
       const volume = await panelDataVolume();
       if (!volume) {
-        throw new Error(
-          "Panel veri volume'ü bulunamadı. Panel bir named volume kullanmıyorsa bu iş türü çalışamaz.",
-        );
+        throw new Error(serverT("backupEngine.noPanelVolume"));
       }
       const snapshot = vacuumPanelDb();
-      notes.push(`veritabanı kopyası ${formatBytes(snapshot.bytes)}`);
+      notes.push(serverT("backupEngine.dbCopy", { size: formatBytes(snapshot.bytes) }));
       excludes.push(...PANEL_DB_EXCLUDES);
       target = { kind: "volume", name: volume };
     } else if (job.sourceKind === "volume") {
@@ -153,23 +158,33 @@ export async function runBackupJob(jobId: number, actor: string): Promise<RunOut
     // çöpe atmak olurdu.
     const partial = result.exitCode === 3;
     if (result.exitCode !== 0 && !partial) {
-      throw new Error(result.output.slice(0, 800) || `restic çıkış kodu ${result.exitCode}`);
+      throw new Error(
+        result.output.slice(0, 800) ||
+          serverT("backupEngine.resticExit", { code: result.exitCode }),
+      );
     }
-    if (partial) notes.push("bazı dosyalar okunamadı (kısmi yedek)");
+    if (partial) notes.push(serverT("backupEngine.partial"));
 
-    if (!summary) throw new Error("restic özeti okunamadı:\n" + result.output.slice(0, 500));
+    if (!summary) {
+      throw new Error(serverT("backupEngine.noSummary", { output: result.output.slice(0, 500) }));
+    }
 
     const forget = await runForget(secrets, tagFor(job), {
       daily: job.keepDaily,
       weekly: job.keepWeekly,
       monthly: job.keepMonthly,
     });
-    if (!forget.ok) notes.push("saklama politikası uygulanamadı");
-    else if (forget.removed > 0) notes.push(`${forget.removed} eski snapshot silindi`);
+    if (!forget.ok) notes.push(serverT("backupEngine.retentionFailed"));
+    else if (forget.removed > 0) {
+      notes.push(serverT("backupEngine.pruned", { count: forget.removed }));
+    }
 
     const detail =
-      `${summary.filesNew} yeni / ${summary.filesChanged} değişen dosya · ` +
-      `${formatBytes(summary.bytesAdded)} eklendi` +
+      serverT("backupEngine.summary", {
+        new: summary.filesNew,
+        changed: summary.filesChanged,
+        size: formatBytes(summary.bytesAdded),
+      }) +
       (notes.length > 0 ? ` · ${notes.join(" · ")}` : "");
 
     finishRun(runId, job.id, {
@@ -197,7 +212,10 @@ export async function runBackupJob(jobId: number, actor: string): Promise<RunOut
         await startContainer(job.quiesce.trim());
       } catch (restartError) {
         notes.push(
-          `${job.quiesce.trim()} GERİ BAŞLATILAMADI: ${describe(restartError)}`,
+          serverT("backupEngine.restartFailed", {
+            name: job.quiesce.trim(),
+            error: describe(restartError),
+          }),
         );
       }
     }
@@ -213,7 +231,7 @@ export async function runBackupJob(jobId: number, actor: string): Promise<RunOut
       alertKey: `backup.failed.${job.id}`,
       source: "system",
       severity: "critical",
-      title: `Yedekleme başarısız: ${job.name}`,
+      title: serverT("backupEngine.failedTitle", { name: job.name }),
       detail,
     });
 
@@ -268,14 +286,14 @@ export function isDue(job: BackupJob, now = new Date()): boolean {
 /** Zamanlanmış tur: vadesi gelen işleri sırayla çalıştırır. */
 export async function runDueBackups(): Promise<string> {
   const jobs = listJobs().filter((job) => isDue(job));
-  if (jobs.length === 0) return "vadesi gelen iş yok";
+  if (jobs.length === 0) return serverT("backupEngine.nothingDue");
 
   const parts: string[] = [];
   for (const job of jobs) {
     // Sırayla: iki restic işi aynı depoya paralel yazarsa depo kilidi
     // yüzünden biri başarısız olur.
-    const outcome = await runBackupJob(job.id, "zamanlanmış");
-    parts.push(`${job.name}: ${outcome.ok ? "ok" : "hata"}`);
+    const outcome = await runBackupJob(job.id, serverT("backupEngine.scheduledActor"));
+    parts.push(`${job.name}: ${outcome.ok ? "ok" : serverT("backupEngine.error")}`);
   }
   return parts.join(" · ");
 }

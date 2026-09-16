@@ -12,6 +12,11 @@ import assert from "node:assert/strict";
 
 import { applyFix, blocked, checkCompose, EMPTY_CONTEXT, type CheckContext } from "./checks.ts";
 import { parseCompose, readService, stringifyCompose } from "./service.ts";
+import { createT } from "../i18n/translate.ts";
+import { localeDictionary } from "../../locales/index.ts";
+
+/** Mesajlar Türkçe kaynak dilden: testler metnin kendisini doğruluyor. */
+const t = createT(localeDictionary("tr"));
 
 function belge(text: string) {
   const { doc, error } = parseCompose(text);
@@ -20,7 +25,7 @@ function belge(text: string) {
 }
 
 function kontrol(text: string, context: CheckContext = EMPTY_CONTEXT) {
-  return checkCompose(belge(text), context);
+  return checkCompose(belge(text), context, t);
 }
 
 function baslik(findings: ReturnType<typeof checkCompose>, parca: string) {
@@ -264,6 +269,6 @@ describe("applyFix", () => {
   it("düzeltme sonrası ilgili bulgu kaybolur", () => {
     const doc = belge("services:\n  a:\n    image: x:1\n");
     applyFix(doc, "a", "restart");
-    assert.equal(baslik(checkCompose(doc), "restart politikası"), undefined);
+    assert.equal(baslik(checkCompose(doc, EMPTY_CONTEXT, t), "restart politikası"), undefined);
   });
 });

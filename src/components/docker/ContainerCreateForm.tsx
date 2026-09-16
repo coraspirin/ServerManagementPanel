@@ -14,6 +14,7 @@ import {
 } from "@/lib/docker/spec";
 import type { DockerNetwork } from "@/lib/providers/types";
 import type { DockerOverview } from "@/lib/docker/types";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * Container ayrıntıları formu (M3.46).
@@ -78,6 +79,8 @@ function RowList<T>({
   onRemove: (index: number) => void;
   render: (row: T, index: number) => React.ReactNode;
 }) {
+  const t = useT();
+
   return (
     <section className="rounded-md border border-line">
       <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2">
@@ -88,7 +91,7 @@ function RowList<T>({
           className="ml-auto inline-flex items-center gap-1 rounded border border-line px-1.5 py-0.5 text-[11px] text-subtle transition-colors hover:border-brand hover:text-brand"
         >
           <Plus className="size-3" aria-hidden />
-          ekle
+          {t("docker.create.addRow")}
         </button>
       </div>
 
@@ -106,7 +109,7 @@ function RowList<T>({
               <button
                 type="button"
                 onClick={() => onRemove(index)}
-                aria-label="Satırı kaldır"
+                aria-label={t("docker.create.removeRow")}
                 className="shrink-0 rounded p-1 text-subtle transition-colors hover:text-danger"
               >
                 <X className="size-3.5" />
@@ -134,6 +137,7 @@ export function ContainerCreateForm({
   onCreated: (data: DockerOverview, message: string) => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [networks, setNetworks] = useState<DockerNetwork[] | null>(null);
@@ -176,7 +180,7 @@ export function ContainerCreateForm({
   const removeRow = (key: "ports" | "volumes" | "env" | "labels", index: number) =>
     patch({ [key]: spec[key].filter((_, i) => i !== index) } as Partial<ContainerSpec>);
 
-  const problem = specProblem(spec);
+  const problem = specProblem(spec, t);
 
   async function create() {
     if (problem) {
@@ -200,7 +204,7 @@ export function ContainerCreateForm({
       };
 
       if (!response.ok) {
-        setError(payload.error ?? "Container oluşturulamadı.");
+        setError(payload.error ?? t("docker.create.createFailed"));
         return;
       }
 
@@ -208,12 +212,14 @@ export function ContainerCreateForm({
       onCreated(
         payload,
         [
-          `"${payload.name}" oluşturuldu${payload.started ? " ve başlatıldı" : ""}.`,
+          payload.started
+            ? t("docker.create.createdStarted", { name: payload.name ?? "" })
+            : t("docker.create.created", { name: payload.name ?? "" }),
           ...notes,
         ].join(" "),
       );
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
@@ -233,17 +239,17 @@ export function ContainerCreateForm({
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Container adı" help="Harf ya da rakamla başlar; tire ve alt çizgi serbest.">
+        <Field label={t("docker.create.name")} help={t("docker.create.nameHelp")}>
           <input
             value={spec.name}
             onChange={(e) => patch({ name: e.target.value })}
-            placeholder="ornek-uygulama"
+            placeholder={t("docker.create.namePlaceholder")}
             className={`font-mono ${inputClass}`}
             autoFocus
           />
         </Field>
 
-        <Field label="Image" help="Yerelde yoksa oluşturmadan önce otomatik çekilir.">
+        <Field label={t("docker.create.image")} help={t("docker.create.imageHelp")}>
           <input
             value={spec.image}
             onChange={(e) => patch({ image: e.target.value })}
@@ -254,7 +260,7 @@ export function ContainerCreateForm({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Yeniden başlatma politikası">
+        <Field label={t("docker.create.restartPolicy")}>
           <select
             value={spec.restart}
             onChange={(e) => patch({ restart: e.target.value as ContainerSpec["restart"] })}
@@ -262,24 +268,26 @@ export function ContainerCreateForm({
           >
             {RESTART_POLICIES.map((policy) => (
               <option key={policy.value} value={policy.value}>
-                {policy.label}
+                {t(policy.labelKey)}
               </option>
             ))}
           </select>
         </Field>
 
         <Field
-          label="Ağlar"
+          label={t("docker.create.networks")}
           help={
             networks === null
-              ? "ağ listesi yükleniyor…"
-              : "İlki container'ın birincil ağı olur; kalanları oluşturduktan sonra bağlanır."
+              ? t("docker.create.networksLoading")
+              : t("docker.create.networksHelp")
           }
         >
           <div className="max-h-28 space-y-0.5 overflow-y-auto rounded-md border border-line bg-canvas px-2 py-1.5">
             {(networks ?? []).length === 0 ? (
               <span className="text-[11px] text-subtle">
-                {networks === null ? "yükleniyor…" : "ağ bulunamadı"}
+                {networks === null
+                  ? t("common.states.loadingInline")
+                  : t("docker.create.noNetworks")}
               </span>
             ) : (
               networks!.map((network) => (
@@ -305,10 +313,10 @@ export function ContainerCreateForm({
       </div>
 
       <RowList
-        title="Portlar"
-        help="Host portu boş bırakılırsa port yalnızca container ağında açık kalır — dışarıdan erişilmez."
+        title={t("docker.create.ports")}
+        help={t("docker.create.portsHelp")}
         rows={spec.ports}
-        empty="Port yayınlanmıyor."
+        empty={t("docker.create.portsEmpty")}
         onAdd={() =>
           patch({
             ports: [
@@ -323,20 +331,20 @@ export function ContainerCreateForm({
             <input
               value={row.hostIp}
               onChange={(e) => setRow("ports", index, { hostIp: e.target.value })}
-              placeholder="host IP (ops.)"
+              placeholder={t("docker.create.hostIp")}
               className={`w-28 font-mono ${inputClass}`}
             />
             <input
               value={row.hostPort}
               onChange={(e) => setRow("ports", index, { hostPort: e.target.value })}
-              placeholder="host"
+              placeholder={t("docker.create.host")}
               className={`w-20 font-mono ${inputClass}`}
             />
             <span className="text-xs text-subtle">→</span>
             <input
               value={row.containerPort}
               onChange={(e) => setRow("ports", index, { containerPort: e.target.value })}
-              placeholder="container"
+              placeholder={t("docker.create.container")}
               className={`w-24 font-mono ${inputClass}`}
             />
             <select
@@ -354,10 +362,10 @@ export function ContainerCreateForm({
       />
 
       <RowList
-        title="Volume'ler"
-        help="Kaynak bir host yolu (/srv/veri) ya da named volume adı olabilir."
+        title={t("docker.create.volumes")}
+        help={t("docker.create.volumesHelp")}
         rows={spec.volumes}
-        empty="Volume bağlanmıyor — container silinince içindeki veri gider."
+        empty={t("docker.create.volumesEmpty")}
         onAdd={() =>
           patch({
             volumes: [
@@ -372,14 +380,14 @@ export function ContainerCreateForm({
             <input
               value={row.source}
               onChange={(e) => setRow("volumes", index, { source: e.target.value })}
-              placeholder="kaynak"
+              placeholder={t("docker.create.source")}
               className={`min-w-0 flex-1 font-mono ${inputClass}`}
             />
             <span className="text-xs text-subtle">→</span>
             <input
               value={row.target}
               onChange={(e) => setRow("volumes", index, { target: e.target.value })}
-              placeholder="/container/icindeki/yol"
+              placeholder={t("docker.create.targetPlaceholder")}
               className={`min-w-0 flex-1 font-mono ${inputClass}`}
             />
             <label className="flex shrink-0 items-center gap-1 text-[11px] text-subtle">
@@ -389,16 +397,16 @@ export function ContainerCreateForm({
                 onChange={(e) => setRow("volumes", index, { readOnly: e.target.checked })}
                 className="size-3.5 accent-[var(--brand)]"
               />
-              salt-okunur
+              {t("docker.create.readOnly")}
             </label>
           </>
         )}
       />
 
       <RowList
-        title="Ortam değişkenleri"
+        title={t("docker.create.env")}
         rows={spec.env}
-        empty="Ortam değişkeni tanımlı değil."
+        empty={t("docker.create.envEmpty")}
         onAdd={() => patch({ env: [...spec.env, { key: "", value: "" } as KeyValue] })}
         onRemove={(index) => removeRow("env", index)}
         render={(row, index) => (
@@ -406,13 +414,13 @@ export function ContainerCreateForm({
             <input
               value={row.key}
               onChange={(e) => setRow("env", index, { key: e.target.value })}
-              placeholder="ANAHTAR"
+              placeholder={t("docker.create.keyUpper")}
               className={`w-40 font-mono ${inputClass}`}
             />
             <input
               value={row.value}
               onChange={(e) => setRow("env", index, { value: e.target.value })}
-              placeholder="değer"
+              placeholder={t("docker.create.value")}
               className={`min-w-0 flex-1 font-mono ${inputClass}`}
             />
           </>
@@ -421,40 +429,40 @@ export function ContainerCreateForm({
 
       <details className="rounded-md border border-line">
         <summary className="cursor-pointer px-3 py-2 text-xs text-subtle">
-          Gelişmiş (komut, kullanıcı, etiketler)
+          {t("docker.create.advanced")}
         </summary>
 
         <div className="space-y-3 border-t border-line px-3 py-3">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Komut" help="Boş bırakılırsa imajın kendi komutu çalışır.">
+            <Field label={t("docker.create.command")} help={t("docker.create.commandHelp")}>
               <input
                 value={spec.command}
                 onChange={(e) => patch({ command: e.target.value })}
                 className={`font-mono ${inputClass}`}
               />
             </Field>
-            <Field label="Entrypoint" help="Boş bırakılırsa imajınki kullanılır.">
+            <Field label={t("docker.create.entrypoint")} help={t("docker.create.entrypointHelp")}>
               <input
                 value={spec.entrypoint}
                 onChange={(e) => patch({ entrypoint: e.target.value })}
                 className={`font-mono ${inputClass}`}
               />
             </Field>
-            <Field label="Kullanıcı" help="uid:gid ya da kullanıcı adı.">
+            <Field label={t("docker.create.user")} help={t("docker.create.userHelp")}>
               <input
                 value={spec.user}
                 onChange={(e) => patch({ user: e.target.value })}
                 className={`font-mono ${inputClass}`}
               />
             </Field>
-            <Field label="Çalışma dizini">
+            <Field label={t("docker.create.workingDir")}>
               <input
                 value={spec.workingDir}
                 onChange={(e) => patch({ workingDir: e.target.value })}
                 className={`font-mono ${inputClass}`}
               />
             </Field>
-            <Field label="Hostname">
+            <Field label={t("docker.create.hostname")}>
               <input
                 value={spec.hostname}
                 onChange={(e) => patch({ hostname: e.target.value })}
@@ -464,9 +472,9 @@ export function ContainerCreateForm({
           </div>
 
           <RowList
-            title="Etiketler"
+            title={t("docker.create.labels")}
             rows={spec.labels}
-            empty="Etiket yok."
+            empty={t("docker.create.labelsEmpty")}
             onAdd={() => patch({ labels: [...spec.labels, { key: "", value: "" } as KeyValue] })}
             onRemove={(index) => removeRow("labels", index)}
             render={(row, index) => (
@@ -474,13 +482,13 @@ export function ContainerCreateForm({
                 <input
                   value={row.key}
                   onChange={(e) => setRow("labels", index, { key: e.target.value })}
-                  placeholder="anahtar"
+                  placeholder={t("docker.create.keyLower")}
                   className={`w-40 font-mono ${inputClass}`}
                 />
                 <input
                   value={row.value}
                   onChange={(e) => setRow("labels", index, { value: e.target.value })}
-                  placeholder="değer"
+                  placeholder={t("docker.create.value")}
                   className={`min-w-0 flex-1 font-mono ${inputClass}`}
                 />
               </>
@@ -495,11 +503,8 @@ export function ContainerCreateForm({
               className="mt-0.5 size-4 accent-[var(--brand)]"
             />
             <span className="text-xs">
-              <span className="font-medium text-danger">Ayrıcalıklı mod (privileged)</span>
-              <span className="mt-0.5 block text-subtle">
-                Container host&apos;taki tüm cihazlara erişir ve pratikte host&apos;ta root
-                yetkisine eşdeğer olur. Yalnızca imaj gerçekten gerektiriyorsa aç.
-              </span>
+              <span className="font-medium text-danger">{t("docker.create.privileged")}</span>
+              <span className="mt-0.5 block text-subtle">{t("docker.create.privilegedHelp")}</span>
             </span>
           </label>
         </div>
@@ -512,7 +517,7 @@ export function ContainerCreateForm({
           onChange={(e) => patch({ autoStart: e.target.checked })}
           className="size-4 accent-[var(--brand)]"
         />
-        Oluşturduktan sonra başlat
+        {t("docker.create.autoStart")}
       </label>
 
       {error && (
@@ -528,7 +533,7 @@ export function ContainerCreateForm({
           disabled={busy}
           className="rounded-md border border-line px-3 py-1.5 text-sm text-subtle transition-colors hover:text-ink disabled:opacity-50"
         >
-          Geri
+          {t("common.actions.back")}
         </button>
         <button
           type="button"
@@ -537,7 +542,7 @@ export function ContainerCreateForm({
           onClick={() => void create()}
           className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          {busy ? "Oluşturuluyor…" : "Konteyner oluştur"}
+          {busy ? t("docker.create.creating") : t("docker.create.submit")}
         </button>
       </div>
     </div>

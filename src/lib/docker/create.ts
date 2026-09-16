@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getDockerProvider } from "@/lib/providers";
+import { serverT } from "@/lib/i18n/runtime";
 import { specProblem, toCreatePayload, type ContainerSpec } from "./spec";
 
 /**
@@ -44,7 +45,7 @@ export type CreateResult = {
 };
 
 export async function createContainerFromSpec(spec: ContainerSpec): Promise<CreateResult> {
-  const problem = specProblem(spec);
+  const problem = specProblem(spec, serverT);
   if (problem) throw new Error(problem);
 
   const provider = getDockerProvider();
@@ -76,8 +77,8 @@ export async function createContainerFromSpec(spec: ContainerSpec): Promise<Crea
         /* ilerleme yok sayılıyor */
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "image çekilemedi";
-      throw new Error(`Image çekilemedi (${reference}): ${message}`);
+      const message = error instanceof Error ? error.message : serverT("createLib.pullFailed");
+      throw new Error(serverT("createLib.pullFailedRef", { reference, message }));
     }
   }
 
@@ -92,8 +93,8 @@ export async function createContainerFromSpec(spec: ContainerSpec): Promise<Crea
     try {
       await provider.connectNetwork(network, id, {});
     } catch (error) {
-      const message = error instanceof Error ? error.message : "bilinmeyen hata";
-      warnings.push(`"${network}" ağına bağlanamadı: ${message}`);
+      const message = error instanceof Error ? error.message : serverT("console.unknownError");
+      warnings.push(serverT("createLib.networkFailed", { network, message }));
     }
   }
 
@@ -105,10 +106,9 @@ export async function createContainerFromSpec(spec: ContainerSpec): Promise<Crea
     await provider.action(id, "start", 10);
     return { id, name, started: true, warnings };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "bilinmeyen hata";
+    const message = error instanceof Error ? error.message : serverT("console.unknownError");
     warnings.push(
-      `Container oluşturuldu ama başlatılamadı: ${message}. ` +
-        "Kayıt duruyor — loglarına bakıp düzelttikten sonra listeden başlatabilirsin.",
+      serverT("createLib.startFailed", { message }),
     );
     return { id, name, started: false, warnings };
   }

@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { createCategory } from "@/lib/apps/store";
@@ -19,11 +20,11 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as typeof body;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const name = String(body.name ?? "").trim();
-  if (!name) return Response.json({ error: "Kategori adı boş olamaz." }, { status: 400 });
+  if (!name) return Response.json({ error: serverT("api.apps.categoryNameEmpty") }, { status: 400 });
 
   const id = createCategory(name, String(body.icon ?? ""));
 

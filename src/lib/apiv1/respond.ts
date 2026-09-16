@@ -7,6 +7,8 @@
  * değişebilir — istemci koda bakar, mesaja değil.
  */
 
+import { serverT } from "@/lib/i18n/runtime";
+
 export type ApiErrorCode =
   | "unauthorized"
   | "forbidden"
@@ -74,7 +76,7 @@ export function apiText(body: string, init: { status?: number; headers?: Headers
 }
 
 export function rateLimited(retryAfterSeconds: number): Response {
-  return apiError("rate_limited", "istek sınırı aşıldı, biraz sonra tekrar deneyin", {
+  return apiError("rate_limited", serverT("apiv1.rateLimited"), {
     headers: { "Retry-After": String(Math.max(retryAfterSeconds, 1)) },
   });
 }

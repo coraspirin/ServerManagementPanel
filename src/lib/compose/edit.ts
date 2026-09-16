@@ -8,6 +8,7 @@ import { elevatedRead, isPermissionError } from "@/lib/files/elevated";
 import { hostRoot } from "@/lib/files/paths";
 import { callHelper } from "@/lib/host/helper";
 import { panelImage } from "@/lib/host/self";
+import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 import { getNumber } from "@/lib/settings";
 
@@ -55,7 +56,10 @@ export async function readComposeFile(location: ComposeLocation): Promise<Compos
     if (!isPermissionError(error)) {
       return {
         text: null,
-        error: `${location.file} okunamadı: ${error instanceof Error ? error.message : "bilinmeyen hata"}`,
+        error: serverT("composeEdit.readFailed", {
+          file: location.file,
+          error: error instanceof Error ? error.message : serverT("console.unknownError"),
+        }),
       };
     }
   }
@@ -127,7 +131,7 @@ async function runInStack(
   env: Record<string, string>,
 ): Promise<{ ok: boolean; output: string }> {
   const image = await panelImage();
-  if (!image) return { ok: false, output: "Panel imajı belirlenemedi." };
+  if (!image) return { ok: false, output: serverT("stacks.noPanelImage") };
 
   const directory = path.posix.dirname(location.file);
   const result = await getDockerProvider().runThrowaway({
@@ -159,7 +163,7 @@ export async function applyComposeEdit(
   if (Buffer.byteLength(text, "utf8") > MAX_EDIT_BYTES) {
     return {
       ok: false,
-      message: `Compose dosyası ${Math.round(MAX_EDIT_BYTES / 1024)} KB sınırını aşıyor.`,
+      message: serverT("composeEdit.tooLarge", { limit: Math.round(MAX_EDIT_BYTES / 1024) }),
       warnings: "",
       backup: null,
       stackDown: false,
@@ -179,7 +183,10 @@ export async function applyComposeEdit(
   if (!written.ok) {
     return {
       ok: false,
-      message: `${location.file} yazılamadı: ${written.output.slice(0, 400)}`,
+      message: serverT("composeEdit.writeFailed", {
+        file: location.file,
+        output: written.output.slice(0, 400),
+      }),
       warnings: "",
       backup: null,
       stackDown: false,
@@ -201,17 +208,16 @@ export async function applyComposeEdit(
       targetType: "compose_file",
       targetId: `${location.project}/${location.service}`,
       detail: restored.ok
-        ? `${location.file} doğrulamayı geçemedi, değişiklik geri alındı`
-        : `${location.file} doğrulamayı geçemedi VE geri yüklenemedi (yedek: ${backup})`,
+        ? serverT("composeEdit.audit.rolledBack", { file: location.file })
+        : serverT("composeEdit.audit.restoreFailed", { file: location.file, backup }),
       result: "error",
     });
 
     return {
       ok: false,
       message: restored.ok
-        ? `Compose doğrulaması başarısız — değişiklik GERİ ALINDI, dosya eski hâlinde.\n\n${detail}`
-        : `Compose doğrulaması başarısız VE geri yükleme de başarısız oldu. ` +
-          `${location.file} bozuk durumda olabilir; yedek: ${backup}\n\n${detail}`,
+        ? serverT("composeEdit.rolledBack", { detail })
+        : serverT("composeEdit.restoreFailed", { file: location.file, backup, detail }),
       warnings: "",
       backup,
       // Dosya eski hâline döndü; yığına dokunulmadı, hâlâ eski hâliyle ayakta.
@@ -244,10 +250,10 @@ export async function applyComposeEdit(
     });
 
   if (!options.restart) {
-    kaydet("ok", `${location.file} güncellendi, yığın başlatılmadı (yedek: ${backup})`);
+    kaydet("ok", serverT("composeEdit.audit.notStarted", { file: location.file, backup }));
     return {
       ok: true,
-      message: "Dosya güncellendi; yığın yeniden başlatılmadı.",
+      message: serverT("composeEdit.notStarted"),
       warnings,
       backup,
       stackDown: false,
@@ -257,23 +263,25 @@ export async function applyComposeEdit(
   const up = await callHelper("compose.up", { dir: location.workingDir }, actor);
   if (!up.ok || (up.exitCode ?? 1) !== 0) {
     const detail = (up.stderr || up.error || up.stdout || "").slice(0, 600);
-    kaydet("error", `${location.file} güncellendi ama compose up başarısız: ${detail.slice(0, 200)}`);
+    kaydet(
+      "error",
+      serverT("composeEdit.audit.upFailed", { file: location.file, detail: detail.slice(0, 200) }),
+    );
 
     return {
       ok: false,
-      message:
-        "Dosya güncellendi ve geçerli, ama yığın başlatılamadı:\n\n" + detail,
+      message: serverT("composeEdit.upFailed", { detail }),
       warnings,
       backup,
       stackDown: true,
     };
   }
 
-  kaydet("ok", `${location.file} güncellendi ve uygulandı (yedek: ${backup})`);
+  kaydet("ok", serverT("composeEdit.audit.applied", { file: location.file, backup }));
 
   return {
     ok: true,
-    message: (up.stdout ?? "").trim() || "Uygulandı.",
+    message: (up.stdout ?? "").trim() || serverT("composeEdit.applied"),
     warnings,
     backup,
     stackDown: false,
@@ -306,7 +314,7 @@ export async function restoreComposeBackup(
   if (!gecerli) {
     return {
       ok: false,
-      message: `Geçersiz yedek adı: ${backup}`,
+      message: serverT("composeEdit.invalidBackup", { backup }),
       warnings: "",
       backup: null,
       stackDown: false,
@@ -317,7 +325,7 @@ export async function restoreComposeBackup(
   if (!restored.ok) {
     return {
       ok: false,
-      message: `Yedek geri yüklenemedi: ${restored.output.slice(0, 400)}`,
+      message: serverT("composeEdit.restoreError", { output: restored.output.slice(0, 400) }),
       warnings: "",
       backup,
       stackDown: true,
@@ -340,9 +348,9 @@ export async function restoreComposeBackup(
   if (upFailed) {
     return {
       ok: false,
-      message:
-        "Dosya yedekten geri yüklendi ama yığın yine başlatılamadı:\n\n" +
-        (up.stderr || up.error || up.stdout || "").slice(0, 600),
+      message: serverT("composeEdit.restoredNotStarted", {
+        detail: (up.stderr || up.error || up.stdout || "").slice(0, 600),
+      }),
       warnings: "",
       backup,
       stackDown: true,
@@ -351,7 +359,7 @@ export async function restoreComposeBackup(
 
   return {
     ok: true,
-    message: `${backup} geri yüklendi ve yığın başlatıldı.`,
+    message: serverT("composeEdit.restored", { backup }),
     warnings: "",
     backup,
     stackDown: false,

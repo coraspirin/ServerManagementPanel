@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import path from "node:path";
 import { getString } from "@/lib/settings";
@@ -85,17 +86,17 @@ export function allowedRoots(): string[] {
 export function checkPath(raw: string): PathCheck {
   const input = (raw || "/").trim();
   if (!input.startsWith("/")) {
-    return { ok: false, error: "Yol mutlak olmalı (/ ile başlamalı)." };
+    return { ok: false, error: serverT("paths.absolute") };
   }
   if (input.includes("\0")) {
-    return { ok: false, error: "Yol geçersiz karakter içeriyor." };
+    return { ok: false, error: serverT("paths.invalidChar") };
   }
 
   const hostPath = path.posix.normalize(input).replace(/\/+$/, "") || "/";
 
   for (const forbidden of NEVER) {
     if (hostPath === forbidden || hostPath.startsWith(`${forbidden}/`)) {
-      return { ok: false, error: `Bu yola erişilemez: ${forbidden}` };
+      return { ok: false, error: serverT("paths.forbidden", { path: forbidden }) };
     }
   }
 
@@ -103,8 +104,7 @@ export function checkPath(raw: string): PathCheck {
   if (roots.length === 0) {
     return {
       ok: false,
-      error:
-        "Dosya yöneticisi kapalı: Ayarlar → Dosyalar altında hiçbir kök dizin tanımlı değil.",
+      error: serverT("paths.noRoots"),
     };
   }
 
@@ -114,7 +114,7 @@ export function checkPath(raw: string): PathCheck {
   if (!inside) {
     return {
       ok: false,
-      error: `Bu yol izinli kökler dışında. İzinliler: ${roots.join(", ")}`,
+      error: serverT("paths.outsideRoots", { roots: roots.join(", ") }),
     };
   }
 

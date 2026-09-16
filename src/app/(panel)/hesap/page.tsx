@@ -6,6 +6,7 @@ import { recoveryCodesLeft, totpEnabled } from "@/lib/auth/twofactor";
 import { PasswordSection } from "@/components/account/PasswordSection";
 import { TwoFactorSection } from "@/components/account/TwoFactorSection";
 import { ApiTokenSection } from "@/components/account/ApiTokenSection";
+import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -15,17 +16,18 @@ export const dynamic = "force-dynamic";
  */
 export default async function AccountPage() {
   const session = await requireSession();
+  const t = getT();
 
   return (
     <div className="space-y-5">
       <section className="rounded-lg border border-line bg-surface p-5">
         <h2 className="text-sm font-semibold">{session.user.displayName}</h2>
         <dl className="mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr] sm:max-w-md">
-          <dt className="text-subtle">Kullanıcı adı</dt>
+          <dt className="text-subtle">{t("account.username")}</dt>
           <dd className="font-mono">{session.user.username}</dd>
-          <dt className="text-subtle">Rol</dt>
+          <dt className="text-subtle">{t("account.role")}</dt>
           <dd>{session.user.roleName}</dd>
-          <dt className="text-subtle">Yetki sayısı</dt>
+          <dt className="text-subtle">{t("account.permissionCount")}</dt>
           <dd>{session.user.permissions.length}</dd>
         </dl>
       </section>

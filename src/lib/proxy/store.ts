@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getDb } from "@/lib/db/client";
+import { serverT } from "@/lib/i18n/runtime";
 
 /** M2.8 — yayınlanan alan adları ve sertifika durumları. */
 
@@ -126,21 +127,21 @@ export type ProxyInput = {
  */
 export function validateProxy(input: ProxyInput): string | null {
   const domain = input.domain.trim().toLowerCase();
-  if (!domain) return "Alan adı boş olamaz.";
+  if (!domain) return serverT("proxyStore.domainEmpty");
   if (!/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(domain)) {
-    return "Alan adı yalnızca harf, rakam, nokta ve tire içerebilir (ör. ha.evim.net).";
+    return serverT("proxyStore.domainChars");
   }
   if (!domain.includes(".") && input.tls === "auto") {
-    return "Let's Encrypt için gerçek bir alan adı gerekir (nokta içermeli). LAN'da 'Caddy yerel CA' seç.";
+    return serverT("proxyStore.realDomain");
   }
 
-  if (!input.target.trim()) return "Hedef boş olamaz.";
+  if (!input.target.trim()) return serverT("proxyStore.targetEmpty");
   if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?$/.test(input.target.trim())) {
-    return "Hedef bir container adı ya da makine adı/IP olmalı.";
+    return serverT("proxyStore.targetFormat");
   }
 
   if (!Number.isInteger(input.port) || input.port < 1 || input.port > 65535) {
-    return "Port 1–65535 arasında olmalı.";
+    return serverT("proxyStore.portRange");
   }
 
   return null;

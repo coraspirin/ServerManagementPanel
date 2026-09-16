@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { updateContainerImage } from "@/lib/docker/update";
@@ -19,7 +20,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (isMockMode()) {
     return Response.json(
-      { error: "MOCK_MODE açıkken image güncellenemez — gerçek bir Docker gerekiyor." },
+      { error: serverT("api.mock.update") },
       { status: 503 },
     );
   }
@@ -45,10 +46,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           // Eski image kimliği geri alma için tek ipucu: kullanıcı isterse
           // `docker tag <id> repo:etiket` ile önceki sürüme dönebilir.
           detail: result.blockedBy
-            ? `güvenlik kapısı engelledi · ${result.blockedBy}`
+            ? serverT("api.docker.gateBlocked", { by: result.blockedBy })
             : result.changed
-              ? `güncellendi · eski image ${result.oldImageId.slice(7, 19)} → yeni ${result.newImageId.slice(7, 19)}`
-              : "zaten güncel",
+              ? serverT("api.docker.updated", { old: result.oldImageId.slice(7, 19), new: result.newImageId.slice(7, 19) })
+              : serverT("api.docker.upToDate"),
           // Engellenen güncelleme bir hata değil ama "ok" da değil: istenen
           // şey yapılmadı ve denetim kaydı bunu ayırt edebilmeli (M3.28).
           result: result.blockedBy ? "error" : "ok",
@@ -56,7 +57,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
         send("bitti", result);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "güncelleme başarısız";
+        const message = error instanceof Error ? error.message : serverT("api.docker.updateFailed");
         audit({
           userId: user.id,
           username: user.username,

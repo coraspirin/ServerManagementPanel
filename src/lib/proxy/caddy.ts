@@ -3,6 +3,7 @@ import "server-only";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { getDockerProvider } from "@/lib/providers";
+import { serverT } from "@/lib/i18n/runtime";
 import { getString } from "@/lib/settings";
 import { listProxyHosts, type ProxyHost } from "./store";
 
@@ -112,20 +113,21 @@ export async function reloadCaddy(): Promise<ReloadResult> {
       "/etc/caddy/Caddyfile",
     ]);
 
-    if (result.exitCode === 0) return { ok: true, message: "Caddy yeniden yüklendi." };
+    if (result.exitCode === 0) return { ok: true, message: serverT("caddy.reloaded") };
 
     return {
       ok: false,
-      message:
-        `Caddy yapılandırmayı kabul etmedi (çıkış ${result.exitCode}). ` +
-        `Eski yapılandırma çalışmaya devam ediyor.\n${result.output.slice(-800)}`,
+      message: serverT("caddy.rejected", {
+        code: result.exitCode,
+        output: result.output.slice(-800),
+      }),
     };
   } catch (error) {
     return {
       ok: false,
-      message:
-        `Caddy container'ına ulaşılamadı: ${error instanceof Error ? error.message : String(error)}. ` +
-        "Yapılandırma dosyası yazıldı ama devreye alınmadı.",
+      message: serverT("caddy.unreachable", {
+        error: error instanceof Error ? error.message : String(error),
+      }),
     };
   }
 }
@@ -144,9 +146,10 @@ export async function applyProxyConfig(): Promise<ReloadResult> {
   } catch (error) {
     return {
       ok: false,
-      message:
-        `Yapılandırma dosyası yazılamadı: ${error instanceof Error ? error.message : String(error)}. ` +
-        `Kayıt panelde duruyor ama yayında değil. ${proxyDir()} dizini panel kullanıcısına ait olmalı.`,
+      message: serverT("caddy.writeFailed", {
+        error: error instanceof Error ? error.message : String(error),
+        dir: proxyDir(),
+      }),
     };
   }
   return reloadCaddy();

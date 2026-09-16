@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
 import { decryptSecret, encryptSecret, type EncryptedValue } from "@/lib/crypto";
@@ -75,17 +76,17 @@ export type ConnectionInput = {
 };
 
 export function validateConnection(input: ConnectionInput): string | null {
-  if (input.name.trim().length < 2) return "Bağlantı adı en az 2 karakter olmalı.";
-  if (!ENGINES.has(input.engine as DbEngine)) return "Bilinmeyen veritabanı motoru.";
+  if (input.name.trim().length < 2) return serverT("dbStore.name");
+  if (!ENGINES.has(input.engine as DbEngine)) return serverT("dbStore.engine");
 
   if (input.engine === "sqlite") {
     const file = input.host.trim();
     if (!file.startsWith("/") || file.includes("..")) {
-      return "SQLite dosya yolu mutlak olmalı ve '..' içermemeli.";
+      return serverT("dbStore.sqlitePath");
     }
   } else {
-    if (input.host.trim().length === 0) return "Sunucu adresi boş olamaz.";
-    if (input.port <= 0 || input.port > 65535) return "Port 1-65535 arasında olmalı.";
+    if (input.host.trim().length === 0) return serverT("dbStore.host");
+    if (input.port <= 0 || input.port > 65535) return serverT("proxyStore.portRange");
   }
 
   return null;

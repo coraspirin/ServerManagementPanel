@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { getDb } from "@/lib/db/client";
 import { audit } from "@/lib/auth/audit";
 import { createSession, setSessionCookies } from "@/lib/auth/session";
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const challenge = typeof body.challenge === "string" ? body.challenge : "";
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
   // parolayı zaten doğrulamış, oturum ömrünü uzatmak yeni bir yetki değil.
   const remember = body.remember === true;
   if (!challenge || !code) {
-    return Response.json({ error: "Doğrulama kodu gerekli." }, { status: 400 });
+    return Response.json({ error: serverT("api.auth.codeRequired") }, { status: 400 });
   }
 
   const ip = clientIp(request);
@@ -62,8 +63,8 @@ export async function POST(request: Request) {
     ip,
     detail:
       outcome.via === "recovery"
-        ? `kurtarma kodu kullanıldı — ${left} kod kaldı`
-        : "doğrulayıcı uygulama",
+        ? serverT("api.auth.recoveryUsed", { left })
+        : serverT("api.auth.authenticator"),
   });
 
   return Response.json({

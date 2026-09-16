@@ -6,6 +6,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * Container içi terminal (M1.9).
@@ -19,8 +20,9 @@ import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
  * indiriyor.
  */
 /** Sunucunun kabul ettiği kabuklar; sunucu tarafındaki listeyle aynı. */
+/** "auto" dışındakiler dosya yolu; adları çevrilmez, "auto" dil dosyasından. */
 const SHELLS = [
-  { value: "auto", label: "otomatik" },
+  { value: "auto", label: null },
   { value: "/bin/bash", label: "bash" },
   { value: "/bin/sh", label: "sh" },
   { value: "/bin/zsh", label: "zsh" },
@@ -37,6 +39,7 @@ export function TerminalPane({
   containerId: string;
   containerName: string;
 }) {
+  const t = useT();
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const [status, setStatus] = useState<"acilyor" | "acik" | "kapali">("acilyor");
@@ -140,7 +143,7 @@ export function TerminalPane({
         if (disposed) return;
 
         if (!response.ok) {
-          setError(payload.error ?? "Terminal açılamadı.");
+          setError(payload.error ?? t("docker.terminal.openFailed"));
           setStatus("kapali");
           return;
         }
@@ -156,7 +159,11 @@ export function TerminalPane({
           const { exitCode } = JSON.parse((event as MessageEvent).data) as {
             exitCode: number | null;
           };
-          term.writeln(`\r\n\x1b[90m— oturum kapandı${exitCode !== null ? ` (çıkış kodu ${exitCode})` : ""} —\x1b[0m`);
+          const kapanis =
+            exitCode !== null
+              ? t("docker.terminal.sessionClosedCode", { code: exitCode })
+              : t("docker.terminal.sessionClosed");
+          term.writeln(`\r\n\x1b[90m${kapanis}\x1b[0m`);
           setStatus("kapali");
           source?.close();
         });
@@ -168,7 +175,7 @@ export function TerminalPane({
         term.focus();
       } catch {
         if (!disposed) {
-          setError("Sunucuya ulaşılamadı.");
+          setError(t("common.errors.network"));
           setStatus("kapali");
         }
       }
@@ -218,20 +225,17 @@ export function TerminalPane({
             }`}
           />
           {status === "acik"
-            ? `${containerName} içinde kabuk açık`
+            ? t("docker.terminal.statusOpen", { name: containerName })
             : status === "acilyor"
-              ? "açılıyor…"
-              : "oturum kapalı"}
+              ? t("docker.terminal.statusOpening")
+              : t("docker.terminal.statusClosed")}
         </span>
-        <span className="text-subtle">
-          Bu kabuk container içinde genelde root yetkisiyle çalışır — her oturum
-          audit&apos;e düşer.
-        </span>
+        <span className="text-subtle">{t("docker.terminal.rootWarning")}</span>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <label className="flex items-center gap-1.5">
-          <span className="text-subtle">Kabuk</span>
+          <span className="text-subtle">{t("docker.terminal.shell")}</span>
           <select
             value={shell}
             onChange={(e) => setShell(e.target.value)}
@@ -239,20 +243,20 @@ export function TerminalPane({
           >
             {SHELLS.map((entry) => (
               <option key={entry.value} value={entry.value}>
-                {entry.label}
+                {entry.label ?? t("docker.terminal.shellAuto")}
               </option>
             ))}
           </select>
         </label>
 
         <label className="flex items-center gap-1.5">
-          <span className="text-subtle">Kullanıcı</span>
+          <span className="text-subtle">{t("docker.terminal.user")}</span>
           <input
             type="text"
             value={user}
             onChange={(e) => setUser(e.target.value)}
-            placeholder="varsayılan"
-            title="Ad, uid ya da uid:gid. Boş bırakılırsa imajın varsayılan kullanıcısı."
+            placeholder={t("docker.terminal.userPlaceholder")}
+            title={t("docker.terminal.userTitle")}
             className="w-28 rounded-md border border-line bg-surface px-2 py-1 text-xs outline-none focus:border-brand"
           />
         </label>
@@ -262,19 +266,19 @@ export function TerminalPane({
           onClick={() => setNonce((v) => v + 1)}
           className="rounded-md border border-line px-2 py-1 text-xs text-subtle transition-colors hover:border-brand hover:text-brand"
         >
-          Yeniden bağlan
+          {t("docker.terminal.reconnect")}
         </button>
 
         <div className="ml-auto flex items-center gap-px">
           <FontButton
-            title="Yazıyı küçült"
+            title={t("docker.terminal.fontSmaller")}
             disabled={font <= MIN_FONT}
             onClick={() => setFont((v) => Math.max(MIN_FONT, v - 1))}
           >
             <Minus className="size-3" />
           </FontButton>
           <FontButton
-            title="Yazıyı büyüt"
+            title={t("docker.terminal.fontLarger")}
             disabled={font >= MAX_FONT}
             onClick={() => setFont((v) => Math.min(MAX_FONT, v + 1))}
           >
@@ -284,9 +288,7 @@ export function TerminalPane({
       </div>
 
       <p className="text-[11px] text-subtle">
-        Kabuk ve kullanıcı seçimi YALNIZCA bu oturum için geçerli; kalıcı
-        varsayılan ayarlardaki &quot;Terminal kabuğu&quot; değeri. Değiştirmek
-        çalışan oturumu kapatıp yenisini açar.
+        {t("docker.terminal.sessionNote")}
       </p>
 
       {error && (

@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import QRCode from "qrcode";
 
 import { getDb } from "@/lib/db/client";
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
   const user = guard.session.user;
   if (totpEnabled(user.id)) {
     return Response.json(
-      { error: "2FA zaten açık. Yenilemek için önce kapatmalısın." },
+      { error: serverT("api.auth.totpAlreadyOn") },
       { status: 409 },
     );
   }
@@ -74,7 +75,7 @@ export async function PUT(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const user = guard.session.user;
@@ -98,7 +99,7 @@ export async function PUT(request: Request) {
     action: "auth.2fa.enable",
     result: "ok",
     ip: clientIp(request),
-    detail: `${outcome.recoveryCodes.length} kurtarma kodu üretildi`,
+    detail: serverT("api.auth.recoveryGenerated", { count: outcome.recoveryCodes.length }),
   });
 
   return Response.json({ ok: true, recoveryCodes: outcome.recoveryCodes });
@@ -112,7 +113,7 @@ export async function DELETE(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const user = guard.session.user;
@@ -125,9 +126,9 @@ export async function DELETE(request: Request) {
       action: "auth.2fa.disable",
       result: "denied",
       ip: clientIp(request),
-      detail: "parola doğrulanamadı",
+      detail: serverT("api.auth.passwordNotVerified"),
     });
-    return Response.json({ error: "Parola hatalı." }, { status: 401 });
+    return Response.json({ error: serverT("api.auth.passwordWrong") }, { status: 401 });
   }
 
   disableTotp(user.id);
@@ -151,16 +152,16 @@ export async function PATCH(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const user = guard.session.user;
   if (!totpEnabled(user.id)) {
-    return Response.json({ error: "2FA açık değil." }, { status: 409 });
+    return Response.json({ error: serverT("api.auth.totpNotOn") }, { status: 409 });
   }
 
   if (!verifyPassword(typeof body.password === "string" ? body.password : "", passwordOf(user.id))) {
-    return Response.json({ error: "Parola hatalı." }, { status: 401 });
+    return Response.json({ error: serverT("api.auth.passwordWrong") }, { status: 401 });
   }
 
   const codes = regenerateRecoveryCodes(user.id);

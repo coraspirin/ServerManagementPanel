@@ -14,6 +14,8 @@
  * adında geçen "delete" kelimesi ifadeyi tehlikeli yapmamalı.
  */
 
+import { serverT } from "../i18n/runtime.ts";
+
 export type SqlKind = "read" | "write" | "schema" | "unknown";
 
 export type SqlAnalysis = {
@@ -93,19 +95,19 @@ export function analyzeSql(sql: string): SqlAnalysis {
   const dangers: string[] = [];
 
   if (/\bdrop\s+(table|database|schema|index|view)\b/.test(first)) {
-    dangers.push("DROP — nesne kalıcı olarak silinir");
+    dangers.push(serverT("sqlGuard.drop"));
   }
   if (/\btruncate\b/.test(first)) {
-    dangers.push("TRUNCATE — tablodaki tüm satırlar silinir");
+    dangers.push(serverT("sqlGuard.truncate"));
   }
   if (/^delete\b/.test(first) && !/\bwhere\b/.test(first)) {
-    dangers.push("WHERE'siz DELETE — tablodaki TÜM satırlar silinir");
+    dangers.push(serverT("sqlGuard.delete"));
   }
   if (/^update\b/.test(first) && !/\bwhere\b/.test(first)) {
-    dangers.push("WHERE'siz UPDATE — tablodaki TÜM satırlar değişir");
+    dangers.push(serverT("sqlGuard.update"));
   }
   if (/\bgrant\b|\brevoke\b/.test(first)) {
-    dangers.push("Yetki değişikliği");
+    dangers.push(serverT("sqlGuard.grant"));
   }
 
   return { kind, dangers, statementCount: statements.length };

@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { createHmac, randomBytes, randomInt } from "node:crypto";
 
@@ -47,7 +48,7 @@ export function base32Decode(input: string): Buffer {
 
   for (const char of clean) {
     const index = BASE32_ALPHABET.indexOf(char);
-    if (index < 0) throw new Error("Geçersiz base32 karakteri.");
+    if (index < 0) throw new Error(serverT("totpLib.invalidBase32"));
     value = (value << 5) | index;
     bits += 5;
     if (bits >= 8) {

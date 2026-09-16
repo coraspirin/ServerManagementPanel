@@ -6,6 +6,8 @@ import { readCsrfToken } from "./detail/shared";
 import { CSRF_HEADER } from "@/lib/auth/types";
 import type { ContainerView, DockerOverview } from "@/lib/docker/types";
 import type { ContainerAction } from "@/lib/providers/types";
+import { useT } from "@/lib/i18n/client";
+import type { MessageKey } from "@/lib/i18n/translate";
 
 /**
  * Seçili container'lara toplu işlem (M3.30).
@@ -30,13 +32,12 @@ import type { ContainerAction } from "@/lib/providers/types";
 
 type Sonuc = { name: string; ok: boolean; error?: string };
 
-const ETIKET: Record<ContainerAction | "remove", string> = {
-  start: "Başlat",
-  stop: "Durdur",
-  restart: "Yeniden başlat",
-  pause: "Duraklat",
-  unpause: "Sürdür",
-  remove: "Sil",
+const CONFIRM_KEY: Record<ContainerAction, MessageKey> = {
+  start: "docker.bulk.confirm.start",
+  stop: "docker.bulk.confirm.stop",
+  restart: "docker.bulk.confirm.restart",
+  pause: "docker.bulk.confirm.pause",
+  unpause: "docker.bulk.confirm.unpause",
 };
 
 export function BulkBar({
@@ -49,6 +50,7 @@ export function BulkBar({
   onDone: (data: DockerOverview) => void;
   onClear: () => void;
 }) {
+  const t = useT();
   const [progress, setProgress] = useState<{ done: number; total: number; current: string } | null>(
     null,
   );
@@ -63,11 +65,8 @@ export function BulkBar({
         ? // Silme geri alınamıyor; onay metni HANGİ container'ların gideceğini
           // tek tek saymalı. "4 container silinsin mi?" diye sormak, seçimin
           // ne olduğunu hatırlamayı kullanıcıya bırakmak olurdu.
-          `${isim.length} container SİLİNSİN mi?\n\n${isim.join("\n")}\n\n` +
-          "Container kayıtları kaldırılır; volume'lardaki veri ve image'lar etkilenmez. " +
-          "Çalışan container'lar silinemez — önce durdurulmaları gerekir.\n\n" +
-          "Bu işlem geri alınamaz."
-        : `${isim.length} container ${ETIKET[action].toLocaleLowerCase("tr")}ılsın mı?\n\n${isim.join("\n")}`;
+          t("docker.bulk.confirmRemove", { count: isim.length, names: isim.join("\n") })
+        : t(CONFIRM_KEY[action], { count: isim.length, names: isim.join("\n") });
 
     if (!confirm(onay)) return;
 
@@ -96,10 +95,10 @@ export function BulkBar({
           // tazelemek işlemin ilerlediğini görünür kılıyor.
           onDone(payload);
         } else {
-          toplanan.push({ name: container.name, ok: false, error: payload.error ?? "başarısız" });
+          toplanan.push({ name: container.name, ok: false, error: payload.error ?? t("docker.bulk.failed") });
         }
       } catch {
-        toplanan.push({ name: container.name, ok: false, error: "sunucuya ulaşılamadı" });
+        toplanan.push({ name: container.name, ok: false, error: t("docker.bulk.network") });
       }
     }
 
@@ -115,30 +114,30 @@ export function BulkBar({
   return (
     <div className="rounded-lg border border-brand/40 bg-brand/5 px-4 py-2.5">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium">{selected.length} seçili</span>
+        <span className="text-sm font-medium">{t("docker.bulk.selected", { count: selected.length })}</span>
 
         <div className="flex flex-wrap items-center gap-1.5">
           <BulkButton
-            label={ETIKET.start}
+            label={t("docker.bulk.start")}
             icon={<Play className="size-3.5" />}
             disabled={calisiyor}
             onClick={() => void run("start")}
           />
           <BulkButton
-            label={ETIKET.restart}
+            label={t("docker.bulk.restart")}
             icon={<RotateCw className="size-3.5" />}
             disabled={calisiyor}
             onClick={() => void run("restart")}
           />
           <BulkButton
-            label={ETIKET.stop}
+            label={t("docker.bulk.stop")}
             icon={<Square className="size-3.5" />}
             danger
             disabled={calisiyor}
             onClick={() => void run("stop")}
           />
           <BulkButton
-            label={ETIKET.remove}
+            label={t("docker.bulk.remove")}
             icon={<Trash2 className="size-3.5" />}
             danger
             disabled={calisiyor}
@@ -153,22 +152,22 @@ export function BulkBar({
           className="ml-auto inline-flex items-center gap-1 text-xs text-subtle transition-colors hover:text-ink disabled:opacity-40"
         >
           <X className="size-3.5" aria-hidden />
-          seçimi bırak
+          {t("docker.bulk.clear")}
         </button>
       </div>
 
       {progress && (
         <p className="mt-2 text-xs text-subtle" aria-live="polite">
-          {progress.done + 1} / {progress.total} — <span className="text-ink">{progress.current}</span>{" "}
-          işleniyor…
+          {progress.done + 1} / {progress.total} —{" "}
+          {t("docker.bulk.processing", { current: progress.current })}
         </p>
       )}
 
       {results && (
         <div className="mt-2 text-xs" aria-live="polite">
           <p className={hatalar.length > 0 ? "text-warn" : "text-ok"}>
-            {results.length - hatalar.length} / {results.length} işlem başarılı
-            {hatalar.length > 0 && ` · ${hatalar.length} hata`}
+            {t("docker.bulk.summary", { ok: results.length - hatalar.length, total: results.length })}
+            {hatalar.length > 0 && t("docker.bulk.errors", { count: hatalar.length })}
           </p>
           {hatalar.length > 0 && (
             <ul className="mt-1 space-y-0.5 text-subtle">

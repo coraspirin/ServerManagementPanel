@@ -1,6 +1,7 @@
 import { guardApi } from "@/lib/auth/api";
 import { parseCompose, readAllServices } from "@/lib/compose/service";
 import { specFromService } from "@/lib/docker/spec";
+import { serverT } from "@/lib/i18n/runtime";
 import type { ContainerSpec } from "@/lib/docker/spec";
 
 export const dynamic = "force-dynamic";
@@ -49,35 +50,35 @@ export async function POST(request: Request) {
   try {
     compose = String(((await request.json()) as { compose?: unknown }).compose ?? "");
   } catch {
-    return Response.json({ error: "Geçersiz istek gövdesi." }, { status: 400 });
+    return Response.json({ error: serverT("common.errors.invalidBody") }, { status: 400 });
   }
 
   if (!compose.trim()) {
-    return Response.json({ error: "Compose içeriği boş." }, { status: 400 });
+    return Response.json({ error: serverT("api.compose.empty") }, { status: 400 });
   }
 
   // Uzunluk BAYT olarak ölçülüyor: Türkçe karakterler iki bayt ve karakter
   // sayısına bakan bir sınır dosyayı olduğundan küçük gösterirdi.
   if (new TextEncoder().encode(compose).length > MAX_COMPOSE_BYTES) {
     return Response.json(
-      { error: "Compose dosyası çok büyük (üst sınır 256 KB)." },
+      { error: serverT("api.compose.tooLarge") },
       { status: 400 },
     );
   }
 
   const { doc, error } = parseCompose(compose);
-  if (!doc) return Response.json({ error: `YAML okunamadı: ${error}` }, { status: 400 });
+  if (!doc) return Response.json({ error: serverT("api.compose.yamlError", { error: String(error) }) }, { status: 400 });
 
   const services = readAllServices(doc);
   if (services.length === 0) {
     return Response.json(
-      { error: "Dosyada `services:` altında tanımlı bir servis bulunamadı." },
+      { error: serverT("api.compose.noServices") },
       { status: 400 },
     );
   }
 
   const result: ComposeImportService[] = services.map((service) => {
-    const { spec, warnings } = specFromService(service);
+    const { spec, warnings } = specFromService(service, serverT);
     return { service: service.name, spec, warnings };
   });
 

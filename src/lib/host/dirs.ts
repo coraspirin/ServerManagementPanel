@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { lstat, readdir } from "node:fs/promises";
 import path from "node:path";
@@ -50,7 +51,7 @@ export async function listHostDirs(rawPath: string): Promise<DirListing> {
   const parent = hostPath === "/" ? null : path.posix.dirname(hostPath);
 
   if (hostPath.includes("\0") || forbiddenPath(hostPath)) {
-    return { path: hostPath, parent, dirs: [], error: "Bu yola erişilemez." };
+    return { path: hostPath, parent, dirs: [], error: serverT("dirs.forbidden") };
   }
 
   const containerPath = path.posix.join(hostRoot(), hostPath);
@@ -67,10 +68,10 @@ export async function listHostDirs(rawPath: string): Promise<DirListing> {
         parent,
         dirs: [],
         error: message.includes("ENOENT")
-          ? "Klasör bulunamadı."
+          ? serverT("dirs.notFound")
           : message.includes("ENOTDIR")
-            ? "Bu bir klasör değil."
-            : "Klasör okunamadı.",
+            ? serverT("dirs.notDir")
+            : serverT("dirs.unreadable"),
       };
     }
 

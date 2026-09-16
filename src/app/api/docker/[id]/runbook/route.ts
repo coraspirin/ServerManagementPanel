@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { saveRunbook } from "@/lib/docker/runbooks";
@@ -27,21 +28,21 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   try {
     payload = (await request.json()) as typeof payload;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   if (typeof payload.body !== "string") {
-    return Response.json({ error: "not metni gerekli" }, { status: 400 });
+    return Response.json({ error: serverT("api.docker.noteRequired") }, { status: 400 });
   }
   if (payload.body.length > MAX_BODY_CHARS) {
     return Response.json(
-      { error: `Not en fazla ${MAX_BODY_CHARS} karakter olabilir.` },
+      { error: serverT("api.docker.noteTooLong", { max: MAX_BODY_CHARS }) },
       { status: 400 },
     );
   }
 
   const state = await getDockerProvider().inspect(id);
-  if (!state) return Response.json({ error: "container bulunamadı" }, { status: 404 });
+  if (!state) return Response.json({ error: serverT("api.notFound.container") }, { status: 404 });
 
   const runbook = saveRunbook(
     "container",

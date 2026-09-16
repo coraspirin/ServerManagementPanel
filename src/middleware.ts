@@ -83,7 +83,7 @@ export function middleware(request: NextRequest) {
 
   // API isteklerini yönlendirmek yerine 401 döndür.
   if (pathname.startsWith("/api/")) {
-    return NextResponse.json({ error: "oturum gerekli" }, { status: 401 });
+    return NextResponse.json({ error: "oturum gerekli" }, { status: 401 }); // i18n-ignore — middleware ayarlara (DB) erişemez; istemci 401'i yönlendirmeyle karşılıyor
   }
 
   // Kök adres yukarıda döndüğü için buraya yalnızca gerçekten korunan bir yol

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { panelImage } from "@/lib/host/self";
+import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 
 /**
@@ -116,7 +117,7 @@ async function run(
 ): Promise<ElevatedResult> {
   const image = await panelImage();
   if (!image) {
-    return { ok: false, error: "Panel imajı belirlenemedi; yükseltilmiş okuma kullanılamıyor." };
+    return { ok: false, error: serverT("elevated.noImage") };
   }
 
   const result = await getDockerProvider().runThrowaway({
@@ -131,7 +132,7 @@ async function run(
   });
 
   if (result.exitCode !== 0) {
-    return { ok: false, error: result.output.slice(0, 300) || "okuma başarısız" };
+    return { ok: false, error: result.output.slice(0, 300) || serverT("elevated.readFailed") };
   }
 
   // Script tek satır JSON yazıyor ama Node bazen uyarı satırı ekleyebiliyor;
@@ -143,12 +144,12 @@ async function run(
     .reverse()
     .find((entry) => entry.startsWith("{"));
 
-  if (!line) return { ok: false, error: "okuma çıktısı ayrıştırılamadı" };
+  if (!line) return { ok: false, error: serverT("elevated.parseFailed") };
 
   try {
     return JSON.parse(line) as ElevatedResult;
   } catch {
-    return { ok: false, error: "okuma çıktısı geçerli JSON değil" };
+    return { ok: false, error: serverT("elevated.notJson") };
   }
 }
 
@@ -168,7 +169,7 @@ export async function elevatedList(
   limit: number,
 ): Promise<{ entries: ElevatedEntry[]; total: number } | { error: string }> {
   const result = await run("list", containerPath, { LIMIT: String(limit) });
-  if (!result.ok) return { error: String(result.error ?? "okunamadı") };
+  if (!result.ok) return { error: String(result.error ?? serverT("elevated.unreadable")) };
   return {
     entries: (result.entries as ElevatedEntry[]) ?? [],
     total: Number(result.total ?? 0),
@@ -180,7 +181,7 @@ export async function elevatedRead(
   maxBytes: number,
 ): Promise<{ buffer: Buffer; sizeBytes: number } | { error: string }> {
   const result = await run("read", containerPath, { LIMIT: String(maxBytes) });
-  if (!result.ok) return { error: String(result.error ?? "okunamadı") };
+  if (!result.ok) return { error: String(result.error ?? serverT("elevated.unreadable")) };
   return {
     buffer: Buffer.from(String(result.base64 ?? ""), "base64"),
     sizeBytes: Number(result.sizeBytes ?? 0),
@@ -192,7 +193,7 @@ export async function elevatedUsage(
   budgetMs: number,
 ): Promise<{ entries: { name: string; isDir: boolean; bytes: number }[]; timedOut: boolean } | { error: string }> {
   const result = await run("usage", containerPath, { BUDGET_MS: String(budgetMs) });
-  if (!result.ok) return { error: String(result.error ?? "okunamadı") };
+  if (!result.ok) return { error: String(result.error ?? serverT("elevated.unreadable")) };
   return {
     entries: (result.entries as { name: string; isDir: boolean; bytes: number }[]) ?? [],
     timedOut: Boolean(result.timedOut),

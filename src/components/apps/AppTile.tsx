@@ -11,6 +11,7 @@ import {
   type AppCardView,
 } from "@/lib/apps/types";
 import type { WidgetActionDef, WidgetState } from "@/lib/widgets/types";
+import { useFormat, useT } from "@/lib/i18n/client";
 
 /**
  * M2.1 — tek bir uygulama kartı.
@@ -86,6 +87,8 @@ function Widget({
   busy: boolean;
   onAction: (action: WidgetActionDef) => void;
 }) {
+  const t = useT();
+  const f = useFormat();
   if (state.status === "error") {
     return (
       <p className="border-t border-line px-3 py-2 text-[11px] leading-snug text-danger">
@@ -122,8 +125,9 @@ function Widget({
         // Tazeliği gizlemek yanlış veriden tehlikelidir: kullanıcı eski sayıya
         // bakıp "her şey yolunda" diye karar verebilir.
         <p className="text-[11px] text-subtle">
-          Servise ulaşılamıyor — {new Date(state.updatedAt * 1000).toLocaleTimeString("tr-TR")}{" "}
-          verisi gösteriliyor.
+          {t("appTile.stale", {
+            time: f.time(state.updatedAt * 1000, { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+          })}
         </p>
       )}
 
@@ -164,6 +168,7 @@ export function AppTile({
   widgetBusy?: boolean;
   onWidgetAction?: (card: AppCard, action: WidgetActionDef) => void;
 }) {
+  const t = useT();
   const status = statusStyle(card);
   // Widget varken kart tek parça bir kutu olmalı; kenarlık dış sarmalayıcıya
   // taşınıyor ki bağlantı ile veri arasında çift çizgi oluşmasın.
@@ -194,10 +199,10 @@ export function AppTile({
               // Renk tek başına bilgi taşımamalı (renk körlüğü): durum metni
               // hem başlıkta hem de ekran okuyucuya açık şekilde veriliyor.
               <span
-                title={`${card.monitorName}: ${status.label}`}
+                title={`${card.monitorName}: ${t(status.label)}`}
                 className={`size-2 shrink-0 rounded-full ${status.dot}`}
               >
-                <span className="sr-only">{status.label}</span>
+                <span className="sr-only">{t(status.label)}</span>
               </span>
             )}
             <span className="truncate font-medium">{card.name}</span>
@@ -205,10 +210,10 @@ export function AppTile({
               // Kullanıcı bu kartın nereden geldiğini bilmeli: sildiğinde geri
               // gelmesi ancak "etiketten geliyor" bilgisiyle anlaşılır.
               <span
-                title="Docker etiketlerinden oluşturuldu"
+                title={t("appTile.fromLabels")}
                 className="shrink-0 rounded bg-brand/10 px-1 text-[10px] font-medium text-brand"
               >
-                etiket
+                {t("appTile.label")}
               </span>
             )}
             {card.openNewTab && (
@@ -232,7 +237,9 @@ export function AppTile({
                 type="button"
                 disabled={blocked}
                 onClick={() => move.onMove(card, direction)}
-                aria-label={`${card.name} kartını ${direction === -1 ? "öne" : "sona"} al`}
+                aria-label={t(direction === -1 ? "appTile.moveFirst" : "appTile.moveLast", {
+                  name: card.name,
+                })}
                 className="rounded p-1 text-subtle transition-colors hover:text-ink disabled:opacity-25"
               >
                 <Icon className="size-4" />
@@ -246,7 +253,7 @@ export function AppTile({
         <button
           type="button"
           onClick={() => onEdit(card)}
-          aria-label={`${card.name} kartını düzenle`}
+          aria-label={t("appTile.edit", { name: card.name })}
           // Yalnızca kart üzerindeyken görünür; ama klavyeyle gezenler için
           // odaklanınca da açılmalı, yoksa düğmeye erişilemez.
           className="absolute right-1.5 top-1.5 rounded p-1 text-subtle opacity-0 transition-opacity hover:bg-canvas hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"

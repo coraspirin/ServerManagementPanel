@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { auditAction } from "@/lib/apiv1/action";
 import { mergePatch, monitorPatchBase, parseId } from "@/lib/apiv1/crud";
 import { guardV1 } from "@/lib/apiv1/guard";
@@ -22,10 +23,10 @@ export async function GET(request: Request, { params }: Context) {
   if (!guard.ok) return guard.response;
 
   const id = parseId((await params).id);
-  if (id === null) return apiError("invalid_request", "geçersiz monitör kimliği");
+  if (id === null) return apiError("invalid_request", serverT("api.v1.invalidMonitorId"));
 
   const view = monitorViews(0).find((monitor) => monitor.id === id);
-  if (!view) return apiError("not_found", "monitör bulunamadı");
+  if (!view) return apiError("not_found", serverT("api.notFound.monitor"));
 
   return apiOk({ monitor: serializeMonitor(view) });
 }
@@ -43,10 +44,10 @@ export async function PATCH(request: Request, { params }: Context) {
   if (!guard.ok) return guard.response;
 
   const id = parseId((await params).id);
-  if (id === null) return apiError("invalid_request", "geçersiz monitör kimliği");
+  if (id === null) return apiError("invalid_request", serverT("api.v1.invalidMonitorId"));
 
   const existing = getMonitor(id);
-  if (!existing) return apiError("not_found", "monitör bulunamadı");
+  if (!existing) return apiError("not_found", serverT("api.notFound.monitor"));
 
   const body = await readJsonBody(request, getNumber("api.max_body_bytes"));
   if (!body.ok) return body.response;
@@ -75,10 +76,10 @@ export async function DELETE(request: Request, { params }: Context) {
   if (!guard.ok) return guard.response;
 
   const id = parseId((await params).id);
-  if (id === null) return apiError("invalid_request", "geçersiz monitör kimliği");
+  if (id === null) return apiError("invalid_request", serverT("api.v1.invalidMonitorId"));
 
   const existing = getMonitor(id);
-  if (!existing) return apiError("not_found", "monitör bulunamadı");
+  if (!existing) return apiError("not_found", serverT("api.notFound.monitor"));
 
   deleteMonitor(id);
 

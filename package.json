@@ -9,7 +9,9 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "node --test --disable-warning=MODULE_TYPELESS_PACKAGE_JSON \"src/**/*.test.ts\"",
-    "check:openapi": "node scripts/check-openapi.mjs"
+    "check:openapi": "node scripts/check-openapi.mjs",
+    "i18n:check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/i18n-check.mjs",
+    "i18n:new": "node scripts/i18n-new.mjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

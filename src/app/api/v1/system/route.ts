@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardV1 } from "@/lib/apiv1/guard";
 import { apiError, apiOk } from "@/lib/apiv1/respond";
 import { serializeSystem } from "@/lib/apiv1/serialize";
@@ -22,7 +23,7 @@ export async function GET(request: Request) {
     // içinde başlık ya da ham gövde yok (§Loglama).
     return apiError(
       "upstream_error",
-      error instanceof Error ? error.message : "sistem bilgisi okunamadı",
+      error instanceof Error ? error.message : serverT("api.v1.systemUnreadable"),
     );
   }
 }

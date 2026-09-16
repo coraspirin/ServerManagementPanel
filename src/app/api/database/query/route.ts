@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { hasPermission } from "@/lib/auth/session";
@@ -23,13 +24,13 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const connection = connectionSecrets(Number(body.connectionId ?? 0));
   if (!connection) {
     return Response.json(
-      { error: "Bağlantı bulunamadı ya da parolası çözülemedi." },
+      { error: serverT("api.db.connectionOrPassword") },
       { status: 400 },
     );
   }
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
         result: "denied",
       });
       return Response.json(
-        { error: "Veri değiştirmek için `db.write` izni gerekiyor." },
+        { error: serverT("api.db.writeRequired") },
         { status: 403 },
       );
     }
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
       )
     : await runQuery(connection, sql, { confirmed: Boolean(body.confirmed) });
 
-  const label = browsing ? `[gözat] ${body.schema}.${body.table}` : sql;
+  const label = browsing ? `[${serverT("api.db.browse")}] ${body.schema}.${body.table}` : sql;
 
   // Onay bekleyen bir ifade henüz çalışmadı; geçmişe yazmak yanıltıcı olurdu.
   if (!outcome.ok && outcome.needsConfirmation) {
@@ -108,7 +109,7 @@ export async function POST(request: Request) {
         targetType: "db_connection",
         targetId: String(connection.id),
         detail: `${connection.name}: ${sql.slice(0, 500)}${
-          outcome.ok ? ` → ${outcome.result.affected ?? 0} satır` : ` — ${outcome.error}`
+          outcome.ok ? ` → ${serverT("api.db.rows", { count: outcome.result.affected ?? 0 })}` : ` — ${outcome.error}`
         }`,
         result: outcome.ok ? "ok" : "error",
       });

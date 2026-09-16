@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { startSession } from "@/lib/docker/exec";
@@ -26,7 +27,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (isMockMode()) {
     return Response.json(
-      { error: "MOCK_MODE açıkken terminal kullanılamaz — gerçek bir container gerekiyor." },
+      { error: serverT("api.mock.terminal") },
       { status: 503 },
     );
   }
@@ -56,10 +57,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const user = USER_RE.test(String(body.user ?? "")) ? String(body.user) : "";
 
   const state = await getDockerProvider().inspect(id);
-  if (!state) return Response.json({ error: "container bulunamadı" }, { status: 404 });
+  if (!state) return Response.json({ error: serverT("api.notFound.container") }, { status: 404 });
   if (!state.running) {
     return Response.json(
-      { error: "container çalışmıyor — durmuş bir container'da kabuk açılamaz" },
+      { error: serverT("api.docker.notRunning") },
       { status: 409 },
     );
   }
@@ -82,15 +83,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       targetType: "container",
       targetId: state.name,
       detail:
-        `terminal açıldı (${cols}×${rows})` +
-        (shell ? ` · kabuk: ${shell}` : "") +
-        (user ? ` · kullanıcı: ${user}` : ""),
+        serverT("api.docker.terminalOpened", { cols, rows }) +
+        (shell ? ` · ${serverT("api.docker.shell", { shell })}` : "") +
+        (user ? ` · ${serverT("api.docker.user", { user })}` : ""),
       result: "ok",
     });
 
     return Response.json({ sessionId: session.id, container: state.name });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "terminal açılamadı";
+    const message = error instanceof Error ? error.message : serverT("api.docker.terminalFailed");
     audit({
       userId: guard.session.user.id,
       username: guard.session.user.username,

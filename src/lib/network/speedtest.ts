@@ -2,6 +2,7 @@ import "server-only";
 
 import { getDb } from "@/lib/db/client";
 import { isMockMode } from "@/lib/env";
+import { serverT } from "@/lib/i18n/runtime";
 import { getNumber, getString } from "@/lib/settings";
 
 /**
@@ -281,13 +282,12 @@ function describeFault(fault: Fault, direction: string): string {
   if (fault.status === 429) {
     const minutes = Math.ceil(fault.retryAfterSeconds / 60);
     return (
-      `Ölçüm sunucusu ${direction} isteğini reddetti (HTTP 429 — hız sınırı). ` +
-      (minutes > 0 ? `Yaklaşık ${minutes} dakika sonra tekrar denenebilir. ` : "") +
-      "Sınır istek BOYUTUNA bakıyor: Ayarlar → Ağ → \"Akış başına " +
-      `${direction} parçası\" değerini 5 MB ve altına çekmek bu sınırın altında kalır.`
+      serverT("speedtestLib.rateLimited", { direction }) +
+      (minutes > 0 ? serverT("speedtestLib.retryIn", { minutes }) : "") +
+      serverT("speedtestLib.sizeHint", { direction })
     );
   }
-  return `Ölçüm sunucusu ${direction} isteğini reddetti (HTTP ${fault.status}).`;
+  return serverT("speedtestLib.rejected", { direction, status: fault.status });
 }
 
 /**
@@ -435,8 +435,8 @@ export async function runSpeedtest(): Promise<SpeedtestResult> {
     if (download.bytes === 0) {
       throw new Error(
         download.fault
-          ? describeFault(download.fault, "indirme")
-          : "indirme ölçülemedi — ölçüm sunucusuna ulaşılamıyor olabilir",
+          ? describeFault(download.fault, serverT("speedtestLib.download"))
+          : serverT("speedtestLib.downloadFailed"),
       );
     }
 
@@ -448,7 +448,7 @@ export async function runSpeedtest(): Promise<SpeedtestResult> {
     );
 
     if (upload.bytes === 0) {
-      if (upload.fault) throw new Error(describeFault(upload.fault, "yükleme"));
+      if (upload.fault) throw new Error(describeFault(upload.fault, serverT("speedtestLib.upload")));
 
       // Pencerede hiçbir yükleme TAMAMLANAMADIYSA (çok yavaş hat + büyük parça)
       // sıfır yazmak yanlış olurdu: ölçüm başarısız değil, parça büyük. Tek
@@ -467,7 +467,7 @@ export async function runSpeedtest(): Promise<SpeedtestResult> {
               status: response.status,
               retryAfterSeconds: Number(response.headers.get("retry-after") ?? 0) || 0,
             },
-            "yükleme",
+            serverT("speedtestLib.upload"),
           ),
         );
       }

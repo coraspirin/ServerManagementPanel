@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import {
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   // "Şimdi eşitle" aynı uçtan: ayrı bir yol açmak, aynı yetki ve aynı
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
       userId: guard.session.user.id,
       username: guard.session.user.username,
       action: "ddns.sync",
-      detail: `${result.updated.length} güncellendi · ${result.failed.length} hata`,
+      detail: serverT("api.proxy.ddnsSummary", { updated: result.updated.length, failed: result.failed.length }),
       result: result.failed.length > 0 ? "error" : "ok",
     });
     return Response.json({ ok: true, result, ...proxyPayload() });
@@ -40,23 +41,23 @@ export async function POST(request: Request) {
 
   const provider = String(body.provider ?? "");
   if (!PROVIDERS.includes(provider as DdnsProvider)) {
-    return Response.json({ error: "geçersiz sağlayıcı" }, { status: 400 });
+    return Response.json({ error: serverT("api.proxy.invalidProvider") }, { status: 400 });
   }
 
   const hostname = String(body.hostname ?? "").trim();
-  if (!hostname) return Response.json({ error: "Alan adı boş olamaz." }, { status: 400 });
+  if (!hostname) return Response.json({ error: serverT("api.proxy.hostnameEmpty") }, { status: 400 });
 
   const zone = String(body.zone ?? "").trim();
   if (provider === "cloudflare" && !zone) {
     return Response.json(
-      { error: "Cloudflare için Zone ID gerekli (Cloudflare panelinde alan adının sağ sütununda)." },
+      { error: serverT("api.proxy.zoneIdRequired") },
       { status: 400 },
     );
   }
 
   const id = body.id === undefined || body.id === null ? null : Number(body.id);
   if (id !== null && !getDdnsRecord(id)) {
-    return Response.json({ error: "kayıt bulunamadı" }, { status: 404 });
+    return Response.json({ error: serverT("api.notFound.record") }, { status: 404 });
   }
 
   const saved = saveDdnsRecord(
@@ -83,7 +84,7 @@ export async function DELETE(request: Request) {
 
   const id = Number(new URL(request.url).searchParams.get("id") ?? "0");
   const existing = getDdnsRecord(id);
-  if (!existing) return Response.json({ error: "kayıt bulunamadı" }, { status: 404 });
+  if (!existing) return Response.json({ error: serverT("api.notFound.record") }, { status: 404 });
 
   deleteDdnsRecord(id);
 

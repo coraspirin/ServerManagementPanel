@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { getDockerProvider } from "@/lib/providers";
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
 
   if (isMockMode()) {
     return Response.json(
-      { error: "MOCK_MODE açıkken image çekilemez — gerçek bir Docker gerekiyor." },
+      { error: serverT("api.mock.pull") },
       { status: 503 },
     );
   }
@@ -41,14 +42,14 @@ export async function POST(request: Request) {
   try {
     reference = String(((await request.json()) as { reference?: unknown }).reference ?? "").trim();
   } catch {
-    return Response.json({ error: "Geçersiz istek gövdesi." }, { status: 400 });
+    return Response.json({ error: serverT("common.errors.invalidBody") }, { status: 400 });
   }
 
   // Boşluk ve kabuk karakterleri bir image referansında yeri olmayan şeyler;
   // erken reddetmek, Docker'ın anlaşılmaz hatasından daha yardımcı.
   if (!reference || /[\s"'`$;|&<>]/.test(reference)) {
     return Response.json(
-      { error: "Geçerli bir image adı gir (ör. nginx:alpine ya da ghcr.io/kullanici/uygulama:1.2)." },
+      { error: serverT("api.docker.imageName") },
       { status: 400 },
     );
   }
@@ -79,13 +80,13 @@ export async function POST(request: Request) {
           action: "docker.image_pull",
           targetType: "image",
           targetId: reference,
-          detail: "çekildi",
+          detail: serverT("api.docker.pulled"),
           result: "ok",
         });
 
         send("bitti", { reference, inspect });
       } catch (error) {
-        const message = error instanceof Error ? error.message : "image çekilemedi";
+        const message = error instanceof Error ? error.message : serverT("api.docker.pullFailed");
 
         audit({
           userId: user.id,

@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
 import type {
@@ -342,17 +343,19 @@ export type PatternInput = {
 };
 
 export function validatePattern(input: PatternInput): string | null {
-  if (input.name.trim().length < 2) return "Kural adı en az 2 karakter olmalı.";
-  if (input.pattern.trim().length === 0) return "Desen boş olamaz.";
+  if (input.name.trim().length < 2) return serverT("logStore.ruleName");
+  if (input.pattern.trim().length === 0) return serverT("logStore.patternEmpty");
   if (input.isRegex) {
     try {
       new RegExp(input.pattern, "i");
     } catch (error) {
-      return `Düzenli ifade geçersiz: ${error instanceof Error ? error.message : "bilinmeyen hata"}`;
+      return serverT("logStore.invalidRegex", {
+        error: error instanceof Error ? error.message : serverT("console.unknownError"),
+      });
     }
   }
   if (input.cooldownMinutes < 0 || input.cooldownMinutes > 1440) {
-    return "Bekleme süresi 0-1440 dakika arasında olmalı.";
+    return serverT("logStore.cooldownRange");
   }
   return null;
 }

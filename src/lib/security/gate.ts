@@ -19,6 +19,8 @@
  * I/O yok, `@/` yolu yok — `node --test` altında doğrudan çalışsın diye saf.
  */
 
+import { serverT } from "../i18n/runtime.ts";
+
 export type GateMode = "kapali" | "kritik" | "kritik_yuksek" | "daha_kotu";
 
 export const GATE_MODES: GateMode[] = ["kapali", "kritik", "kritik_yuksek", "daha_kotu"];
@@ -43,11 +45,11 @@ function toplam(counts: VulnCounts): number {
 
 function ozet(counts: VulnCounts): string {
   const parcalar: string[] = [];
-  if (counts.critical) parcalar.push(`${counts.critical} kritik`);
-  if (counts.high) parcalar.push(`${counts.high} yüksek`);
-  if (counts.medium) parcalar.push(`${counts.medium} orta`);
-  if (counts.low) parcalar.push(`${counts.low} düşük`);
-  return parcalar.length > 0 ? parcalar.join(", ") : "açık yok";
+  if (counts.critical) parcalar.push(serverT("gate.count.critical", { count: counts.critical }));
+  if (counts.high) parcalar.push(serverT("gate.count.high", { count: counts.high }));
+  if (counts.medium) parcalar.push(serverT("gate.count.medium", { count: counts.medium }));
+  if (counts.low) parcalar.push(serverT("gate.count.low", { count: counts.low }));
+  return parcalar.length > 0 ? parcalar.join(", ") : serverT("gate.none");
 }
 
 /**
@@ -63,16 +65,16 @@ export function evaluateGate(
   current: VulnCounts | null,
 ): GateVerdict {
   if (mode === "kapali") {
-    return { allowed: true, reason: `Tarama: ${ozet(fresh)} (kapı kapalı, engellenmiyor).` };
+    return { allowed: true, reason: serverT("gate.off", { summary: ozet(fresh) }) };
   }
 
   if (mode === "kritik") {
     return fresh.critical > 0
       ? {
           allowed: false,
-          reason: `Yeni imajda ${fresh.critical} kritik açık var (${ozet(fresh)}).`,
+          reason: serverT("gate.criticalFound", { count: fresh.critical, summary: ozet(fresh) }),
         }
-      : { allowed: true, reason: `Kritik açık yok (${ozet(fresh)}).` };
+      : { allowed: true, reason: serverT("gate.noCritical", { summary: ozet(fresh) }) };
   }
 
   if (mode === "kritik_yuksek") {
@@ -80,9 +82,9 @@ export function evaluateGate(
     return engel > 0
       ? {
           allowed: false,
-          reason: `Yeni imajda ${engel} kritik/yüksek açık var (${ozet(fresh)}).`,
+          reason: serverT("gate.criticalHighFound", { count: engel, summary: ozet(fresh) }),
         }
-      : { allowed: true, reason: `Kritik ya da yüksek açık yok (${ozet(fresh)}).` };
+      : { allowed: true, reason: serverT("gate.noCriticalHigh", { summary: ozet(fresh) }) };
   }
 
   // daha_kotu
@@ -92,9 +94,7 @@ export function evaluateGate(
     // hâle getirirdi.
     return {
       allowed: true,
-      reason:
-        `Mevcut imajın taraması yok, karşılaştırma yapılamadı — engellenmedi. ` +
-        `Yeni imaj: ${ozet(fresh)}.`,
+      reason: serverT("gate.noBaseline", { summary: ozet(fresh) }),
     };
   }
 
@@ -104,9 +104,12 @@ export function evaluateGate(
   if (yeni > eski) {
     return {
       allowed: false,
-      reason:
-        `Yeni imaj daha fazla açık taşıyor: ${yeni} (${ozet(fresh)}) ` +
-        `↔ mevcut ${eski} (${ozet(current)}).`,
+      reason: serverT("gate.worse", {
+        new: yeni,
+        newSummary: ozet(fresh),
+        old: eski,
+        oldSummary: ozet(current),
+      }),
     };
   }
 
@@ -114,7 +117,7 @@ export function evaluateGate(
     allowed: true,
     reason:
       yeni < eski
-        ? `İyileşme: ${eski} açıktan ${yeni} açığa (${ozet(fresh)}).`
-        : `Açık sayısı değişmedi: ${yeni} (${ozet(fresh)}).`,
+        ? serverT("gate.better", { old: eski, new: yeni, summary: ozet(fresh) })
+        : serverT("gate.same", { new: yeni, summary: ozet(fresh) }),
   };
 }

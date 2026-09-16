@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { getNumber, getString } from "@/lib/settings";
@@ -120,12 +121,12 @@ export async function backupStatus(): Promise<BackupStatus> {
       stale: tooOld(newerOf(newestAt, engineLastRunAt)),
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "klasör okunamadı";
+    const message = error instanceof Error ? error.message : serverT("backupWatch.unreadable");
     return {
       ...base,
       // Okunamayan klasör "yedek yok" ile aynı şey değil; ayrı söylenmeli.
       error: message.includes("ENOENT")
-        ? `Klasör bulunamadı: ${dir} (host kökü ${HOST_ROOT} altına bağlı mı?)`
+        ? serverT("backupWatch.notFound", { dir, root: HOST_ROOT })
         : message,
     };
   }

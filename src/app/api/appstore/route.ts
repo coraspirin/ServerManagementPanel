@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import {
   installComposeStack,
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const actor = { username: guard.session.user.username, userId: guard.session.user.id };
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
     if (!doc) {
       return Response.json({
         ok: false,
-        error: `YAML okunamadı: ${error}`,
+        error: serverT("api.compose.yamlError", { error: String(error) }),
         findings: [],
         services: [],
       });
@@ -108,7 +109,7 @@ export async function POST(request: Request) {
         panelPorts: panelPorts(),
         networks,
         containerNames,
-      }),
+      }, serverT),
       services: readAllServices(doc),
       compose: stringifyCompose(doc),
     });
@@ -145,5 +146,5 @@ export async function POST(request: Request) {
     );
   }
 
-  return Response.json({ error: "Bilinmeyen işlem." }, { status: 400 });
+  return Response.json({ error: serverT("api.unknownAction") }, { status: 400 });
 }

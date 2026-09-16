@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { METRIC_META, isRangeId } from "@/lib/metrics/catalog";
 import { querySeriesForRange } from "@/lib/metrics/query";
@@ -28,17 +29,17 @@ export async function GET(request: Request) {
   const unknown = requested.filter((metric) => !(metric in METRIC_META));
   if (unknown.length > 0) {
     return Response.json(
-      { error: `bilinmeyen metrik: ${unknown.join(", ")}` },
+      { error: serverT("api.unknownMetric", { names: unknown.join(", ") }) },
       { status: 400 },
     );
   }
   if (requested.length === 0) {
-    return Response.json({ error: "metrics parametresi gerekli" }, { status: 400 });
+    return Response.json({ error: serverT("api.metricsRequired") }, { status: 400 });
   }
 
   const range = params.get("range") ?? "24h";
   if (!isRangeId(range)) {
-    return Response.json({ error: "geçersiz aralık" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRange") }, { status: 400 });
   }
 
   // `label` isteğe bağlı: etiketli metriklerde tek bir kaynağın (container,

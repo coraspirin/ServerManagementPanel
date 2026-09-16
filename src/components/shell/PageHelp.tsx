@@ -7,8 +7,8 @@ import { Modal } from "@/components/Modal";
 import { helpFor } from "@/lib/help";
 import { settingGroups } from "@/settings.schema";
 import { useDict, useT } from "@/lib/i18n/client";
-import { settingsGroupText } from "@/lib/i18n/runtime";
-import type { Dictionary } from "@/lib/i18n/dict/tr";
+import { settingsGroupText } from "@/lib/i18n/lookup";
+import type { Dictionary } from "@/lib/i18n/locales";
 
 /**
  * Sayfa yardımı — başlık çubuğundaki "?" düğmesi.

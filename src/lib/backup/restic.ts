@@ -1,4 +1,5 @@
 import "server-only";
+import { serverT } from "@/lib/i18n/runtime";
 
 import { getDockerProvider } from "@/lib/providers";
 import { getNumber, getString } from "@/lib/settings";
@@ -80,7 +81,7 @@ export async function checkRepo(repo: RepoSecrets): Promise<RepoCheck> {
   const result = await resticRun(repo, ["cat", "config"], [], "panel-restic-check");
 
   if (result.exitCode === 0) {
-    return { ok: true, initialized: true, message: "Depo açıldı." };
+    return { ok: true, initialized: true, message: serverT("resticLib.opened") };
   }
 
   const output = result.output.toLowerCase();
@@ -88,11 +89,11 @@ export async function checkRepo(repo: RepoSecrets): Promise<RepoCheck> {
     return {
       ok: false,
       initialized: false,
-      message: "Depo henüz oluşturulmamış. 'Depoyu oluştur' ile başlatabilirsin.",
+      message: serverT("resticLib.notInitialized"),
     };
   }
   if (output.includes("wrong password") || output.includes("invalid password")) {
-    return { ok: false, initialized: true, message: "Depo parolası hatalı." };
+    return { ok: false, initialized: true, message: serverT("resticLib.wrongPassword") };
   }
 
   return { ok: false, initialized: false, message: result.output.slice(0, 500) };
@@ -101,10 +102,10 @@ export async function checkRepo(repo: RepoSecrets): Promise<RepoCheck> {
 export async function initRepo(repo: RepoSecrets): Promise<RepoCheck> {
   const result = await resticRun(repo, ["init"], [], "panel-restic-init");
   if (result.exitCode === 0) {
-    return { ok: true, initialized: true, message: "Depo oluşturuldu." };
+    return { ok: true, initialized: true, message: serverT("resticLib.created") };
   }
   if (result.output.toLowerCase().includes("already initialized")) {
-    return { ok: true, initialized: true, message: "Depo zaten oluşturulmuş." };
+    return { ok: true, initialized: true, message: serverT("resticLib.alreadyCreated") };
   }
   return { ok: false, initialized: false, message: result.output.slice(0, 500) };
 }

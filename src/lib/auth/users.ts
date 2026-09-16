@@ -2,6 +2,7 @@ import "server-only";
 
 import { getDb } from "@/lib/db/client";
 import { hashPassword, hashToken } from "@/lib/crypto";
+import { serverT } from "@/lib/i18n/runtime";
 import { destroyAllSessionsForUser } from "./session";
 import type { PermissionKey } from "./types";
 
@@ -65,9 +66,9 @@ const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{1,31}$/i;
 
 /** Parola kuralı tek yerde: hem oluşturma hem sıfırlama aynı eşiği görsün. */
 export function passwordProblem(password: string): string | null {
-  if (password.length < 10) return "Parola en az 10 karakter olmalı.";
+  if (password.length < 10) return serverT("usersLib.passwordLength");
   if (!/[a-zA-Z]/.test(password) || !/\d/.test(password)) {
-    return "Parola en az bir harf ve bir rakam içermeli.";
+    return serverT("usersLib.passwordMix");
   }
   return null;
 }
@@ -223,7 +224,7 @@ export function createUser(input: {
   if (!USERNAME_RE.test(username)) {
     return {
       ok: false,
-      error: "Kullanıcı adı 2-32 karakter olmalı; harf/rakam ile başlayıp . _ - içerebilir.",
+      error: serverT("usersLib.usernameFormat"),
     };
   }
 
@@ -232,10 +233,10 @@ export function createUser(input: {
 
   const db = getDb();
   const role = db.prepare("SELECT id FROM roles WHERE id = ?").get(input.roleId);
-  if (!role) return { ok: false, error: "Rol bulunamadı." };
+  if (!role) return { ok: false, error: serverT("usersLib.roleMissing") };
 
   const clash = db.prepare("SELECT id FROM users WHERE username = ?").get(username);
-  if (clash) return { ok: false, error: "Bu kullanıcı adı zaten var." };
+  if (clash) return { ok: false, error: serverT("usersLib.usernameTaken") };
 
   const info = db
     .prepare(
@@ -251,7 +252,7 @@ export function createUser(input: {
     );
 
   const created = listUsers().find((user) => user.id === Number(info.lastInsertRowid));
-  return created ? { ok: true, result: created } : { ok: false, error: "Kullanıcı okunamadı." };
+  return created ? { ok: true, result: created } : { ok: false, error: serverT("usersLib.userUnreadable") };
 }
 
 export function updateUser(
@@ -262,13 +263,13 @@ export function updateUser(
   const user = db.prepare("SELECT id, role_id, is_active FROM users WHERE id = ?").get(id) as
     | { id: number; role_id: number; is_active: number }
     | undefined;
-  if (!user) return { ok: false, error: "Kullanıcı bulunamadı." };
+  if (!user) return { ok: false, error: serverT("usersLib.userMissing") };
 
   const nextRoleId = input.roleId ?? Number(user.role_id);
   const nextActive = input.isActive ?? Number(user.is_active) === 1;
 
   if (input.roleId !== undefined && !db.prepare("SELECT id FROM roles WHERE id = ?").get(input.roleId)) {
-    return { ok: false, error: "Rol bulunamadı." };
+    return { ok: false, error: serverT("usersLib.roleMissing") };
   }
 
   // Bu kullanıcı değişiklikten sonra hâlâ admin sayılacak mı?
@@ -276,9 +277,7 @@ export function updateUser(
   if (!staysAdmin && adminCount(id) === 0) {
     return {
       ok: false,
-      error:
-        "Bu, kullanıcı yönetimi yetkisi olan tek aktif hesap. Rolünü düşürmek ya da " +
-        "pasifleştirmek paneli yönetilemez hâle getirirdi.",
+      error: serverT("usersLib.lastAdminDemote"),
     };
   }
 
@@ -295,18 +294,18 @@ export function updateUser(
   if (!nextActive || nextRoleId !== Number(user.role_id)) destroyAllSessionsForUser(id);
 
   const updated = listUsers().find((entry) => entry.id === id);
-  return updated ? { ok: true, result: updated } : { ok: false, error: "Kullanıcı okunamadı." };
+  return updated ? { ok: true, result: updated } : { ok: false, error: serverT("usersLib.userUnreadable") };
 }
 
 export function deleteUser(id: number): Outcome<{ id: number }> {
   const db = getDb();
   const user = db.prepare("SELECT id FROM users WHERE id = ?").get(id);
-  if (!user) return { ok: false, error: "Kullanıcı bulunamadı." };
+  if (!user) return { ok: false, error: serverT("usersLib.userMissing") };
 
   if (adminCount(id) === 0) {
     return {
       ok: false,
-      error: "Kullanıcı yönetimi yetkisi olan son aktif hesap silinemez.",
+      error: serverT("usersLib.lastAdminDelete"),
     };
   }
 
@@ -330,7 +329,7 @@ export function resetPassword(
     )
     .run(hashPassword(password), mustChange ? 1 : 0, id);
 
-  if (Number(info.changes) === 0) return { ok: false, error: "Kullanıcı bulunamadı." };
+  if (Number(info.changes) === 0) return { ok: false, error: serverT("usersLib.userMissing") };
 
   // Parolayı yönetici sıfırladıysa eski oturumlar da kapanmalı: sıfırlama
   // sebebi genelde "hesap ele geçti" olur.
@@ -344,7 +343,7 @@ export function unlockUser(id: number): Outcome<{ id: number }> {
     .run(id);
   return Number(info.changes) > 0
     ? { ok: true, result: { id } }
-    : { ok: false, error: "Kullanıcı bulunamadı." };
+    : { ok: false, error: serverT("usersLib.userMissing") };
 }
 
 /** 2FA'yı yönetici kapatır: telefonunu kaybeden kullanıcının tek kurtuluşu. */
@@ -353,7 +352,7 @@ export function disableTotpFor(id: number): Outcome<{ id: number }> {
   const info = db
     .prepare("UPDATE users SET totp_enabled = 0, totp_secret = '' WHERE id = ?")
     .run(id);
-  if (Number(info.changes) === 0) return { ok: false, error: "Kullanıcı bulunamadı." };
+  if (Number(info.changes) === 0) return { ok: false, error: serverT("usersLib.userMissing") };
   db.prepare("DELETE FROM recovery_codes WHERE user_id = ?").run(id);
   return { ok: true, result: { id } };
 }
@@ -372,11 +371,11 @@ export function createRole(input: {
   permissions: string[];
 }): Outcome<ManagedRole> {
   const name = input.name.trim();
-  if (!ROLE_NAME_RE.test(name)) return { ok: false, error: "Rol adı 2-32 karakter olmalı." };
+  if (!ROLE_NAME_RE.test(name)) return { ok: false, error: serverT("usersLib.roleNameLength") };
 
   const db = getDb();
   if (db.prepare("SELECT id FROM roles WHERE name = ?").get(name)) {
-    return { ok: false, error: "Bu rol adı zaten var." };
+    return { ok: false, error: serverT("usersLib.roleNameTaken") };
   }
 
   const info = db
@@ -387,7 +386,7 @@ export function createRole(input: {
   applyPermissions(roleId, input.permissions);
 
   const created = listRoles().find((role) => role.id === roleId);
-  return created ? { ok: true, result: created } : { ok: false, error: "Rol okunamadı." };
+  return created ? { ok: true, result: created } : { ok: false, error: serverT("usersLib.roleUnreadable") };
 }
 
 function applyPermissions(roleId: number, permissions: string[]): void {
@@ -415,10 +414,10 @@ export function updateRole(
   const role = db.prepare("SELECT id, name, is_system FROM roles WHERE id = ?").get(id) as
     | { id: number; name: string; is_system: number }
     | undefined;
-  if (!role) return { ok: false, error: "Rol bulunamadı." };
+  if (!role) return { ok: false, error: serverT("usersLib.roleMissing") };
 
   if (input.name !== undefined && Number(role.is_system) === 1 && input.name.trim() !== role.name) {
-    return { ok: false, error: "Sistem rolünün adı değiştirilemez; izinleri düzenlenebilir." };
+    return { ok: false, error: serverT("usersLib.systemRoleRename") };
   }
 
   if (input.permissions !== undefined) {
@@ -437,9 +436,7 @@ export function updateRole(
       if (Number(others.n) === 0) {
         return {
           ok: false,
-          error:
-            "Bu rol, kullanıcı yönetimi yetkisi kalan tek rol. İzni kaldırmak paneli " +
-            "yönetilemez hâle getirirdi.",
+          error: serverT("usersLib.lastAdminRole"),
         };
       }
     }
@@ -463,7 +460,7 @@ export function updateRole(
   }
 
   const updated = listRoles().find((entry) => entry.id === id);
-  return updated ? { ok: true, result: updated } : { ok: false, error: "Rol okunamadı." };
+  return updated ? { ok: true, result: updated } : { ok: false, error: serverT("usersLib.roleUnreadable") };
 }
 
 export function deleteRole(id: number): Outcome<{ id: number }> {
@@ -471,8 +468,8 @@ export function deleteRole(id: number): Outcome<{ id: number }> {
   const role = db.prepare("SELECT id, is_system FROM roles WHERE id = ?").get(id) as
     | { id: number; is_system: number }
     | undefined;
-  if (!role) return { ok: false, error: "Rol bulunamadı." };
-  if (Number(role.is_system) === 1) return { ok: false, error: "Sistem rolü silinemez." };
+  if (!role) return { ok: false, error: serverT("usersLib.roleMissing") };
+  if (Number(role.is_system) === 1) return { ok: false, error: serverT("usersLib.systemRoleDelete") };
 
   const users = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role_id = ?").get(id) as {
     n: number;
@@ -480,7 +477,7 @@ export function deleteRole(id: number): Outcome<{ id: number }> {
   if (Number(users.n) > 0) {
     return {
       ok: false,
-      error: `Bu rolü ${users.n} kullanıcı kullanıyor. Önce onları başka bir role taşı.`,
+      error: serverT("usersLib.roleInUse", { count: users.n }),
     };
   }
 

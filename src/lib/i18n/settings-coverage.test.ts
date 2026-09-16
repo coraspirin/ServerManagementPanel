@@ -1,11 +1,10 @@
 /**
- * Şema ile sözlüğün ÖRTÜŞMESİ.
+ * Şema ile KAYNAK dil dosyasının örtüşmesi.
  *
- * Tip denetimi İngilizcenin Türkçeyle aynı anahtarlara sahip olmasını garanti
- * ediyor ama şemaya yeni bir ayar eklendiğinde ikisinde de o anahtarın
- * OLMADIĞINI göremez: sözlük şemadan türemiyor, yan yana duruyor. Karşılığı
- * olmayan ayar ekranda anahtarının kendisiyle ("docker.stats_interval")
- * görünür — bu test onu derlemede değil, testte yakalar.
+ * Şemaya yeni bir ayar eklendiğinde Türkçe dosyada karşılığı yoksa ayar
+ * ekranda anahtarıyla ("docker.stats_interval") görünür — bu test onu yakalar.
+ * Diğer dillerin Türkçeyle aynı anahtarlara sahip olması ayrı denetim:
+ * `locales-coverage.test.ts`.
  *
  * Şema yalnızca tip içe aktarıyor, bu yüzden test koşucusu altında da
  * yüklenebiliyor.
@@ -15,53 +14,47 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import { settingDefs, settingGroups } from "../../settings.schema.ts";
-import { tr } from "./dict/tr/index.ts";
-import { en } from "./dict/en/index.ts";
+import { rawLocale } from "../../locales/index.ts";
 
-const DILLER = [
-  ["tr", tr],
-  ["en", en],
-] as const;
+const tr = rawLocale("tr") ?? {};
 
-describe("ayar sözlüğü", () => {
-  for (const [ad, dict] of DILLER) {
-    it(`${ad}: her ayarın adı var`, () => {
-      const eksik = settingDefs
-        .filter((def) => !(def.key in dict.settings.items))
-        .map((def) => def.key);
-      assert.deepEqual(eksik, [], `sözlükte karşılığı olmayan ayar: ${eksik.join(", ")}`);
-    });
+describe("ayar metinleri (kaynak dil)", () => {
+  it("her ayarın adı var", () => {
+    const eksik = settingDefs
+      .filter((def) => !tr[`settings.items.${def.key}.label`])
+      .map((def) => def.key);
+    assert.deepEqual(eksik, [], `dil dosyasında karşılığı olmayan ayar: ${eksik.join(", ")}`);
+  });
 
-    it(`${ad}: her kategorinin adı var`, () => {
-      const groups = dict.settings.groups as Record<string, unknown>;
-      const eksik = settingGroups.filter((g) => !(g.key in groups)).map((g) => g.key);
-      assert.deepEqual(eksik, []);
-    });
+  it("her kategorinin adı var", () => {
+    const eksik = settingGroups
+      .filter((g) => !tr[`settings.groups.${g.key}.label`])
+      .map((g) => g.key);
+    assert.deepEqual(eksik, []);
+  });
 
-    it(`${ad}: her bölüm başlığının karşılığı var`, () => {
-      const sections = dict.settings.sections as Record<string, unknown>;
-      const eksik = [...new Set(settingDefs.map((d) => d.section).filter(Boolean))].filter(
-        (s) => !(String(s) in sections),
-      );
-      assert.deepEqual(eksik, []);
-    });
+  it("her bölüm başlığının karşılığı var", () => {
+    const eksik = [...new Set(settingDefs.map((d) => d.section).filter(Boolean))].filter(
+      (section) => !tr[`settings.sections.${section}`],
+    );
+    assert.deepEqual(eksik, []);
+  });
 
-    it(`${ad}: her enum seçeneğinin adı var`, () => {
-      const items = dict.settings.items as Record<string, { options?: Record<string, string> }>;
-      const eksik: string[] = [];
-      for (const def of settingDefs) {
-        if (!def.options) continue;
-        for (const value of def.options) {
-          if (!items[def.key]?.options?.[value]) eksik.push(`${def.key}.${value}`);
-        }
+  it("her enum seçeneğinin adı var", () => {
+    const eksik: string[] = [];
+    for (const def of settingDefs) {
+      for (const value of def.options ?? []) {
+        if (!tr[`settings.items.${def.key}.options.${value}`]) eksik.push(`${def.key}.${value}`);
       }
-      assert.deepEqual(eksik, []);
-    });
+    }
+    assert.deepEqual(eksik, []);
+  });
 
-    it(`${ad}: sözlükte şemada olmayan ayar yok`, () => {
-      const keys = new Set(settingDefs.map((d) => d.key));
-      const fazla = Object.keys(dict.settings.items).filter((k) => !keys.has(k));
-      assert.deepEqual(fazla, [], `şemadan silinmiş ama sözlükte duran: ${fazla.join(", ")}`);
-    });
-  }
+  it("dil dosyasında şemada olmayan ayar yok", () => {
+    const keys = new Set(settingDefs.map((d) => d.key));
+    const fazla = Object.keys(tr)
+      .map((k) => /^settings\.items\.(.+)\.label$/.exec(k)?.[1])
+      .filter((k): k is string => k !== undefined && !keys.has(k));
+    assert.deepEqual(fazla, [], `şemadan silinmiş ama dosyada duran: ${fazla.join(", ")}`);
+  });
 });

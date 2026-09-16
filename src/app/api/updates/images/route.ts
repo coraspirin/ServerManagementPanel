@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { cachedImageUpdates, refreshImageUpdates } from "@/lib/updates";
@@ -34,14 +35,14 @@ export async function POST(request: Request) {
       userId: guard.session.user.id,
       username: guard.session.user.username,
       action: "updates.image_check",
-      detail: `${updates.length} container · ${outdated} güncelleme`,
+      detail: serverT("api.updates.summary", { containers: updates.length, outdated }),
       result: "ok",
     });
 
     return Response.json({ updates, checkedAt: Math.floor(Date.now() / 1000) });
   } catch (error) {
     return Response.json(
-      { error: error instanceof Error ? error.message : "kontrol başarısız" },
+      { error: error instanceof Error ? error.message : serverT("api.updates.checkFailed") },
       { status: 502 },
     );
   }

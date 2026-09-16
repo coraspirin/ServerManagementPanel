@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { deleteCategory, listCategories, updateCategory } from "@/lib/apps/store";
@@ -17,17 +18,17 @@ export async function PATCH(request: Request, { params }: Context) {
 
   const id = Number((await params).id);
   const existing = find(id);
-  if (!existing) return Response.json({ error: "kategori bulunamadı" }, { status: 404 });
+  if (!existing) return Response.json({ error: serverT("api.notFound.category") }, { status: 404 });
 
   let body: { name?: unknown; icon?: unknown };
   try {
     body = (await request.json()) as typeof body;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   const name = String(body.name ?? "").trim();
-  if (!name) return Response.json({ error: "Kategori adı boş olamaz." }, { status: 400 });
+  if (!name) return Response.json({ error: serverT("api.apps.categoryNameEmpty") }, { status: 400 });
 
   updateCategory(id, name, String(body.icon ?? ""));
 
@@ -51,7 +52,7 @@ export async function DELETE(request: Request, { params }: Context) {
 
   const id = Number((await params).id);
   const existing = find(id);
-  if (!existing) return Response.json({ error: "kategori bulunamadı" }, { status: 404 });
+  if (!existing) return Response.json({ error: serverT("api.notFound.category") }, { status: 404 });
 
   deleteCategory(id);
 

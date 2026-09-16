@@ -18,6 +18,10 @@
  */
 
 import type { ServiceConfig } from "../compose/service.ts";
+// Yalnızca TİP. Metinler çağırandan gelen `t` ile çevriliyor: bu modül hem
+// tarayıcıda hem sunucuda çalışıyor ve dil dosyası içe aktarmak tüm dilleri
+// istemci paketine taşırdı.
+import type { MessageKey, TFunction } from "../i18n/translate.ts";
 
 export type PortMapping = {
   /** Host'ta yayınlanan port; boşsa port yalnızca container içinde açık. */
@@ -40,11 +44,11 @@ export type KeyValue = { key: string; value: string };
 
 export type RestartPolicyName = "no" | "always" | "unless-stopped" | "on-failure";
 
-export const RESTART_POLICIES: { value: RestartPolicyName; label: string }[] = [
-  { value: "unless-stopped", label: "Elle durdurulana kadar (unless-stopped)" },
-  { value: "always", label: "Her zaman (always)" },
-  { value: "on-failure", label: "Hata olursa (on-failure)" },
-  { value: "no", label: "Yeniden başlatma (no)" },
+export const RESTART_POLICIES: { value: RestartPolicyName; labelKey: MessageKey }[] = [
+  { value: "unless-stopped", labelKey: "docker.spec.restart.unless-stopped" },
+  { value: "always", labelKey: "docker.spec.restart.always" },
+  { value: "on-failure", labelKey: "docker.spec.restart.on-failure" },
+  { value: "no", labelKey: "docker.spec.restart.no" },
 ];
 
 export type ContainerSpec = {
@@ -106,36 +110,36 @@ export const CONTAINER_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/;
  * geri bildirim için, sunucuda kontrol etmek doğruluk için. İkisini ayrı
  * yazmak, birinin diğerinden ayrışması demekti.
  */
-export function specProblem(spec: ContainerSpec): string | null {
-  if (!spec.name.trim()) return "Container adı gerekli.";
+export function specProblem(spec: ContainerSpec, t: TFunction): string | null {
+  if (!spec.name.trim()) return t("docker.spec.nameRequired");
   if (!CONTAINER_NAME_RE.test(spec.name.trim())) {
-    return "Container adı harf ya da rakamla başlamalı; harf, rakam, nokta, tire ve alt çizgi içerebilir.";
+    return t("docker.spec.nameInvalid");
   }
-  if (!spec.image.trim()) return "Image gerekli.";
+  if (!spec.image.trim()) return t("docker.spec.imageRequired");
 
   for (const port of spec.ports) {
     const target = port.containerPort.trim();
     if (!/^\d{1,5}$/.test(target) || Number(target) < 1 || Number(target) > 65535) {
-      return `Geçersiz container portu: "${port.containerPort}"`;
+      return t("docker.spec.invalidContainerPort", { port: port.containerPort });
     }
     const host = port.hostPort.trim();
     if (host && (!/^\d{1,5}$/.test(host) || Number(host) < 1 || Number(host) > 65535)) {
-      return `Geçersiz host portu: "${port.hostPort}"`;
+      return t("docker.spec.invalidHostPort", { port: port.hostPort });
     }
   }
 
   for (const mount of spec.volumes) {
     if (!mount.source.trim() || !mount.target.trim()) {
-      return "Her volume satırında hem kaynak hem hedef dolu olmalı.";
+      return t("docker.spec.volumeIncomplete");
     }
     if (!mount.target.trim().startsWith("/")) {
-      return `Container içindeki yol mutlak olmalı: "${mount.target}"`;
+      return t("docker.spec.targetNotAbsolute", { path: mount.target });
     }
   }
 
   for (const entry of spec.env) {
     if (entry.key.trim() && /[\s=]/.test(entry.key.trim())) {
-      return `Ortam değişkeni adı boşluk ya da "=" içeremez: "${entry.key}"`;
+      return t("docker.spec.envKeyInvalid", { key: entry.key });
     }
   }
 
@@ -305,6 +309,7 @@ function normalizeRestart(value: string): RestartPolicyName {
  */
 export function specFromService(
   service: ServiceConfig,
+  t: TFunction,
   containerName?: string,
 ): { spec: ContainerSpec; warnings: string[] } {
   const warnings: string[] = [];
@@ -318,7 +323,7 @@ export function specFromService(
 
   for (const port of service.ports) {
     if (port.raw !== null) {
-      warnings.push(`Port tanımı çözülemedi ve atlandı: ${port.raw}`);
+      warnings.push(t("docker.spec.portSkipped", { raw: port.raw ?? "" }));
       continue;
     }
     spec.ports.push({
@@ -332,10 +337,10 @@ export function specFromService(
   for (const line of service.volumes) {
     const mount = parseVolumeLine(line);
     if (mount) spec.volumes.push(mount);
-    else warnings.push(`Volume tanımı çözülemedi ve atlandı: ${line}`);
+    else warnings.push(t("docker.spec.volumeSkipped", { raw: line }));
   }
 
-  if (!spec.image) warnings.push("Serviste image yok; compose onu build ediyor olabilir.");
+  if (!spec.image) warnings.push(t("docker.spec.noImage"));
 
   return { spec, warnings };
 }

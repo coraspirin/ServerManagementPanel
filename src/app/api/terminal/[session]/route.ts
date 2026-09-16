@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import {
@@ -23,7 +24,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
   if (!guard.ok) return guard.response;
 
   const session = getSession((await params).session, guard.session.user.username);
-  if (!session) return Response.json({ error: "oturum bulunamadı" }, { status: 404 });
+  if (!session) return Response.json({ error: serverT("api.notFound.session") }, { status: 404 });
 
   const encoder = new TextEncoder();
   const signal = request.signal;
@@ -42,7 +43,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
       } catch (error) {
         if (!signal.aborted) {
           send("hata", {
-            message: error instanceof Error ? error.message : "terminal akışı kesildi",
+            message: error instanceof Error ? error.message : serverT("api.terminal.streamLost"),
           });
         }
       } finally {
@@ -71,18 +72,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
   if (!guard.ok) return guard.response;
 
   const session = getSession((await params).session, guard.session.user.username);
-  if (!session) return Response.json({ error: "oturum bulunamadı" }, { status: 404 });
+  if (!session) return Response.json({ error: serverT("api.notFound.session") }, { status: 404 });
   if (session.closed) {
     // Kabuk kapandıysa tuş vuruşunu sessizce yutmak yerine söylemek gerekir:
     // istemci "yazıyorum ama bir şey olmuyor" haline düşmesin.
-    return Response.json({ error: "oturum kapandı" }, { status: 409 });
+    return Response.json({ error: serverT("api.terminal.closed") }, { status: 409 });
   }
 
   let body: { data?: unknown; cols?: unknown; rows?: unknown };
   try {
     body = (await request.json()) as typeof body;
   } catch {
-    return Response.json({ error: "geçersiz istek" }, { status: 400 });
+    return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
   if (typeof body.data === "string") writeInput(session, body.data);

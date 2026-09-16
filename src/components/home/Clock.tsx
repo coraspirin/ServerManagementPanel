@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { useFormat } from "@/lib/i18n/client";
 
 /**
  * M2.7 — saat.
@@ -27,6 +28,7 @@ function snapshot(): number {
 }
 
 export function Clock({ big = false }: { big?: boolean }) {
+  const f = useFormat();
   const seconds = useSyncExternalStore(subscribe, snapshot, () => null);
   const now = seconds === null ? null : new Date(seconds * 1000);
 
@@ -37,15 +39,11 @@ export function Clock({ big = false }: { big?: boolean }) {
         // Boşken de aynı yüksekliği kaplasın; yoksa saat gelince sayfa zıplıyor.
         style={{ minHeight: "1em" }}
       >
-        {now ? now.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) : " "}
+        {now ? f.time(now) : " "}
       </div>
       <div className={`text-subtle ${big ? "mt-1 text-lg" : "text-xs"}`}>
         {now
-          ? now.toLocaleDateString("tr-TR", {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-            })
+          ? f.date(now, { weekday: "long", day: "numeric", month: "long" })
           : " "}
       </div>
     </div>

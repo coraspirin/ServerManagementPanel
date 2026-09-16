@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { statusStyle } from "@/lib/apps/types";
 import type { PublicAppCard, PublicAppGroup } from "@/lib/apps/types";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * Karşılama sayfasının kare kutu ızgarası.
@@ -50,6 +51,7 @@ function Logo({ card }: { card: PublicAppCard }) {
 }
 
 function Tile({ card }: { card: PublicAppCard }) {
+  const t = useT();
   const status = statusStyle(card);
 
   return (
@@ -63,8 +65,8 @@ function Tile({ card }: { card: PublicAppCard }) {
     >
       {status && (
         <span
-          title={status.label}
-          aria-label={status.label}
+          title={t(status.label)}
+          aria-label={t(status.label)}
           className={`absolute right-2 top-2 size-2 rounded-full ${status.dot}`}
         />
       )}

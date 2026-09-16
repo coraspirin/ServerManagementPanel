@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
 import { isSecretName } from "@/lib/text";
+import { useFormat, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 
 import { Section } from "./shared";
 
@@ -22,15 +24,16 @@ import { Section } from "./shared";
  * container'da açılıp kapanan bir kutu, aranabilir bir liste değildi.
  */
 export function EnvTab({ env }: { env: { key: string; value: string }[] }) {
+  const t = useT();
+  const f = useFormat();
   const [shown, setShown] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
 
   const secrets = env.filter((entry) => isSecretName(entry.key)).length;
-  const query = filter.trim().toLowerCase();
+  const query = f.lower(filter.trim());
   const filtered = query
     ? env.filter(
-        (entry) =>
-          entry.key.toLowerCase().includes(query) || entry.value.toLowerCase().includes(query),
+        (entry) => f.lower(entry.key).includes(query) || f.lower(entry.value).includes(query),
       )
     : env;
 
@@ -44,18 +47,18 @@ export function EnvTab({ env }: { env: { key: string; value: string }[] }) {
 
   if (env.length === 0) {
     return (
-      <Section title="Ortam değişkenleri">
-        <p className="text-sm text-subtle">Tanımlı ortam değişkeni yok.</p>
+      <Section title={t("docker.env.title")}>
+        <p className="text-sm text-subtle">{t("docker.env.empty")}</p>
       </Section>
     );
   }
 
   return (
     <Section
-      title={`Ortam değişkenleri (${env.length})`}
+      title={t("docker.env.titleCount", { count: env.length })}
       action={
         secrets > 0 ? (
-          <span className="text-xs text-warn">{secrets} tanesi maskeli</span>
+          <span className="text-xs text-warn">{t("docker.env.masked", { count: secrets })}</span>
         ) : null
       }
     >
@@ -63,17 +66,19 @@ export function EnvTab({ env }: { env: { key: string; value: string }[] }) {
         type="search"
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
-        placeholder="ada ya da değere göre ara…"
+        placeholder={t("docker.env.search")}
         className="mb-2 w-full rounded-md border border-line bg-canvas px-2.5 py-1.5 text-sm outline-none focus:border-brand"
       />
 
       <p className="mb-2 text-[11px] text-warn">
-        Maskeleme değişken <strong>adına</strong> bakar; adı ele vermeyen bir değer de parola
-        olabilir.
+        <Rich
+          text={t("docker.env.maskNote")}
+          values={{ name: <strong>{t("docker.env.maskNoteName")}</strong> }}
+        />
       </p>
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-subtle">Eşleşen değişken yok.</p>
+        <p className="text-sm text-subtle">{t("docker.env.noMatch")}</p>
       ) : (
         <ul className="space-y-0.5 break-all font-mono text-[11px]">
           {filtered.map((entry) => {
@@ -91,7 +96,7 @@ export function EnvTab({ env }: { env: { key: string; value: string }[] }) {
                   <button
                     type="button"
                     onClick={() => toggle(entry.key)}
-                    title={gizli ? "Göster" : "Gizle"}
+                    title={gizli ? t("docker.env.show") : t("docker.env.hide")}
                     className="shrink-0 text-subtle transition-colors hover:text-brand"
                   >
                     {gizli ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
@@ -104,9 +109,13 @@ export function EnvTab({ env }: { env: { key: string; value: string }[] }) {
       )}
 
       <p className="mt-3 text-xs text-subtle">
-        Buradaki değerler <strong>çalışan container&apos;a ait</strong>. Kalıcı olarak
-        değiştirmek için Compose sekmesini kullan — burada yapılacak bir değişikliği ilk{" "}
-        <code className="font-mono">compose up</code> geri alırdı.
+        <Rich
+          text={t("docker.env.runtimeNote")}
+          values={{
+            strong: <strong>{t("docker.env.runtimeOwner")}</strong>,
+            cmd: <code className="font-mono">compose up</code>,
+          }}
+        />
       </p>
     </Section>
   );

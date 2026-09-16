@@ -15,15 +15,16 @@ import { DirListEditor, DirPicker } from "@/components/settings/DirPicker";
 import { OwnerSelect } from "@/components/settings/HostUserSelect";
 import { RichTextField } from "@/components/settings/RichTextField";
 import { settingDefs, settingGroups } from "@/settings.schema";
-import { useDict, useLocale, useT } from "@/lib/i18n/client";
+import { useDict, useT } from "@/lib/i18n/client";
 import {
   settingItemText,
   settingSectionText,
+  settingOptionText,
   settingsGroupText,
   type SettingItemText,
-} from "@/lib/i18n/runtime";
-import { intlLocale, type Locale } from "@/lib/i18n/locales";
-import type { Dictionary } from "@/lib/i18n/dict/tr";
+} from "@/lib/i18n/lookup";
+import { intlOf, type Dictionary } from "@/lib/i18n/locales";
+import type { LocaleInfo } from "@/locales";
 
 /**
  * Geniş bir denetim isteyen ayar tipleri.
@@ -43,6 +44,8 @@ type Props = {
   initialValues: ResolvedSetting[];
   canEdit: boolean;
   initialQuery: string;
+  /** Kayıtlı diller — `locale` tipli ayarın seçenekleri (bkz. src/locales). */
+  locales: LocaleInfo[];
 };
 
 function readCsrfToken(): string {
@@ -54,12 +57,12 @@ function readCsrfToken(): string {
  * Arama, ekranda GÖRÜNEN metne bakar: kullanıcı ne okuduysa onu yazıyor.
  * Anahtar da aranıyor çünkü "docker.stats" gibi bir anahtarı hatırlayan da var.
  */
-function matches(def: SettingDef, query: string, dict: Dictionary, locale: Locale): boolean {
+function matches(def: SettingDef, query: string, dict: Dictionary): boolean {
   const text = settingItemText(dict, def.key);
   const section = def.section ? settingSectionText(dict, def.section) : null;
 
   return [def.key, text?.label ?? "", section ?? "", text?.help ?? ""].some((candidate) =>
-    candidate.toLocaleLowerCase(intlLocale(locale)).includes(query),
+    candidate.toLocaleLowerCase(intlOf(dict)).includes(query),
   );
 }
 
@@ -76,10 +79,10 @@ export function SettingsScreen({
   initialValues,
   canEdit,
   initialQuery,
+  locales,
 }: Props) {
   const t = useT();
   const dict = useDict();
-  const locale = useLocale();
 
   // Kategori adı sözlükten geliyor: şema artık yalnızca anahtarı tutuyor.
   // Karşılığı yoksa anahtarın kendisi gösteriliyor — boş başlıktan iyidir.
@@ -95,17 +98,17 @@ export function SettingsScreen({
   const [errors, setErrors] = useState<Map<string, string>>(new Map());
   const [saved, setSaved] = useState<string | null>(null);
 
-  const needle = query.trim().toLocaleLowerCase(intlLocale(locale));
+  const needle = query.trim().toLocaleLowerCase(intlOf(dict));
 
   const visibleSections = useMemo(() => {
     if (!needle) return sections;
     return sections
       .map((section) => ({
         ...section,
-        defs: section.defs.filter((def) => matches(def, needle, dict, locale)),
+        defs: section.defs.filter((def) => matches(def, needle, dict)),
       }))
       .filter((section) => section.defs.length > 0);
-  }, [sections, needle, dict, locale]);
+  }, [sections, needle, dict]);
 
   /**
    * Aranan şey başka bir kategorideyse kullanıcı bunu bilemez — kategori
@@ -116,13 +119,13 @@ export function SettingsScreen({
     if (!needle) return [];
     const counts = new Map<string, number>();
     for (const def of settingDefs) {
-      if (def.group === group.key || !matches(def, needle, dict, locale)) continue;
+      if (def.group === group.key || !matches(def, needle, dict)) continue;
       counts.set(def.group, (counts.get(def.group) ?? 0) + 1);
     }
     return settingGroups
       .filter((candidate) => counts.has(candidate.key))
       .map((candidate) => ({ ...candidate, count: counts.get(candidate.key) ?? 0 }));
-  }, [needle, group.key, dict, locale]);
+  }, [needle, group.key, dict]);
 
   async function send(key: string, payload: Record<string, unknown>) {
     setBusyKey(key);
@@ -280,6 +283,7 @@ export function SettingsScreen({
                     <SettingInput
                       def={def}
                       text={text}
+                      locales={locales}
                       value={resolved?.value ?? def.default}
                       disabled={!canEdit || busyKey === def.key}
                       onCommit={(value) => send(def.key, { value })}
@@ -326,6 +330,7 @@ function SettingInput({
   value,
   disabled,
   onCommit,
+  locales,
 }: {
   def: SettingDef;
   /** Ayarın çevrilmiş metni: başlık, birim ve enum seçeneklerinin adları. */
@@ -333,8 +338,10 @@ function SettingInput({
   value: string | number | boolean;
   disabled: boolean;
   onCommit: (value: string | number | boolean) => void;
+  locales: LocaleInfo[];
 }) {
   const t = useT();
+  const dict = useDict();
   const [draft, setDraft] = useState(String(value));
   const inputClass =
     "w-full rounded-md border border-line bg-canvas px-2 py-1.5 text-sm outline-none focus:border-brand disabled:opacity-50 sm:w-40";
@@ -401,6 +408,27 @@ function SettingInput({
     );
   }
 
+  // Dil listesi kayıttan geliyor; taslak bir dil seçilebilir ama öyle olduğu
+  // yazıyor — çevrilmemiş metinler Türkçe görünecek.
+  if (def.type === "locale") {
+    return (
+      <select
+        value={String(value)}
+        disabled={disabled}
+        onChange={(e) => onCommit(e.target.value)}
+        className={inputClass}
+      >
+        {locales.map((locale) => (
+          <option key={locale.code} value={locale.code}>
+            {locale.draft
+              ? t("settings.screen.draftLocale", { name: locale.name })
+              : locale.name}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
   if (def.type === "enum") {
     return (
       <select
@@ -411,7 +439,7 @@ function SettingInput({
       >
         {def.options?.map((option) => (
           <option key={option} value={option}>
-            {text?.options?.[option] ?? option}
+            {settingOptionText(dict, def.key, option) ?? option}
           </option>
         ))}
       </select>

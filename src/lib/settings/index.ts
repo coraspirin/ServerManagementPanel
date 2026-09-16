@@ -6,6 +6,7 @@ import { audit } from "@/lib/auth/audit";
 import { sanitizeRichText } from "@/lib/richtext";
 import { findSetting, settingDefs } from "@/settings.schema";
 import { serverT } from "@/lib/i18n/runtime";
+import { isLocale } from "@/locales";
 import type { ResolvedSetting, SettingDef, SettingScope } from "./types";
 
 /**
@@ -72,6 +73,8 @@ export function validateValue(def: SettingDef, value: unknown): string | null {
       return def.options?.includes(String(value))
         ? null
         : serverT("settings.validation.enum");
+    case "locale":
+      return isLocale(value) ? null : serverT("settings.validation.locale");
     case "cron": {
       const parts = String(value).trim().split(/\s+/);
       return parts.length === 5 ? null : serverT("settings.validation.cron");
@@ -251,7 +254,7 @@ export function setSetting(
     targetId: scopeId || key,
     detail:
       def.type === "secret"
-        ? `${key}: (gizli değer güncellendi)`
+        ? serverT("settingsLib.secretUpdated", { key })
         : `${key}: ${previous} → ${String(value)}`,
   });
 
@@ -274,7 +277,7 @@ export function resetSetting(
     username: options.updatedBy,
     action: "settings.reset",
     targetId: key,
-    detail: `varsayılana döndürüldü (${String(def.default)})`,
+    detail: serverT("settingsLib.reset", { value: String(def.default) }),
   });
 
   return { ok: true };

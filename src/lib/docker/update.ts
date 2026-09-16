@@ -3,6 +3,7 @@ import { imageConfig, inheritEnv, inheritLabels } from "./inherit";
 // Etiket ayrıştırması ortak modülde (M3.39): kayıt defteri portunu etiket
 // sanmamak gibi ince kurallar üç yerde kopyalanmıştı.
 import { splitReference } from "./reference";
+import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 import { evaluateGate, isGateMode, type GateMode } from "@/lib/security/gate";
 import { latestScans, scanImage } from "@/lib/security/vuln";
@@ -105,7 +106,7 @@ export async function updateContainerImage(
   };
 
   const raw = (await provider.inspectRaw(containerId)) as RawInspect | null;
-  if (!raw) throw new Error("container bulunamadı");
+  if (!raw) throw new Error(serverT("dockerUpdate.notFound"));
 
   const name = raw.Name.replace(/^\//, "");
 
@@ -122,38 +123,30 @@ export async function updateContainerImage(
     Tek geçiş noktası burası olduğu için kilit de burada.
   */
   if (name === panelContainerName()) {
-    throw new Error(
-      "Panelin kendi container'ı panelden güncellenemez — güncelleme paneli kendi " +
-        "ortasında durdurur. Sunucuda elle: docker compose pull && docker compose up -d",
-    );
+    throw new Error(serverT("dockerUpdate.selfUpdate"));
   }
 
   const caddy = getString("proxy.caddy_container").trim();
   if (caddy && name === caddy) {
-    throw new Error(
-      `${caddy} reverse proxy container'ı panelden güncellenemez — güncelleme sırasında ` +
-        "panele giden yol kesilir. Sunucuda elle güncelle.",
-    );
+    throw new Error(serverT("dockerUpdate.proxyUpdate", { name: caddy }));
   }
 
   const reference = raw.Config.Image;
-  if (!reference) throw new Error("container'ın image etiketi okunamadı");
+  if (!reference) throw new Error(serverT("dockerUpdate.noTag"));
   if (reference.includes("@")) {
-    throw new Error(
-      "image bir digest'e sabitlenmiş — güncelleme için önce etikete geçilmeli",
-    );
+    throw new Error(serverT("dockerUpdate.digestPinned"));
   }
 
   const oldImageId = raw.Image;
 
-  record("çekiliyor", reference);
+  record(serverT("dockerUpdate.step.pulling"), reference);
   for await (const line of provider.pullImage(reference)) {
     // Her satırı kaydetmek yüzlerce adım demek; yalnızca çağırana iletiliyor.
-    onStep?.({ step: "indiriliyor", detail: line });
+    onStep?.({ step: serverT("dockerUpdate.step.downloading"), detail: line });
   }
 
   const pulled = await provider.inspect(name);
-  if (!pulled) throw new Error("container güncelleme sırasında kayboldu");
+  if (!pulled) throw new Error(serverT("dockerUpdate.vanished"));
 
   // Yeni image id'sini container listesinden değil, image listesinden alıyoruz:
   // container hâlâ eski image'ı kullanıyor.
@@ -162,7 +155,7 @@ export async function updateContainerImage(
   const newImageId = newImage?.id ?? oldImageId;
 
   if (newImageId === oldImageId) {
-    record("güncel", "kayıt defterindeki sürüm zaten kurulu");
+    record(serverT("dockerUpdate.step.upToDate"), serverT("dockerUpdate.alreadyInstalled"));
     return { container: name, oldImageId, newImageId, changed: false, steps };
   }
 
@@ -187,7 +180,7 @@ export async function updateContainerImage(
 
   if (parts && mode !== "kapali") {
     pendingTag = `${parts.repo}:${parts.tag}-panel-bekliyor`;
-    record("etiket korumaya alınıyor", pendingTag);
+    record(serverT("dockerUpdate.step.protectingTag"), pendingTag);
 
     try {
       // Sıra önemli: önce YENİ imaja geçici etiket, sonra ESKİ imajı asıl
@@ -197,8 +190,8 @@ export async function updateContainerImage(
       await provider.tagImage(oldImageId, parts.repo, parts.tag);
     } catch (error) {
       record(
-        "etiket koruması kurulamadı",
-        error instanceof Error ? error.message : "bilinmeyen hata",
+        serverT("dockerUpdate.step.tagProtectionFailed"),
+        error instanceof Error ? error.message : serverT("console.unknownError"),
       );
       pendingTag = null;
     }
@@ -210,13 +203,12 @@ export async function updateContainerImage(
     // kullanıcı bunu bilmeli.
     if (pendingTag === null) {
       record(
-        "güvenlik ağı yok",
-        "etiket koruması kurulamadı; tarama yapılıyor ama başarısız olursa " +
-          "etiket yeni imajda kalır",
+        serverT("dockerUpdate.step.noSafetyNet"),
+        serverT("dockerUpdate.noSafetyNetDetail"),
       );
     }
 
-    record("taranıyor", pendingTag ?? reference);
+    record(serverT("dockerUpdate.step.scanning"), pendingTag ?? reference);
     const fresh = await scanImage(pendingTag ?? reference);
     const current = latestScans().find((row) => row.image === reference && row.ok) ?? null;
 
@@ -227,12 +219,12 @@ export async function updateContainerImage(
     );
 
     if (!verdict.allowed) {
-      record("engellendi", verdict.reason);
+      record(serverT("dockerUpdate.step.blocked"), verdict.reason);
 
       // Yeni imajı ve geçici etiketini temizle; container'a hiç dokunulmadı.
       if (pendingTag) {
         await provider.removeResource("image", pendingTag, true).catch(() => {
-          record("temizlenemedi", `${pendingTag} elle silinmeli`);
+          record(serverT("dockerUpdate.step.cleanupFailed"), serverT("dockerUpdate.removeManually", { tag: pendingTag ?? "" }));
         });
       }
 
@@ -247,7 +239,7 @@ export async function updateContainerImage(
       };
     }
 
-    record("güvenlik kontrolü geçildi", verdict.reason);
+    record(serverT("dockerUpdate.step.gatePassed"), verdict.reason);
 
     // Onaylandı: asıl etiketi yeni imaja taşı, geçiciyi kaldır.
     if (pendingTag && parts) {
@@ -265,12 +257,12 @@ export async function updateContainerImage(
 
   // Eski container'ı önce durdur: aynı portu dinleyen iki container aynı anda
   // ayakta olamaz ve yenisi "port zaten kullanımda" ile patlar.
-  record("durduruluyor", name);
+  record(serverT("dockerUpdate.step.stopping"), name);
   await provider.action(raw.Id, "stop", stopTimeout).catch(() => {
     // Zaten durmuşsa sorun değil.
   });
 
-  record("yedekleniyor", backupName);
+  record(serverT("dockerUpdate.step.backingUp"), backupName);
   await provider.removeContainer(backupName, true).catch(() => {
     // Önceki bir güncellemeden kalmış yedek varsa temizlenir.
   });
@@ -321,35 +313,35 @@ export async function updateContainerImage(
   let newId: string | null = null;
 
   try {
-    record("oluşturuluyor", `${name} → ${reference}`);
+    record(serverT("dockerUpdate.step.creating"), `${name} → ${reference}`);
     newId = await provider.createContainer(name, payload);
 
     // Docker `create` sırasında yalnızca tek ağ kabul eder; gerisi sonradan
     // bağlanır. Birden çok ağdaki bir container'da bu adım atlanırsa servis
     // yarısı erişilebilir halde kalırdı.
     for (const [networkName, endpoint] of restNetworks) {
-      record("ağa bağlanıyor", networkName);
+      record(serverT("dockerUpdate.step.connectingNetwork"), networkName);
       await provider.connectNetwork(networkName, newId, cleanEndpoint(endpoint, shortId));
     }
 
-    record("başlatılıyor", name);
+    record(serverT("dockerUpdate.step.starting"), name);
     await provider.action(newId, "start", stopTimeout);
 
-    record("doğrulanıyor", `${healthWait} sn`);
+    record(serverT("dockerUpdate.step.verifying"), serverT("dockerUpdate.seconds", { count: healthWait }));
     const ok = await waitHealthy(newId, healthWait);
-    if (!ok) throw new Error("yeni container ayakta kalamadı");
+    if (!ok) throw new Error(serverT("dockerUpdate.unhealthy"));
 
-    record("yedek siliniyor", backupName);
+    record(serverT("dockerUpdate.step.removingBackup"), backupName);
     await provider.removeContainer(backupName, true);
 
     return { container: name, oldImageId, newImageId, changed: true, steps };
   } catch (error) {
     // Geri alma: yeni container'ı kaldır, eskisini eski adıyla geri getir.
-    record("GERİ ALINIYOR", error instanceof Error ? error.message : "bilinmeyen hata");
+    record(serverT("dockerUpdate.step.rollingBack"), error instanceof Error ? error.message : serverT("console.unknownError"));
     if (newId) await provider.removeContainer(newId, true).catch(() => {});
     await provider.renameContainer(backupName, name).catch(() => {});
     await provider.action(backupName, "start", stopTimeout).catch(() => {});
-    throw error instanceof Error ? error : new Error("güncelleme başarısız");
+    throw error instanceof Error ? error : new Error(serverT("dockerUpdate.failed"));
   }
 }
 

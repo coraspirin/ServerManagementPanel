@@ -12,7 +12,8 @@ import {
   type Series,
   type SeriesResult,
 } from "@/lib/metrics/catalog";
-import { useDict } from "@/lib/i18n/client";
+import { useDict, useT } from "@/lib/i18n/client";
+import { Rich } from "@/lib/i18n/rich";
 import { countersToRates } from "@/lib/metrics/rates";
 
 import { Section } from "./shared";
@@ -34,6 +35,7 @@ import { Section } from "./shared";
  */
 export function ResourcesTab({ containerName }: { containerName: string }) {
   const dict = useDict();
+  const t = useT();
   const [range, setRange] = useState<RangeId>("6h");
   const [data, setData] = useState<SeriesResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,17 +49,17 @@ export function ResourcesTab({ containerName }: { containerName: string }) {
       const response = await fetch(url, { cache: "no-store" });
       const payload = await response.json();
       if (!response.ok) {
-        setError(payload.error ?? "Ölçümler okunamadı.");
+        setError(payload.error ?? t("docker.resourcesTab.loadFailed"));
         return;
       }
       setError(null);
       setData(payload as SeriesResult);
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
-  }, [url]);
+  }, [url, t]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -65,21 +67,21 @@ export function ResourcesTab({ containerName }: { containerName: string }) {
       try {
         const response = await fetch(url, { cache: "no-store", signal: controller.signal });
         const payload = await response.json();
-        if (!response.ok) setError(payload.error ?? "Ölçümler okunamadı.");
+        if (!response.ok) setError(payload.error ?? t("docker.resourcesTab.loadFailed"));
         else {
           setError(null);
           setData(payload as SeriesResult);
         }
       } catch (fetchError) {
-        if ((fetchError as Error)?.name !== "AbortError") setError("Sunucuya ulaşılamadı.");
+        if ((fetchError as Error)?.name !== "AbortError") setError(t("common.errors.network"));
       }
     })();
     return () => controller.abort();
-  }, [url]);
+  }, [url, t]);
 
   if (error) {
     return (
-      <Section title="Kaynak kullanımı">
+      <Section title={t("docker.resourcesTab.title")}>
         <p className="text-sm text-danger">{error}</p>
       </Section>
     );
@@ -87,8 +89,8 @@ export function ResourcesTab({ containerName }: { containerName: string }) {
 
   if (!data) {
     return (
-      <Section title="Kaynak kullanımı">
-        <p className="text-sm text-subtle">yükleniyor…</p>
+      <Section title={t("docker.resourcesTab.title")}>
+        <p className="text-sm text-subtle">{t("common.states.loadingInline")}</p>
       </Section>
     );
   }
@@ -128,7 +130,7 @@ export function ResourcesTab({ containerName }: { containerName: string }) {
             type="button"
             onClick={() => void load()}
             disabled={busy}
-            title="Yenile"
+            title={t("common.actions.refresh")}
             className="rounded border border-line p-1.5 transition-colors hover:text-brand disabled:opacity-50"
           >
             <RotateCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />
@@ -137,11 +139,12 @@ export function ResourcesTab({ containerName }: { containerName: string }) {
       </div>
 
       {bosMu ? (
-        <Section title="Kaynak kullanımı">
+        <Section title={t("docker.resourcesTab.title")}>
           <p className="text-sm text-subtle">
-            Bu aralıkta ölçüm yok. Ölçümler yalnızca container <strong>çalışırken</strong>{" "}
-            toplanıyor; durmuş bir container için daha geniş bir aralık seçersen son çalıştığı
-            döneme ait veriyi görebilirsin.
+            <Rich
+              text={t("docker.resourcesTab.empty")}
+              values={{ strong: <strong>{t("docker.resourcesTab.whileRunning")}</strong> }}
+            />
           </p>
         </Section>
       ) : (
@@ -157,18 +160,18 @@ export function ResourcesTab({ containerName }: { containerName: string }) {
             showBand={data.tier !== "raw"}
           />
           <Grafik
-            title="Bellek"
+            title={t("docker.resourcesTab.memory")}
             series={bellek}
-            names={["kullanılan"]}
+            names={[t("docker.resourcesTab.used")]}
             format="bytes"
             from={data.from}
             to={data.to}
             showBand={data.tier !== "raw"}
           />
           <Grafik
-            title="Ağ"
+            title={t("docker.resourcesTab.network")}
             series={ag}
-            names={["giriş", "çıkış"]}
+            names={[t("docker.resourcesTab.rx"), t("docker.resourcesTab.tx")]}
             format="bps"
             from={data.from}
             to={data.to}
@@ -177,7 +180,7 @@ export function ResourcesTab({ containerName }: { containerName: string }) {
           <Grafik
             title="Disk"
             series={disk}
-            names={["okuma", "yazma"]}
+            names={[t("docker.resourcesTab.read"), t("docker.resourcesTab.write")]}
             format="bps"
             from={data.from}
             to={data.to}

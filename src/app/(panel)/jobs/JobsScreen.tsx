@@ -5,7 +5,7 @@ import { Play } from "lucide-react";
 import type { JobStatusRow } from "@/lib/jobs/types";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import { describeCron } from "@/lib/cron/friendly";
-import { useFormat, useT } from "@/lib/i18n/client";
+import { useDict, useFormat, useT } from "@/lib/i18n/client";
 
 function readCsrfToken(): string {
   const match = document.cookie.match(new RegExp(`(?:^|; )${CSRF_COOKIE}=([^;]*)`));
@@ -68,6 +68,7 @@ export function JobsScreen({
 }) {
   const t = useT();
   const f = useFormat();
+  const dict = useDict();
   const [jobs, setJobs] = useState(initialJobs);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -130,7 +131,7 @@ export function JobsScreen({
                 <td data-label={t("jobs.screen.colSchedule")} className="px-4 py-3 text-xs">
                   {/* Ham cron değil, insan diliyle. Aralık işleri zaten okunur. */}
                   {job.scheduleKind === "cron"
-                    ? describeCron(job.scheduleText)
+                    ? describeCron(job.scheduleText, t, dict)
                     : job.scheduleText}
                 </td>
                 <td data-label={t("jobs.screen.colStatus")} className="px-4 py-3">
