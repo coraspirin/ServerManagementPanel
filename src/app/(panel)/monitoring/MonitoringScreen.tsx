@@ -8,15 +8,17 @@ import {
   RANGES,
   formatBps,
   formatBytes,
-  formatDuration,
-  formatPct,
-  metricMeta,
+  metricLabel,
+  rangeLabel,
   rangeSeconds,
+  tierLabel,
   type RangeId,
   type Series,
   type SeriesResult,
   type Snapshot,
 } from "@/lib/metrics/catalog";
+import { useDict, useFormat, useT } from "@/lib/i18n/client";
+import type { Dictionary } from "@/lib/i18n/dict/tr";
 
 /** Grafikler kartlardan daha yavaş tazelenir; her biri yüzlerce nokta taşıyor. */
 const CHART_REFRESH_MS = 30_000;
@@ -53,10 +55,10 @@ function barClass(value: number, warn: number, crit: number): string {
   return "bg-brand";
 }
 
-function legendNames(series: Series[]): string[] {
+function legendNames(series: Series[], dict: Dictionary): string[] {
   const singleMetric = new Set(series.map((s) => s.metric)).size === 1;
   return series.map((s) => {
-    const label = metricMeta(s.metric).label;
+    const label = metricLabel(dict, s.metric);
     if (singleMetric) return s.label || label;
     return s.label ? `${label} · ${s.label}` : label;
   });
@@ -70,6 +72,9 @@ export function MonitoringScreen({
   thresholds,
   cpuCount,
 }: Props) {
+  const t = useT();
+  const f = useFormat();
+  const dict = useDict();
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [range, setRange] = useState<RangeId>(defaultRange);
   const [data, setData] = useState<SeriesResult>(initialSeries);
@@ -140,7 +145,7 @@ export function MonitoringScreen({
   const pick = (metrics: string[]): Series[] =>
     metrics.flatMap((metric) => data.series.filter((s) => s.metric === metric));
 
-  const showBand = data.tier !== "ham";
+  const showBand = data.tier !== "raw";
   const worstDisk = snapshot.disks.reduce<Snapshot["disks"][number] | null>(
     (worst, disk) => (worst === null || disk.usedPct > worst.usedPct ? disk : worst),
     null,
@@ -153,8 +158,7 @@ export function MonitoringScreen({
     <div className="space-y-6">
       {snapshot.ts === null && (
         <p className="rounded-lg border border-dashed border-line bg-surface px-5 py-4 text-sm text-subtle">
-          Henüz metrik toplanmadı. Toplama işi ayarlardaki aralıkta çalışır; birkaç
-          saniye içinde kartlar dolacak.
+          {t("metrics.screen.empty")}
         </p>
       )}
 
@@ -163,19 +167,22 @@ export function MonitoringScreen({
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         <Card
           icon={<Cpu className="size-4" />}
-          title="İşlemci"
-          value={snapshot.cpuPct === null ? "—" : formatPct(snapshot.cpuPct)}
+          title={t("metrics.screen.cpu")}
+          value={snapshot.cpuPct === null ? "—" : f.pct(snapshot.cpuPct)}
           valueClass={levelClass(snapshot.cpuPct, thresholds.cpuWarn, thresholds.cpuCrit)}
           note={
             snapshot.cpuIowaitPct === null
-              ? `${cpuCount} çekirdek`
-              : `${cpuCount} çekirdek · G/Ç bekleme ${formatPct(snapshot.cpuIowaitPct)}`
+              ? t("metrics.screen.cores", { count: cpuCount })
+              : t("metrics.screen.coresWithIo", {
+                  count: cpuCount,
+                  io: f.pct(snapshot.cpuIowaitPct),
+                })
           }
         />
         <Card
           icon={<MemoryStick className="size-4" />}
-          title="Bellek"
-          value={snapshot.memUsedPct === null ? "—" : formatPct(snapshot.memUsedPct)}
+          title={t("metrics.screen.memory")}
+          value={snapshot.memUsedPct === null ? "—" : f.pct(snapshot.memUsedPct)}
           valueClass={levelClass(snapshot.memUsedPct, thresholds.ramWarn, thresholds.ramCrit)}
           note={
             snapshot.memUsed !== null && snapshot.memTotal !== null
@@ -185,28 +192,35 @@ export function MonitoringScreen({
         />
         <Card
           icon={<HardDrive className="size-4" />}
-          title="Disk"
-          value={worstDisk ? formatPct(worstDisk.usedPct) : "—"}
+          title={t("metrics.screen.disk")}
+          value={worstDisk ? f.pct(worstDisk.usedPct) : "—"}
           valueClass={levelClass(
             worstDisk?.usedPct ?? null,
             thresholds.diskWarn,
             thresholds.diskCrit,
           )}
-          note={worstDisk ? `${worstDisk.mount} · ${formatBytes(worstDisk.free)} boş` : "—"}
+          note={
+            worstDisk
+              ? t("metrics.screen.diskFree", {
+                  mount: worstDisk.mount,
+                  free: formatBytes(worstDisk.free),
+                })
+              : "—"
+          }
         />
         <Card
           icon={<Network className="size-4" />}
-          title="Ağ"
+          title={t("metrics.screen.network")}
           value={snapshot.interfaces.length > 0 ? formatBps(totalRx) : "—"}
           note={
             snapshot.interfaces.length > 0
-              ? `↓ indirme · ↑ ${formatBps(totalTx)} yükleme`
-              : "arayüz bulunamadı"
+              ? t("metrics.screen.netNote", { tx: formatBps(totalTx) })
+              : t("metrics.screen.noInterfaces")
           }
         />
         <Card
           icon={<Activity className="size-4" />}
-          title="Sistem yükü"
+          title={t("metrics.screen.load")}
           value={snapshot.load1 === null ? "—" : snapshot.load1.toFixed(2)}
           valueClass={levelClass(
             snapshot.load1 === null ? null : (snapshot.load1 / cpuCount) * 100,
@@ -216,22 +230,23 @@ export function MonitoringScreen({
           note={
             snapshot.load5 === null
               ? "—"
-              : `5 dk ${snapshot.load5.toFixed(2)} · 15 dk ${snapshot.load15?.toFixed(2) ?? "—"}`
+              : t("metrics.screen.loadNote", {
+                  load5: snapshot.load5.toFixed(2),
+                  load15: snapshot.load15?.toFixed(2) ?? "—",
+                })
           }
         />
         <Card
           icon={<Timer className="size-4" />}
-          title="Çalışma süresi"
-          value={
-            snapshot.uptimeSeconds === null ? "—" : formatDuration(snapshot.uptimeSeconds)
-          }
-          note={age === null ? "—" : `son örnek ${age} sn önce`}
+          title={t("metrics.screen.uptime")}
+          value={snapshot.uptimeSeconds === null ? "—" : f.duration(snapshot.uptimeSeconds)}
+          note={age === null ? "—" : t("metrics.screen.lastSample", { age })}
         />
       </div>
 
       {snapshot.disks.length > 0 && (
         <section className="rounded-lg border border-line bg-surface p-5">
-          <h2 className="font-semibold">Disk bölümleri</h2>
+          <h2 className="font-semibold">{t("metrics.screen.diskPartitions")}</h2>
           <div className="mt-4 space-y-3">
             {snapshot.disks.map((disk) => (
               <div key={disk.mount}>
@@ -246,7 +261,7 @@ export function MonitoringScreen({
                         thresholds.diskCrit,
                       )}
                     >
-                      {formatPct(disk.usedPct)}
+                      {f.pct(disk.usedPct)}
                     </span>
                   </span>
                 </div>
@@ -275,18 +290,20 @@ export function MonitoringScreen({
                   : "border-line text-subtle hover:text-ink"
               }`}
             >
-              {option.label}
+              {rangeLabel(dict, option.id)}
             </button>
           ))}
         </div>
         <span className="text-xs text-subtle">
-          {chartsStale ? "yükleniyor…" : `çözünürlük: ${data.tier}`}
+          {chartsStale
+            ? t("metrics.screen.loading")
+            : t("metrics.screen.resolution", { tier: tierLabel(dict, data.tier) })}
         </span>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <ChartCard
-          title="İşlemci"
+          title={t("metrics.screen.chartCpu")}
           series={pick(["cpu.pct", "cpu.iowait_pct"])}
           format="pct"
           fixedMax={100}
@@ -295,7 +312,7 @@ export function MonitoringScreen({
           to={data.to}
         />
         <ChartCard
-          title="Bellek ve takas"
+          title={t("metrics.screen.chartMemory")}
           series={pick(["mem.used_pct", "swap.used_pct"])}
           format="pct"
           fixedMax={100}
@@ -304,7 +321,7 @@ export function MonitoringScreen({
           to={data.to}
         />
         <ChartCard
-          title="Ağ trafiği"
+          title={t("metrics.screen.chartNetwork")}
           series={pick(["net.rx_bps", "net.tx_bps"])}
           format="bps"
           showBand={showBand}
@@ -312,7 +329,7 @@ export function MonitoringScreen({
           to={data.to}
         />
         <ChartCard
-          title="Disk doluluğu"
+          title={t("metrics.screen.chartDisk")}
           series={pick(["disk.used_pct"])}
           format="pct"
           fixedMax={100}
@@ -321,7 +338,7 @@ export function MonitoringScreen({
           to={data.to}
         />
         <ChartCard
-          title="Sistem yükü"
+          title={t("metrics.screen.chartLoad")}
           series={pick(["load.1m", "load.5m", "load.15m"])}
           format="number"
           showBand={showBand}
@@ -379,7 +396,8 @@ function ChartCard({
   from: number;
   to: number;
 }) {
-  const names = legendNames(series);
+  const dict = useDict();
+  const names = legendNames(series, dict);
 
   return (
     <section className="rounded-lg border border-line bg-surface p-5">

@@ -13,7 +13,8 @@ import {
 } from "lucide-react";
 
 import { containerLink, portLink } from "@/lib/docker/labels";
-import { formatBytes, formatPct } from "@/lib/metrics/catalog";
+import { formatBytes } from "@/lib/metrics/catalog";
+import { useFormat } from "@/lib/i18n/client";
 import type { ContainerView } from "@/lib/docker/types";
 import type { ContainerAction } from "@/lib/providers/types";
 import type { DrawerTab } from "./ContainerDrawer";
@@ -173,6 +174,7 @@ export function ContainerRow({
   indent?: boolean;
   handlers: RowHandlers;
 }) {
+  const f = useFormat();
   const { open, runAction, removeContainer, toggleSelect } = handlers;
 
   return (
@@ -334,7 +336,7 @@ export function ContainerRow({
 
       {visible.has("cpu") && (
         <td data-label="CPU" className="px-4 py-3 text-xs md:whitespace-nowrap">
-          {container.cpuPct === null ? "—" : formatPct(container.cpuPct)}
+          {container.cpuPct === null ? "—" : f.pct(container.cpuPct)}
         </td>
       )}
 
@@ -346,7 +348,7 @@ export function ContainerRow({
             <>
               {formatBytes(container.memUsed)}
               {container.memPct !== null && (
-                <span className="text-subtle"> · {formatPct(container.memPct)}</span>
+                <span className="text-subtle"> · {f.pct(container.memPct)}</span>
               )}
             </>
           )}

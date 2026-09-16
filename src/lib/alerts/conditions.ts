@@ -3,7 +3,13 @@ import "server-only";
 import { backupStatus } from "@/lib/backup/watch";
 import { getDb } from "@/lib/db/client";
 import { detectRestartLoops } from "@/lib/docker/collect";
-import { formatBytes, formatPct } from "@/lib/metrics/catalog";
+import { formatBytes } from "@/lib/metrics/catalog";
+import { formatPct as formatPctLocale } from "@/lib/i18n/format";
+import { currentLocale, serverT } from "@/lib/i18n/runtime";
+
+/** Alarm metinleri o anki arayüz dilinde yazılır. */
+const formatPct = (value: number, digits = 1) =>
+  formatPctLocale(value, currentLocale(), digits);
 import { latestSnapshot } from "@/lib/metrics/collect";
 import { diskForecasts, isActionable } from "@/lib/metrics/forecast";
 import { listMonitors } from "@/lib/monitors/store";
@@ -85,9 +91,13 @@ function metricConditions(): Condition[] {
       severity,
       title:
         severity === "ok"
-          ? "İşlemci yükü normale döndü"
-          : `İşlemci yükü yüksek (${formatPct(cpuAverage)})`,
-      detail: `Son 5 dakikanın ortalaması ${formatPct(cpuAverage)}. Uyarı eşiği %${getNumber("alerts.cpu.warn")}, kritik eşik %${getNumber("alerts.cpu.crit")}.`,
+          ? serverT("alerts.cpu.ok")
+          : serverT("alerts.cpu.high", { value: formatPct(cpuAverage) }),
+      detail: serverT("alerts.cpu.detail", {
+        value: formatPct(cpuAverage),
+        warn: formatPct(getNumber("alerts.cpu.warn"), 0),
+        crit: formatPct(getNumber("alerts.cpu.crit"), 0),
+      }),
     });
   }
 
@@ -99,15 +109,19 @@ function metricConditions(): Condition[] {
     );
     const used = snapshot.memUsed === null ? "" : ` (${formatBytes(snapshot.memUsed)}`;
     const total = snapshot.memTotal === null ? "" : ` / ${formatBytes(snapshot.memTotal)})`;
+
     conditions.push({
       key: "metric:ram",
       source: "metric",
       severity,
       title:
         severity === "ok"
-          ? "Bellek kullanımı normale döndü"
-          : `Bellek kullanımı yüksek (${formatPct(snapshot.memUsedPct)})`,
-      detail: `Kullanım ${formatPct(snapshot.memUsedPct)}${used}${total}.`,
+          ? serverT("alerts.ram.ok")
+          : serverT("alerts.ram.high", { value: formatPct(snapshot.memUsedPct) }),
+      detail: serverT("alerts.ram.detail", {
+        value: formatPct(snapshot.memUsedPct),
+        used: `${used}${total}`,
+      }),
     });
   }
 
@@ -123,9 +137,16 @@ function metricConditions(): Condition[] {
       severity,
       title:
         severity === "ok"
-          ? `${disk.mount} doluluğu normale döndü`
-          : `${disk.mount} doluyor (${formatPct(disk.usedPct)})`,
-      detail: `${formatBytes(disk.used)} / ${formatBytes(disk.total)} kullanımda, ${formatBytes(disk.free)} boş.`,
+          ? serverT("alerts.disk.ok", { mount: disk.mount })
+          : serverT("alerts.disk.high", {
+              mount: disk.mount,
+              value: formatPct(disk.usedPct),
+            }),
+      detail: serverT("alerts.disk.detail", {
+        used: formatBytes(disk.used),
+        total: formatBytes(disk.total),
+        free: formatBytes(disk.free),
+      }),
     });
   }
 
@@ -142,12 +163,18 @@ function monitorConditions(): Condition[] {
       severity: monitor.status === "down" ? ("critical" as Severity) : ("ok" as Severity),
       title:
         monitor.status === "down"
-          ? `${monitor.name} yanıt vermiyor`
-          : `${monitor.name} yeniden çalışıyor`,
+          ? serverT("alerts.monitor.down", { name: monitor.name })
+          : serverT("alerts.monitor.up", { name: monitor.name }),
       detail:
         monitor.status === "down"
-          ? `${monitor.target} — ${monitor.lastError ?? "yanıt yok"}`
-          : `${monitor.target} — ${monitor.lastLatencyMs ?? "?"} ms`,
+          ? serverT("alerts.monitor.downDetail", {
+              target: monitor.target,
+              error: monitor.lastError ?? serverT("alerts.monitor.noResponse"),
+            })
+          : serverT("alerts.monitor.upDetail", {
+              target: monitor.target,
+              latency: monitor.lastLatencyMs ?? "?",
+            }),
       // `container` tipi monitörde hedef, container adının ta kendisidir —
       // runbook notu doğrudan eşleşir.
       container: monitor.type === "container" ? monitor.target : undefined,
@@ -181,9 +208,18 @@ function hardwareConditions(report: HardwareReport): Condition[] {
       severity,
       title:
         severity === "ok"
-          ? `${reading.source} ${reading.label} sıcaklığı normale döndü`
-          : `${reading.source} ${reading.label} sıcak (${reading.celsius} °C)`,
-      detail: `Ölçüm ${reading.celsius} °C. Uyarı ${warn} °C, kritik ${crit} °C${reading.highC !== null ? " (sensörün kendi eşikleri)" : ""}.`,
+          ? serverT("alerts.temp.ok", { source: reading.source, label: reading.label })
+          : serverT("alerts.temp.high", {
+              source: reading.source,
+              label: reading.label,
+              value: reading.celsius,
+            }),
+      detail: serverT("alerts.temp.detail", {
+        value: reading.celsius,
+        warn,
+        crit,
+        sensor: reading.highC !== null ? serverT("alerts.temp.sensorOwn") : "",
+      }),
     });
   }
 
@@ -198,9 +234,15 @@ function hardwareConditions(report: HardwareReport): Condition[] {
 
     const severity: Severity = failed ? "critical" : bad ? "warning" : "ok";
     const counters = [
-      disk.reallocatedSectors !== null ? `yeniden atanan sektör: ${disk.reallocatedSectors}` : null,
-      disk.pendingSectors !== null ? `bekleyen sektör: ${disk.pendingSectors}` : null,
-      disk.uncorrectableErrors !== null ? `düzeltilemeyen: ${disk.uncorrectableErrors}` : null,
+      disk.reallocatedSectors !== null
+        ? serverT("alerts.smart.reallocated", { count: disk.reallocatedSectors })
+        : null,
+      disk.pendingSectors !== null
+        ? serverT("alerts.smart.pending", { count: disk.pendingSectors })
+        : null,
+      disk.uncorrectableErrors !== null
+        ? serverT("alerts.smart.uncorrectable", { count: disk.uncorrectableErrors })
+        : null,
     ]
       .filter(Boolean)
       .join(" · ");
@@ -210,11 +252,15 @@ function hardwareConditions(report: HardwareReport): Condition[] {
       source: "system",
       severity,
       title: failed
-        ? `${disk.device} S.M.A.R.T arızası bildiriyor`
+        ? serverT("alerts.smart.failed", { device: disk.device })
         : bad
-          ? `${disk.device} disk hatası biriktiriyor`
-          : `${disk.device} sağlık durumu normale döndü`,
-      detail: `${disk.model} — durum ${disk.health}. ${counters}`,
+          ? serverT("alerts.smart.bad", { device: disk.device })
+          : serverT("alerts.smart.ok", { device: disk.device }),
+      detail: serverT("alerts.smart.detail", {
+        model: disk.model,
+        health: disk.health,
+        counters,
+      }),
     });
   }
 
@@ -230,14 +276,20 @@ function hardwareConditions(report: HardwareReport): Condition[] {
       source: "system",
       severity,
       title: !pool.healthy
-        ? `${pool.name} havuzu bozulmuş (${pool.state})`
+        ? serverT("alerts.pool.degraded", { name: pool.name, state: pool.state })
         : scrubOverdue
-          ? `${pool.name} havuzu uzun süredir doğrulanmadı`
-          : `${pool.name} havuzu normale döndü`,
+          ? serverT("alerts.pool.scrubOverdue", { name: pool.name })
+          : serverT("alerts.pool.ok", { name: pool.name }),
       detail:
-        `${pool.kind.toUpperCase()} · durum ${pool.state} · ${pool.detail}` +
+        serverT("alerts.pool.detail", {
+          kind: pool.kind.toUpperCase(),
+          state: pool.state,
+          detail: pool.detail,
+        }) +
         (pool.lastScrubAt !== null
-          ? ` · son scrub ${Math.round((now - pool.lastScrubAt) / 86400)} gün önce`
+          ? serverT("alerts.pool.lastScrub", {
+              days: Math.round((now - pool.lastScrubAt) / 86400),
+            })
           : ""),
     });
   }
@@ -253,13 +305,11 @@ function hardwareConditions(report: HardwareReport): Condition[] {
       key: "hardware:report",
       source: "system",
       severity: stale ? "warning" : "ok",
-      title: stale
-        ? "Donanım raporu güncellenmiyor"
-        : "Donanım raporu yeniden güncelleniyor",
+      title: stale ? serverT("alerts.report.stale") : serverT("alerts.report.ok"),
       detail:
         age === null
-          ? "Host'taki scripts/hardware.sh hiç çalışmamış görünüyor."
-          : `Son rapor ${Math.round(age / 60)} dakika önce üretildi.`,
+          ? serverT("alerts.report.never")
+          : serverT("alerts.report.detail", { minutes: Math.round(age / 60) }),
     });
   }
 
@@ -286,11 +336,17 @@ function capacityConditions(): Condition[] {
         severity,
         title:
           severity === "ok"
-            ? `${forecast.label} dolma eğilimi geçti`
-            : `${forecast.label} yaklaşık ${Math.round(days)} gün sonra dolabilir`,
-        detail:
-          `Şu an %${forecast.currentPct.toFixed(1)}, günde ${forecast.slopePerDay.toFixed(2)} puan artıyor. ` +
-          `${forecast.basedOnDays} günlük veriye dayanan tahmin, uyum %${Math.round(forecast.confidence * 100)}.`,
+            ? serverT("alerts.capacity.ok", { label: forecast.label })
+            : serverT("alerts.capacity.filling", {
+                label: forecast.label,
+                days: Math.round(days),
+              }),
+        detail: serverT("alerts.capacity.detail", {
+          current: formatPct(forecast.currentPct),
+          slope: forecast.slopePerDay.toFixed(2),
+          basedOn: forecast.basedOnDays,
+          confidence: formatPct(forecast.confidence * 100, 0),
+        }),
       };
     });
 }
@@ -313,8 +369,11 @@ function dockerConditions(): Condition[] {
     key: `docker:restart-loop:${loop.container}`,
     source: "system" as const,
     severity: "critical" as Severity,
-    title: `${loop.container} sürekli yeniden başlıyor`,
-    detail: `Son ${loop.windowMinutes} dakikada ${loop.restarts} kez yeniden başladı. Container listede "çalışıyor" görünse bile hizmet vermiyor olabilir; loglara bakmak gerekir.`,
+    title: serverT("alerts.restartLoop.title", { container: loop.container }),
+    detail: serverT("alerts.restartLoop.detail", {
+      minutes: loop.windowMinutes,
+      count: loop.restarts,
+    }),
     container: loop.container,
   }));
 }
@@ -341,22 +400,27 @@ async function osUpdateConditions(): Promise<Condition[]> {
       key: "updates:os:rapor",
       source: "system",
       severity: "warning",
-      title: "İşletim sistemi güncelleme raporu eskidi",
-      detail: `Host'taki os-updates.sh ${getNumber("updates.report_stale_hours")} saatten uzun süredir çalışmadı. Liste eski olabilir — cron kaydı duruyor mu?`,
+      title: serverT("alerts.osUpdate.staleTitle"),
+      detail: serverT("alerts.osUpdate.staleDetail", {
+        hours: getNumber("updates.report_stale_hours"),
+      }),
     });
   } else {
     conditions.push({
       key: "updates:os:rapor",
       source: "system",
       severity: "ok",
-      title: "Güncelleme raporu güncel",
-      detail: "os-updates.sh zamanında çalışıyor.",
+      title: serverT("alerts.osUpdate.freshTitle"),
+      detail: serverT("alerts.osUpdate.freshDetail"),
     });
   }
 
   if (level !== "off") {
     const count = level === "security" ? report.security : report.total;
-    const label = level === "security" ? "güvenlik güncellemesi" : "paket güncellemesi";
+    const label =
+      level === "security"
+        ? serverT("alerts.osUpdate.securityLabel")
+        : serverT("alerts.osUpdate.packageLabel");
 
     conditions.push({
       key: "updates:os:paketler",
@@ -367,16 +431,18 @@ async function osUpdateConditions(): Promise<Condition[]> {
       severity: count > 0 ? "warning" : "ok",
       title:
         count > 0
-          ? `${count} ${label} bekliyor`
-          : "İşletim sistemi güncel",
+          ? serverT("alerts.osUpdate.pendingTitle", { count, label })
+          : serverT("alerts.osUpdate.upToDateTitle"),
       detail:
         count > 0
           ? `${report.packages
               .filter((pkg) => (level === "security" ? pkg.security : true))
               .slice(0, 8)
               .map((pkg) => pkg.name)
-              .join(", ")}${count > 8 ? " …" : ""}${report.rebootRequired ? "\nSunucu yeniden başlatma bekliyor." : ""}`
-          : "Bekleyen güncelleme yok.",
+              .join(", ")}${count > 8 ? " …" : ""}${
+              report.rebootRequired ? serverT("alerts.osUpdate.rebootSuffix") : ""
+            }`
+          : serverT("alerts.osUpdate.noneDetail"),
     });
   }
 
@@ -394,7 +460,7 @@ async function backupConditions(): Promise<Condition[]> {
         key: "backup:klasor",
         source: "system",
         severity: "warning",
-        title: "Yedek klasörü okunamıyor",
+        title: serverT("alerts.backup.unreadableTitle"),
         detail: status.error,
       },
     ];
@@ -409,13 +475,17 @@ async function backupConditions(): Promise<Condition[]> {
       severity: status.stale ? "critical" : "ok",
       title: status.stale
         ? status.newestAt === null
-          ? "Yedek klasöründe hiç yedek yok"
-          : "Yedek eskidi"
-        : "Yedekler güncel",
+          ? serverT("alerts.backup.noneTitle")
+          : serverT("alerts.backup.staleTitle")
+        : serverT("alerts.backup.freshTitle"),
       detail:
         status.newestAt === null
-          ? `${status.dir} boş. Yedekleme çalışıyor mu?`
-          : `En son yedek: ${status.newestName} — ${Math.floor((age ?? 0) / 3600)} saat önce (eşik ${status.staleAfterHours} saat).`,
+          ? serverT("alerts.backup.emptyDetail", { dir: status.dir })
+          : serverT("alerts.backup.detail", {
+              name: status.newestName ?? "",
+              hours: Math.floor((age ?? 0) / 3600),
+              threshold: status.staleAfterHours,
+            }),
     },
   ];
 }
@@ -436,12 +506,12 @@ function imageUpdateConditions(): Condition[] {
       severity: outdated.length > 0 ? "info" : "ok",
       title:
         outdated.length > 0
-          ? `${outdated.length} container için yeni image sürümü var`
-          : "Tüm image'lar güncel",
+          ? serverT("alerts.imageUpdate.available", { count: outdated.length })
+          : serverT("alerts.imageUpdate.upToDate"),
       detail:
         outdated.length > 0
           ? outdated.map((entry) => `${entry.container} (${entry.image})`).join(", ")
-          : "Kayıt defterindeki sürümler yereldekiyle aynı.",
+          : serverT("alerts.imageUpdate.noneDetail"),
     },
   ];
 }

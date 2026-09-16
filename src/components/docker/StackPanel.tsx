@@ -18,7 +18,8 @@ import { ComposeSection } from "./ComposeSection";
 import { StackInstaller } from "./StackInstaller";
 import { readCsrfToken } from "./detail/shared";
 import { CSRF_HEADER } from "@/lib/auth/types";
-import { formatBytes, formatPct } from "@/lib/metrics/catalog";
+import { formatBytes } from "@/lib/metrics/catalog";
+import { useFormat } from "@/lib/i18n/client";
 import type { StackRow } from "@/lib/docker/stacks";
 import type { ContainerView } from "@/lib/docker/types";
 
@@ -83,6 +84,7 @@ export function StackPanel({
   /** Değiştiğinde liste yeniden çekilir (araç çubuğundaki Yenile). */
   refreshToken: number;
 }) {
+  const f = useFormat();
   const [data, setData] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
@@ -257,7 +259,7 @@ export function StackPanel({
                   </span>
 
                   {stack.cpuPct !== null && (
-                    <span className="text-xs text-subtle">{formatPct(stack.cpuPct)}</span>
+                    <span className="text-xs text-subtle">{f.pct(stack.cpuPct)}</span>
                   )}
                   {stack.memUsed !== null && (
                     <span className="text-xs text-subtle">{formatBytes(stack.memUsed)}</span>

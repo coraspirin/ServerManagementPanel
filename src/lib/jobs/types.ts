@@ -5,8 +5,6 @@ export type JobResult = {
 
 export type JobDefinition = {
   key: string;
-  label: string;
-  description: string;
   /**
    * Zamanlama.
    *
@@ -21,7 +19,8 @@ export type JobDefinition = {
   schedule:
     | { kind: "cron"; settingKey: string }
     | { kind: "interval"; settingKey: string }
-    | { kind: "fixed"; seconds: number; label: string };
+    /** `labelKey` sözlükteki sıklık metni; işin ADI da sözlükte (`jobs.items`). */
+    | { kind: "fixed"; seconds: number; labelKey: string };
   /** Kira süresi: işin en fazla ne kadar süreceği tahmini (saniye). */
   leaseSeconds?: number;
   /**

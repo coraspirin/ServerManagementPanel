@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { LoginForm } from "./LoginForm";
 import { currentSession } from "@/lib/auth/session";
+import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export default async function LoginPage({
   }
 
   const { next } = await searchParams;
+  const t = getT();
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-canvas p-4">
@@ -37,7 +39,7 @@ export default async function LoginPage({
         className="flex items-center gap-1.5 text-sm text-subtle transition-colors hover:text-ink"
       >
         <ArrowLeft className="size-3.5" aria-hidden />
-        Uygulamalara dön
+        {t("auth.login.backToApps")}
       </Link>
     </div>
   );

@@ -6,11 +6,16 @@
  * içindedir ve tiplerini buradan alır.
  */
 
+import { formatDuration, formatPct } from "@/lib/i18n/format";
+import { translateLoose } from "@/lib/i18n/translate";
+import type { Locale } from "@/lib/i18n/locales";
+import type { Dictionary } from "@/lib/i18n/dict/tr";
+
 export type SeriesPoint = { ts: number; avg: number; min: number; max: number };
 export type Series = { metric: string; label: string; points: SeriesPoint[] };
 
 export type SeriesResult = {
-  /** Kullanıcıya gösterilen katman adı — "1 saatlik ortalama" gibi. */
+  /** Katman ANAHTARI ("raw" | "minute" | "hour" | "day") — adı sözlükten. */
   tier: string;
   resolution: number;
   from: number;
@@ -48,13 +53,13 @@ export type Snapshot = {
 
 export type RangeId = "1h" | "6h" | "24h" | "7d" | "30d" | "1y";
 
-export const RANGES: { id: RangeId; label: string; seconds: number }[] = [
-  { id: "1h", label: "1 saat", seconds: 3600 },
-  { id: "6h", label: "6 saat", seconds: 6 * 3600 },
-  { id: "24h", label: "24 saat", seconds: 86400 },
-  { id: "7d", label: "7 gün", seconds: 7 * 86400 },
-  { id: "30d", label: "30 gün", seconds: 30 * 86400 },
-  { id: "1y", label: "1 yıl", seconds: 365 * 86400 },
+export const RANGES: { id: RangeId; seconds: number }[] = [
+  { id: "1h", seconds: 3600 },
+  { id: "6h", seconds: 6 * 3600 },
+  { id: "24h", seconds: 86400 },
+  { id: "7d", seconds: 7 * 86400 },
+  { id: "30d", seconds: 30 * 86400 },
+  { id: "1y", seconds: 365 * 86400 },
 ];
 
 export function rangeSeconds(id: string): number {
@@ -116,26 +121,18 @@ export function formatBps(bytesPerSecond: number): string {
   return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
-export function formatPct(value: number, digits = 1): string {
-  return `%${value.toFixed(digits)}`;
-}
-
-export function formatDuration(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return "—";
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  if (days > 0) return `${days} gün ${hours} saat`;
-  if (hours > 0) return `${hours} saat ${minutes} dk`;
-  return `${minutes} dk`;
-}
+/*
+  Yüzde ve süre biçimleme BURADA DEĞİL, `lib/i18n/format.ts` içinde: ikisi de
+  dile bağlı (Türkçe "%42.5" ve "2 gün 3 saat", İngilizce "42.5%" ve
+  "2 days 3 hours"). Bayt ve bit/sn ise dilden bağımsız olduğu için burada
+  kaldı.
+*/
 
 // --- Metrik tanımları ------------------------------------------------------
 
 export type MetricFormat = "pct" | "bytes" | "bps" | "number" | "duration" | "ms";
 
 export type MetricMeta = {
-  label: string;
   format: MetricFormat;
   /** Yüzde metriklerinde y ekseni 0–100 sabitlenir; diğerlerinde veriye uyar. */
   fixedMax?: number;
@@ -144,56 +141,84 @@ export type MetricMeta = {
 };
 
 export const METRIC_META: Record<string, MetricMeta> = {
-  "cpu.pct": { label: "İşlemci", format: "pct", fixedMax: 100 },
-  "cpu.iowait_pct": { label: "G/Ç bekleme", format: "pct", fixedMax: 100 },
-  "mem.used_pct": { label: "Bellek", format: "pct", fixedMax: 100 },
-  "mem.used": { label: "Kullanılan bellek", format: "bytes" },
-  "mem.total": { label: "Toplam bellek", format: "bytes" },
-  "swap.used_pct": { label: "Takas alanı", format: "pct", fixedMax: 100 },
-  "swap.used": { label: "Kullanılan takas", format: "bytes" },
-  "load.1m": { label: "Yük (1 dk)", format: "number" },
-  "load.5m": { label: "Yük (5 dk)", format: "number" },
-  "load.15m": { label: "Yük (15 dk)", format: "number" },
-  "uptime.seconds": { label: "Çalışma süresi", format: "duration" },
-  "disk.used_pct": { label: "Disk doluluğu", format: "pct", fixedMax: 100, labelled: true },
-  "disk.used": { label: "Kullanılan disk", format: "bytes", labelled: true },
-  "disk.free": { label: "Boş disk", format: "bytes", labelled: true },
-  "disk.total": { label: "Disk kapasitesi", format: "bytes", labelled: true },
-  "net.rx_bps": { label: "İndirme", format: "bps", labelled: true },
-  "net.tx_bps": { label: "Yükleme", format: "bps", labelled: true },
+  "cpu.pct": { format: "pct", fixedMax: 100 },
+  "cpu.iowait_pct": { format: "pct", fixedMax: 100 },
+  "mem.used_pct": { format: "pct", fixedMax: 100 },
+  "mem.used": { format: "bytes" },
+  "mem.total": { format: "bytes" },
+  "swap.used_pct": { format: "pct", fixedMax: 100 },
+  "swap.used": { format: "bytes" },
+  "load.1m": { format: "number" },
+  "load.5m": { format: "number" },
+  "load.15m": { format: "number" },
+  "uptime.seconds": { format: "duration" },
+  "disk.used_pct": { format: "pct", fixedMax: 100, labelled: true },
+  "disk.used": { format: "bytes", labelled: true },
+  "disk.free": { format: "bytes", labelled: true },
+  "disk.total": { format: "bytes", labelled: true },
+  "net.rx_bps": { format: "bps", labelled: true },
+  "net.tx_bps": { format: "bps", labelled: true },
   // M1.2 — health-check gecikmesi. Ayrı bir zaman serisi tablosu açmak yerine
   // T1 hattına giriyor: rollup, budama ve grafik hazır geliyor. `label` =
   // monitör kimliği.
-  "monitor.latency": { label: "Yanıt süresi", format: "ms", labelled: true },
+  "monitor.latency": { format: "ms", labelled: true },
   // M1.6 — container ölçümleri. `label` = container adı.
-  "docker.cpu_pct": { label: "Container CPU", format: "pct", labelled: true },
-  "docker.mem_used": { label: "Container bellek", format: "bytes", labelled: true },
-  "docker.mem_pct": { label: "Container bellek", format: "pct", fixedMax: 100, labelled: true },
+  "docker.cpu_pct": { format: "pct", labelled: true },
+  "docker.mem_used": { format: "bytes", labelled: true },
+  "docker.mem_pct": { format: "pct", fixedMax: 100, labelled: true },
   // Kümülatif sayaçlar (M3.22) — grafikte hıza çevrilerek gösteriliyor.
-  "docker.net_rx": { label: "Container ağ giriş", format: "bytes", labelled: true },
-  "docker.net_tx": { label: "Container ağ çıkış", format: "bytes", labelled: true },
-  "docker.blk_read": { label: "Container disk okuma", format: "bytes", labelled: true },
-  "docker.blk_write": { label: "Container disk yazma", format: "bytes", labelled: true },
-  "docker.restart_count": { label: "Yeniden başlatma", format: "number", labelled: true },
-  "docker.running": { label: "Çalışıyor", format: "number", fixedMax: 1, labelled: true },
+  "docker.net_rx": { format: "bytes", labelled: true },
+  "docker.net_tx": { format: "bytes", labelled: true },
+  "docker.blk_read": { format: "bytes", labelled: true },
+  "docker.blk_write": { format: "bytes", labelled: true },
+  "docker.restart_count": { format: "number", labelled: true },
+  "docker.running": { format: "number", fixedMax: 1, labelled: true },
 };
 
 export function metricMeta(metric: string): MetricMeta {
-  return METRIC_META[metric] ?? { label: metric, format: "number" };
+  return METRIC_META[metric] ?? { format: "number" };
 }
 
-export function formatValue(format: MetricFormat, value: number): string {
+/**
+ * Metriğin ekranda görünen adı. Sözlükte karşılığı yoksa metriğin kimliği
+ * gösterilir — grafiğin göstergesini boş bırakmaktansa "cpu.pct" yazsın.
+ */
+export function metricLabel(dict: Dictionary, metric: string): string {
+  const labels = dict.metrics.labels as Record<string, string>;
+  return labels[metric] ?? metric;
+}
+
+/** Aralık düğmesinin metni ("24 saat" / "24 hours"). */
+export function rangeLabel(dict: Dictionary, id: RangeId): string {
+  const ranges = dict.metrics.ranges as Record<string, string>;
+  return ranges[id] ?? id;
+}
+
+/** Çözünürlük katmanının adı; `SeriesResult.tier` bir ANAHTAR taşıyor. */
+export function tierLabel(dict: Dictionary, tier: string): string {
+  const tiers = dict.metrics.tiers as Record<string, string>;
+  return tiers[tier] ?? tier;
+}
+
+export function formatValue(
+  format: MetricFormat,
+  value: number,
+  locale: Locale,
+  dict: Dictionary,
+): string {
   switch (format) {
     case "pct":
-      return formatPct(value);
+      return formatPct(value, locale);
     case "bytes":
       return formatBytes(value);
     case "bps":
       return formatBps(value);
     case "duration":
-      return formatDuration(value);
+      return formatDuration(value, locale, dict);
     case "ms":
-      return value >= 1000 ? `${(value / 1000).toFixed(2)} sn` : `${Math.round(value)} ms`;
+      return value >= 1000
+        ? translateLoose(dict, locale, "metrics.value.seconds", { value: (value / 1000).toFixed(2) })
+        : translateLoose(dict, locale, "metrics.value.milliseconds", { value: Math.round(value) });
     default:
       return value.toFixed(2);
   }

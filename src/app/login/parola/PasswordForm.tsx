@@ -3,8 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { KeyRound } from "lucide-react";
+import { useT } from "@/lib/i18n/client";
+
+/** Parola en az bu kadar karakter — hem `minLength` hem de etiket metni için. */
+const MIN_LENGTH = 10;
 
 export function PasswordForm({ forced }: { forced: boolean }) {
+  const t = useT();
   const router = useRouter();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -15,7 +20,7 @@ export function PasswordForm({ forced }: { forced: boolean }) {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (newPassword !== repeat) {
-      setError("Yeni parolalar eşleşmiyor.");
+      setError(t("auth.password.mismatch"));
       return;
     }
 
@@ -31,7 +36,7 @@ export function PasswordForm({ forced }: { forced: boolean }) {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error ?? "Parola değiştirilemedi.");
+        setError(data.error ?? t("auth.password.failed"));
         return;
       }
 
@@ -39,7 +44,7 @@ export function PasswordForm({ forced }: { forced: boolean }) {
       router.replace("/login");
       router.refresh();
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
@@ -52,18 +57,17 @@ export function PasswordForm({ forced }: { forced: boolean }) {
     >
       <div className="mb-2 flex items-center gap-2">
         <KeyRound className="size-5 text-brand" aria-hidden />
-        <h1 className="text-lg font-semibold tracking-tight">Parola değiştir</h1>
+        <h1 className="text-lg font-semibold tracking-tight">{t("auth.password.title")}</h1>
       </div>
 
       {forced && (
         <p className="mb-4 rounded-md bg-warn/10 px-3 py-2 text-sm text-warn">
-          İlk giriş parolası kurulum logunda görünür. Devam etmeden önce
-          değiştirmelisin.
+          {t("auth.password.forcedNotice")}
         </p>
       )}
 
       <label className="mt-4 block text-sm">
-        <span className="text-subtle">Mevcut parola</span>
+        <span className="text-subtle">{t("auth.password.current")}</span>
         <input
           type="password"
           value={currentPassword}
@@ -75,20 +79,20 @@ export function PasswordForm({ forced }: { forced: boolean }) {
       </label>
 
       <label className="mt-4 block text-sm">
-        <span className="text-subtle">Yeni parola (en az 10 karakter)</span>
+        <span className="text-subtle">{t("auth.password.next", { min: MIN_LENGTH })}</span>
         <input
           type="password"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           autoComplete="new-password"
-          minLength={10}
+          minLength={MIN_LENGTH}
           required
           className="mt-1 w-full rounded-md border border-line bg-canvas px-3 py-2 outline-none focus:border-brand"
         />
       </label>
 
       <label className="mt-4 block text-sm">
-        <span className="text-subtle">Yeni parola (tekrar)</span>
+        <span className="text-subtle">{t("auth.password.repeat")}</span>
         <input
           type="password"
           value={repeat}
@@ -110,7 +114,7 @@ export function PasswordForm({ forced }: { forced: boolean }) {
         disabled={busy}
         className="mt-6 w-full rounded-md bg-brand px-3 py-2 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
       >
-        {busy ? "Değiştiriliyor…" : "Parolayı değiştir"}
+        {busy ? t("auth.password.submitBusy") : t("auth.password.submit")}
       </button>
     </form>
   );

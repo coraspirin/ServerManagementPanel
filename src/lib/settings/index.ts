@@ -5,6 +5,7 @@ import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { audit } from "@/lib/auth/audit";
 import { sanitizeRichText } from "@/lib/richtext";
 import { findSetting, settingDefs } from "@/settings.schema";
+import { serverT } from "@/lib/i18n/runtime";
 import type { ResolvedSetting, SettingDef, SettingScope } from "./types";
 
 /**
@@ -55,32 +56,34 @@ export function validateValue(def: SettingDef, value: unknown): string | null {
     case "int":
     case "float": {
       const n = Number(value);
-      if (!Number.isFinite(n)) return "Sayı olmalı.";
-      if (def.type === "int" && !Number.isInteger(n)) return "Tam sayı olmalı.";
-      if (def.min !== undefined && n < def.min) return `En küçük değer ${def.min}.`;
-      if (def.max !== undefined && n > def.max) return `En büyük değer ${def.max}.`;
+      if (!Number.isFinite(n)) return serverT("settings.validation.number");
+      if (def.type === "int" && !Number.isInteger(n)) return serverT("settings.validation.integer");
+      if (def.min !== undefined && n < def.min)
+        return serverT("settings.validation.min", { value: def.min });
+      if (def.max !== undefined && n > def.max)
+        return serverT("settings.validation.max", { value: def.max });
       return null;
     }
     case "bool":
       return typeof value === "boolean" || value === "0" || value === "1"
         ? null
-        : "Doğru/yanlış olmalı.";
+        : serverT("settings.validation.bool");
     case "enum":
-      return def.options?.some((o) => o.value === value)
+      return def.options?.includes(String(value))
         ? null
-        : "Geçerli seçeneklerden biri olmalı.";
+        : serverT("settings.validation.enum");
     case "cron": {
       const parts = String(value).trim().split(/\s+/);
-      return parts.length === 5 ? null : "5 alanlı cron ifadesi olmalı (dk sa gün ay hafta).";
+      return parts.length === 5 ? null : serverT("settings.validation.cron");
     }
     case "time":
       return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value).trim())
         ? null
-        : "Saat SS:DD biçiminde olmalı (ör. 23:00).";
+        : serverT("settings.validation.time");
     case "owner":
       return /^\d+:\d+$/.test(String(value).trim())
         ? null
-        : "uid:gid biçiminde olmalı (ör. 1000:1000).";
+        : serverT("settings.validation.owner");
     case "dir":
     case "dirs": {
       // Boş liste anlamlı: `files.roots` boşken dosya yöneticisi kapanıyor.
@@ -88,13 +91,14 @@ export function validateValue(def: SettingDef, value: unknown): string | null {
         .split(",")
         .map((entry) => entry.trim())
         .filter(Boolean);
-      if (def.type === "dir" && entries.length > 1) return "Tek bir klasör yolu olmalı.";
+      if (def.type === "dir" && entries.length > 1)
+        return serverT("settings.validation.singleDir");
       return entries.every((entry) => entry.startsWith("/"))
         ? null
-        : "Yollar mutlak olmalı (/ ile başlamalı).";
+        : serverT("settings.validation.absolutePath");
     }
     default:
-      return typeof value === "string" ? null : "Metin olmalı.";
+      return typeof value === "string" ? null : serverT("settings.validation.text");
   }
 }
 
@@ -160,7 +164,7 @@ export function getSetting<T = string | number | boolean>(
   scope?: { type: SettingScope; id: string },
 ): T {
   const def = findSetting(key);
-  if (!def) throw new Error(`Tanımsız ayar: ${key}`);
+  if (!def) throw new Error(serverT("settings.validation.unknownKey", { key }));
 
   if (scope) {
     const row = readRow(key, scope.type, scope.id);
@@ -204,13 +208,13 @@ export function setSetting(
   },
 ): SetResult {
   const def = findSetting(key);
-  if (!def) return { ok: false, error: `Tanımsız ayar: ${key}` };
+  if (!def) return { ok: false, error: serverT("settings.validation.unknownKey", { key }) };
 
   const scopeType = options.scopeType ?? "global";
   const scopeId = options.scopeId ?? "";
 
   if (scopeType !== "global" && !def.overridable) {
-    return { ok: false, error: "Bu ayar kaynak bazında ezilemez." };
+    return { ok: false, error: serverT("settings.screen.notOverridable") };
   }
 
   const problem = validateValue(def, value);
@@ -259,7 +263,7 @@ export function resetSetting(
   options: { scopeType?: SettingScope; scopeId?: string; updatedBy: string; userId?: number },
 ): SetResult {
   const def = findSetting(key);
-  if (!def) return { ok: false, error: `Tanımsız ayar: ${key}` };
+  if (!def) return { ok: false, error: serverT("settings.validation.unknownKey", { key }) };
 
   getDb()
     .prepare("DELETE FROM settings WHERE key = ? AND scope_type = ? AND scope_id = ?")

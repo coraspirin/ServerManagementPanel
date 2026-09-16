@@ -1,6 +1,7 @@
 "use client";
 
 import { Moon, Sun } from "lucide-react";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * Aydınlık/karanlık tema düğmesi (M3.46).
@@ -33,6 +34,8 @@ import { Moon, Sun } from "lucide-react";
 const STORAGE_KEY = "panel-theme";
 
 export function ThemeToggle() {
+  const t = useT();
+
   function toggle() {
     const root = document.documentElement;
     const next = !root.classList.contains("dark");
@@ -48,8 +51,8 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggle}
-      title="Aydınlık ve karanlık tema arasında geçiş yap"
-      aria-label="Temayı değiştir"
+      title={t("shell.theme.title")}
+      aria-label={t("shell.theme.label")}
       className="flex shrink-0 items-center justify-center rounded-md border border-line p-1.5 text-subtle transition-colors hover:text-ink"
     >
       {/*

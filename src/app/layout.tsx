@@ -1,10 +1,23 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { I18nProvider } from "@/lib/i18n/client";
+import { getDictionary } from "@/lib/i18n/runtime";
+import { getLocale, getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = {
-  title: "Sunucu Yönetim Paneli",
-  description: "Ev sunucusu için izleme, Docker/sistem yönetimi ve otomasyon paneli",
-};
+/**
+ * Dil ayarı veritabanından okunuyor; sayfa önceden üretilirse kurulum anındaki
+ * dile çakılı kalırdı. Panel zaten oturum arkasında, önbelleklenecek bir şey
+ * yok.
+ */
+export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = getT();
+  return {
+    title: t("common.appName"),
+    description: t("common.appDescription"),
+  };
+}
 
 /**
  * `viewportFit: "cover"` çentikli telefonlarda sayfayı ekranın tamamına
@@ -48,12 +61,23 @@ try {
 `;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const locale = getLocale();
+
   return (
-    <html lang="tr" suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        {/*
+          Sözlük prop olarak geçiyor: sağlayıcı iki dili birden içe aktarsaydı
+          ikisinin tüm metni istemci paketine girerdi. Kök layout burada
+          olduğu için giriş ve kiosk ekranları da kapsanıyor.
+        */}
+        <I18nProvider locale={locale} dict={getDictionary(locale)}>
+          {children}
+        </I18nProvider>
+      </body>
     </html>
   );
 }

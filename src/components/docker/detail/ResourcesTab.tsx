@@ -4,7 +4,15 @@ import { useCallback, useEffect, useState } from "react";
 import { RotateCw } from "lucide-react";
 
 import { CHART_PALETTE, MetricChart } from "@/components/metrics/MetricChart";
-import { RANGES, type RangeId, type Series, type SeriesResult } from "@/lib/metrics/catalog";
+import {
+  RANGES,
+  rangeLabel,
+  tierLabel,
+  type RangeId,
+  type Series,
+  type SeriesResult,
+} from "@/lib/metrics/catalog";
+import { useDict } from "@/lib/i18n/client";
 import { countersToRates } from "@/lib/metrics/rates";
 
 import { Section } from "./shared";
@@ -25,6 +33,7 @@ import { Section } from "./shared";
  * container yeniden yaratıldığında (aynı adla) geçmişi kopmuyor.
  */
 export function ResourcesTab({ containerName }: { containerName: string }) {
+  const dict = useDict();
   const [range, setRange] = useState<RangeId>("6h");
   const [data, setData] = useState<SeriesResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -108,13 +117,13 @@ export function ResourcesTab({ containerName }: { containerName: string }) {
                   : "border-line text-subtle hover:text-ink"
               }`}
             >
-              {entry.label}
+              {rangeLabel(dict, entry.id)}
             </button>
           ))}
         </div>
 
         <div className="flex items-center gap-2 text-xs text-subtle">
-          <span>{data.tier}</span>
+          <span>{tierLabel(dict, data.tier)}</span>
           <button
             type="button"
             onClick={() => void load()}
@@ -145,7 +154,7 @@ export function ResourcesTab({ containerName }: { containerName: string }) {
             fixedMax={100}
             from={data.from}
             to={data.to}
-            showBand={data.tier !== "ham"}
+            showBand={data.tier !== "raw"}
           />
           <Grafik
             title="Bellek"
@@ -154,7 +163,7 @@ export function ResourcesTab({ containerName }: { containerName: string }) {
             format="bytes"
             from={data.from}
             to={data.to}
-            showBand={data.tier !== "ham"}
+            showBand={data.tier !== "raw"}
           />
           <Grafik
             title="Ağ"

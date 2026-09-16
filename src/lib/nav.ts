@@ -32,7 +32,14 @@ import { settingGroups } from "@/settings.schema";
 
 export type NavItem = {
   href: string;
-  label: string;
+  /**
+   * Sözlük anahtarı — metnin kendisi DEĞİL (`nav.items.docker` gibi).
+   *
+   * Tip `string`, çünkü ayar kategorilerinin anahtarı şemadan türeyip çalışma
+   * zamanında oluşuyor; derleme anında bilinen bir birleşim yazılamıyor.
+   * Karşılığı olmayan anahtar menüde anahtarın kendisi olarak görünür.
+   */
+  labelKey: string;
   icon: LucideIcon;
   /** Menüde görünmesi için gereken izin. */
   permission: PermissionKey;
@@ -71,13 +78,13 @@ const SETTINGS_GROUP_ICONS: Record<string, LucideIcon> = {
 /** Kategoriler şemadan türetilir: yeni bir grup eklemek menüye de yansır. */
 const settingsChildren: NavItem[] = settingGroups.map((group) => ({
   href: `/settings/${group.key}`,
-  label: group.label,
+  labelKey: `settings.groups.${group.key}.label`,
   icon: SETTINGS_GROUP_ICONS[group.key] ?? Settings,
   permission: "settings.view",
 }));
 
 export type NavGroup = {
-  title: string;
+  titleKey: string;
   items: NavItem[];
 };
 
@@ -88,76 +95,76 @@ export type NavGroup = {
  */
 export const navGroups: NavGroup[] = [
   {
-    title: "Genel",
+    titleKey: "nav.groups.general",
     items: [
-      { href: "/panel", label: "Genel Bakış", icon: LayoutDashboard, permission: "panel.view" },
-      { href: "/apps", label: "Uygulamalar", icon: LayoutGrid, permission: "panel.view" },
+      { href: "/panel", labelKey: "nav.items.overview", icon: LayoutDashboard, permission: "panel.view" },
+      { href: "/apps", labelKey: "nav.items.apps", icon: LayoutGrid, permission: "panel.view" },
     ],
   },
   {
-    title: "İzleme",
+    titleKey: "nav.groups.monitoring",
     items: [
-      { href: "/monitoring", label: "İzleme", icon: Activity, permission: "metrics.view" },
+      { href: "/monitoring", labelKey: "nav.items.monitoring", icon: Activity, permission: "metrics.view" },
       {
         href: "/uptime",
-        label: "Servis Durumu",
+        labelKey: "nav.items.uptime",
         icon: HeartPulse,
         permission: "metrics.view",
       },
-      { href: "/events", label: "Olaylar", icon: Bell, permission: "metrics.view" },
-      { href: "/logs", label: "Loglar", icon: ScrollText, permission: "logs.view" },
+      { href: "/events", labelKey: "nav.items.events", icon: Bell, permission: "metrics.view" },
+      { href: "/logs", labelKey: "nav.items.logs", icon: ScrollText, permission: "logs.view" },
     ],
   },
   {
-    title: "Yönetim",
+    titleKey: "nav.groups.management",
     items: [
-      { href: "/docker", label: "Docker", icon: Container, permission: "docker.view" },
-      { href: "/database", label: "Veritabanı", icon: Database, permission: "db.read" },
-      { href: "/files", label: "Dosyalar", icon: FolderTree, permission: "files.read" },
-      { href: "/backup", label: "Yedekleme", icon: Archive, permission: "backup.manage" },
+      { href: "/docker", labelKey: "nav.items.docker", icon: Container, permission: "docker.view" },
+      { href: "/database", labelKey: "nav.items.database", icon: Database, permission: "db.read" },
+      { href: "/files", labelKey: "nav.items.files", icon: FolderTree, permission: "files.read" },
+      { href: "/backup", labelKey: "nav.items.backup", icon: Archive, permission: "backup.manage" },
     ],
   },
   {
-    title: "Ağ & Güvenlik",
+    titleKey: "nav.groups.networkSecurity",
     items: [
       {
         href: "/proxy",
-        label: "Proxy",
+        labelKey: "nav.items.proxy",
         icon: Globe,
         permission: "proxy.manage",
       },
-      { href: "/network", label: "Ağ", icon: Network, permission: "network.manage" },
+      { href: "/network", labelKey: "nav.items.network", icon: Network, permission: "network.manage" },
       {
         href: "/ports",
-        label: "Port Haritası",
+        labelKey: "nav.items.ports",
         icon: Waypoints,
         permission: "security.view",
       },
       {
         href: "/firewall",
-        label: "Güvenlik Duvarı",
+        labelKey: "nav.items.firewall",
         icon: Flame,
         permission: "security.view",
       },
-      { href: "/security", label: "Güvenlik", icon: ShieldCheck, permission: "security.view" },
+      { href: "/security", labelKey: "nav.items.security", icon: ShieldCheck, permission: "security.view" },
     ],
   },
   {
-    title: "Sistem",
+    titleKey: "nav.groups.system",
     items: [
-      { href: "/host", label: "Sunucu", icon: Server, permission: "host.service" },
-      { href: "/users", label: "Kullanıcılar", icon: UsersRound, permission: "users.manage" },
-      { href: "/audit", label: "Denetim Kayıtları", icon: FileClock, permission: "audit.view" },
-      { href: "/jobs", label: "Panel İşleri", icon: ListChecks, permission: "settings.view" },
+      { href: "/host", labelKey: "nav.items.host", icon: Server, permission: "host.service" },
+      { href: "/users", labelKey: "nav.items.users", icon: UsersRound, permission: "users.manage" },
+      { href: "/audit", labelKey: "nav.items.audit", icon: FileClock, permission: "audit.view" },
+      { href: "/jobs", labelKey: "nav.items.jobs", icon: ListChecks, permission: "settings.view" },
       {
         href: "/hostcron",
-        label: "Host Görevleri",
+        labelKey: "nav.items.hostcron",
         icon: CalendarClock,
         permission: "cron.manage",
       },
       {
         href: "/settings",
-        label: "Ayarlar",
+        labelKey: "nav.items.settings",
         icon: Settings,
         permission: "settings.view",
         children: settingsChildren,
@@ -203,6 +210,6 @@ export function findNavTrail(pathname: string): NavItem[] {
  */
 const STANDALONE: Record<string, NavItem[]> = {
   "/hesap": [
-    { href: "/hesap", label: "Hesabım", icon: UsersRound, permission: "panel.view" },
+    { href: "/hesap", labelKey: "nav.items.account", icon: UsersRound, permission: "panel.view" },
   ],
 };

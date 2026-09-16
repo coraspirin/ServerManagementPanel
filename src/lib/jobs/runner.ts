@@ -2,6 +2,13 @@ import { randomUUID } from "node:crypto";
 import { CronExpressionParser } from "cron-parser";
 import { getDb } from "@/lib/db/client";
 import { getString } from "@/lib/settings";
+import {
+  currentLocale,
+  getDictionary,
+  jobText,
+  serverT,
+  translator,
+} from "@/lib/i18n/runtime";
 import { findJob, jobDefinitions } from "./definitions";
 import type { JobDefinition, JobStatusRow } from "./types";
 
@@ -72,10 +79,12 @@ function computeNextRun(job: JobDefinition, from: Date = new Date()): number | n
 }
 
 export function scheduleText(job: JobDefinition): string {
-  if (job.schedule.kind === "fixed") return job.schedule.label;
+  if (job.schedule.kind === "fixed") return translator(currentLocale())(job.schedule.labelKey as never);
   try {
     const value = getString(job.schedule.settingKey);
-    return job.schedule.kind === "interval" ? `her ${value} sn` : value;
+    return job.schedule.kind === "interval"
+      ? serverT("jobs.screen.everySeconds", { value })
+      : value;
   } catch {
     return "?";
   }
@@ -125,14 +134,14 @@ function releaseLock(jobKey: string): void {
 
 export async function runJobNow(jobKey: string): Promise<{ ok: boolean; detail: string }> {
   const job = findJob(jobKey);
-  if (!job) return { ok: false, detail: "tanımsız iş" };
+  if (!job) return { ok: false, detail: serverT("jobs.runner.unknownJob") };
   ensureJobRows();
 
-  if (running.has(job.key)) return { ok: false, detail: "iş zaten çalışıyor" };
+  if (running.has(job.key)) return { ok: false, detail: serverT("jobs.runner.alreadyRunning") };
 
   const lease = job.leaseSeconds ?? 300;
   if (!acquireLock(job.key, lease)) {
-    return { ok: false, detail: "iş zaten çalışıyor" };
+    return { ok: false, detail: serverT("jobs.runner.alreadyRunning") };
   }
   running.add(job.key);
 
@@ -238,6 +247,7 @@ export function startScheduler(): void {
 
 export function jobStatuses(): JobStatusRow[] {
   const db = getDb();
+  const dict = getDictionary(currentLocale());
   ensureJobRows();
   return jobDefinitions.map((job) => {
     const row = db.prepare("SELECT * FROM jobs WHERE key = ?").get(job.key) as {
@@ -252,10 +262,14 @@ export function jobStatuses(): JobStatusRow[] {
       fail_count: number;
     };
 
+    // Ad ve açıklama sözlükten: tanım artık metin taşımıyor. Karşılığı yoksa
+    // anahtarın kendisi görünür — boş bir satırdan iyidir.
+    const text = jobText(dict, job.key);
+
     return {
       key: job.key,
-      label: job.label,
-      description: job.description,
+      label: text?.label ?? job.key,
+      description: text?.description ?? "",
       enabled: row.enabled === 1,
       scheduleKind: job.schedule.kind,
       scheduleText: scheduleText(job),

@@ -3,8 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Server, ShieldCheck } from "lucide-react";
+import { useT } from "@/lib/i18n/client";
 
 export function LoginForm({ next }: { next?: string }) {
+  const t = useT();
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -34,7 +36,7 @@ export function LoginForm({ next }: { next?: string }) {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error ?? "Giriş yapılamadı.");
+        setError(data.error ?? t("auth.login.failed"));
         return;
       }
 
@@ -48,7 +50,7 @@ export function LoginForm({ next }: { next?: string }) {
 
       finish(data);
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
@@ -68,7 +70,7 @@ export function LoginForm({ next }: { next?: string }) {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error ?? "Doğrulanamadı.");
+        setError(data.error ?? t("auth.twoFactor.failed"));
         // Bilet yandıysa baştan başlamak gerekiyor; kullanıcı boşuna kod
         // denemeye devam etmesin.
         if (data.expired) {
@@ -80,7 +82,7 @@ export function LoginForm({ next }: { next?: string }) {
 
       finish(data);
     } catch {
-      setError("Sunucuya ulaşılamadı.");
+      setError(t("common.errors.network"));
     } finally {
       setBusy(false);
     }
@@ -94,13 +96,10 @@ export function LoginForm({ next }: { next?: string }) {
       >
         <div className="mb-4 flex items-center gap-2">
           <ShieldCheck className="size-6 text-brand" aria-hidden />
-          <h1 className="text-lg font-semibold tracking-tight">İki adımlı doğrulama</h1>
+          <h1 className="text-lg font-semibold tracking-tight">{t("auth.twoFactor.title")}</h1>
         </div>
 
-        <p className="text-sm text-subtle">
-          Doğrulayıcı uygulamandaki 6 haneli kodu gir. Telefonun elinde değilse kurtarma
-          kodlarından birini yazabilirsin.
-        </p>
+        <p className="text-sm text-subtle">{t("auth.twoFactor.hint")}</p>
 
         <input
           inputMode="numeric"
@@ -124,7 +123,7 @@ export function LoginForm({ next }: { next?: string }) {
           disabled={busy}
           className="mt-4 w-full rounded-md bg-brand px-3 py-2 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          {busy ? "Doğrulanıyor…" : "Doğrula"}
+          {busy ? t("auth.twoFactor.submitBusy") : t("auth.twoFactor.submit")}
         </button>
 
         <button
@@ -136,7 +135,7 @@ export function LoginForm({ next }: { next?: string }) {
           }}
           className="mt-3 w-full text-center text-xs text-subtle hover:text-ink"
         >
-          Baştan başla
+          {t("auth.twoFactor.restart")}
         </button>
       </form>
     );
@@ -149,11 +148,11 @@ export function LoginForm({ next }: { next?: string }) {
     >
       <div className="mb-6 flex items-center gap-2">
         <Server className="size-6 text-brand" aria-hidden />
-        <h1 className="text-lg font-semibold tracking-tight">Sunucu Paneli</h1>
+        <h1 className="text-lg font-semibold tracking-tight">{t("shell.brand")}</h1>
       </div>
 
       <label className="block text-sm">
-        <span className="text-subtle">Kullanıcı adı</span>
+        <span className="text-subtle">{t("auth.login.username")}</span>
         <input
           type="text"
           value={username}
@@ -166,7 +165,7 @@ export function LoginForm({ next }: { next?: string }) {
       </label>
 
       <label className="mt-4 block text-sm">
-        <span className="text-subtle">Parola</span>
+        <span className="text-subtle">{t("auth.login.password")}</span>
         <input
           type="password"
           value={password}
@@ -185,10 +184,8 @@ export function LoginForm({ next }: { next?: string }) {
           className="mt-0.5 size-4 shrink-0 accent-[var(--brand)]"
         />
         <span>
-          Beni hatırla
-          <span className="mt-0.5 block text-xs text-subtle">
-            Bu cihazda açık kal. Ortak kullanılan bir makinede işaretleme.
-          </span>
+          {t("auth.login.remember")}
+          <span className="mt-0.5 block text-xs text-subtle">{t("auth.login.rememberHint")}</span>
         </span>
       </label>
 
@@ -203,7 +200,7 @@ export function LoginForm({ next }: { next?: string }) {
         disabled={busy}
         className="mt-6 w-full rounded-md bg-brand px-3 py-2 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
       >
-        {busy ? "Giriş yapılıyor…" : "Giriş yap"}
+        {busy ? t("auth.login.submitBusy") : t("auth.login.submit")}
       </button>
     </form>
   );

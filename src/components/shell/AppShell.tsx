@@ -7,6 +7,7 @@ import { LogOut, Menu, Search, Server, UserRound, X } from "lucide-react";
 import { findNavTrail, visibleNavGroups } from "@/lib/nav";
 import type { NavItem } from "@/lib/nav";
 import type { PermissionKey } from "@/lib/auth/types";
+import { useDynamicT, useT } from "@/lib/i18n/client";
 import { DESKTOP_QUERY, useMediaQuery } from "@/lib/useMediaQuery";
 import { CommandPalette } from "./CommandPalette";
 import { LinkPending } from "./LinkPending";
@@ -21,6 +22,10 @@ type Props = {
 };
 
 export function AppShell({ children, mode, version, user }: Props) {
+  const t = useT();
+  // Menü maddelerinin anahtarı şemadan türeyebiliyor (ayar kategorileri), bu
+  // yüzden sabit anahtar bekleyen `t` yerine dinamik olanı.
+  const tk = useDynamicT();
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -82,7 +87,7 @@ export function AppShell({ children, mode, version, user }: Props) {
       {menuOpen && (
         <button
           type="button"
-          aria-label="Menüyü kapat"
+          aria-label={t("shell.menu.close")}
           onClick={() => setMenuOpen(false)}
           className="tap-auto fixed inset-0 z-30 bg-black/40 lg:hidden"
         />
@@ -109,10 +114,10 @@ export function AppShell({ children, mode, version, user }: Props) {
       >
         <div className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-4">
           <Server className="size-5 shrink-0 text-brand" aria-hidden />
-          <span className="truncate font-semibold tracking-tight">Sunucu Paneli</span>
+          <span className="truncate font-semibold tracking-tight">{t("shell.brand")}</span>
           <button
             type="button"
-            aria-label="Menüyü kapat"
+            aria-label={t("shell.menu.close")}
             onClick={() => setMenuOpen(false)}
             className="-mr-1 ml-auto flex shrink-0 items-center justify-center rounded p-1 text-subtle hover:text-ink lg:hidden"
           >
@@ -122,9 +127,9 @@ export function AppShell({ children, mode, version, user }: Props) {
 
         <nav className="flex-1 overflow-y-auto overscroll-contain px-3 py-4">
           {groups.map((group) => (
-            <div key={group.title} className="mb-5">
+            <div key={group.titleKey} className="mb-5">
               <p className="px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-subtle">
-                {group.title}
+                {tk(group.titleKey)}
               </p>
               <ul className="space-y-0.5">
                 {group.items.map((item) => {
@@ -191,13 +196,9 @@ export function AppShell({ children, mode, version, user }: Props) {
               className={`rounded px-1.5 py-0.5 font-medium ${
                 mode === "mock" ? "bg-warn/15 text-warn" : "bg-ok/15 text-ok"
               }`}
-              title={
-                mode === "mock"
-                  ? "MOCK_MODE açık — veriler fixtures/ altından geliyor"
-                  : "Gerçek veri kaynakları kullanılıyor"
-              }
+              title={mode === "mock" ? t("shell.mode.mockTitle") : t("shell.mode.liveTitle")}
             >
-              {mode === "mock" ? "MOCK" : "CANLI"}
+              {mode === "mock" ? t("shell.mode.mock") : t("shell.mode.live")}
             </span>
           </div>
         </div>
@@ -215,7 +216,7 @@ export function AppShell({ children, mode, version, user }: Props) {
           <button
             type="button"
             aria-expanded={menuOpen}
-            aria-label="Menüyü aç"
+            aria-label={t("shell.menu.open")}
             onClick={() => setMenuOpen(true)}
             className="-ml-1 flex shrink-0 items-center justify-center rounded p-1 text-subtle hover:text-ink lg:hidden"
           >
@@ -231,7 +232,7 @@ export function AppShell({ children, mode, version, user }: Props) {
 
           <h1 className="flex min-w-0 items-baseline gap-1.5 font-semibold">
             {trail.length === 0 ? (
-              "Sunucu Paneli"
+              t("shell.brand")
             ) : (
               trail.map((item, index) => (
                 <span key={item.href} className="flex min-w-0 items-baseline gap-1.5">
@@ -245,7 +246,7 @@ export function AppShell({ children, mode, version, user }: Props) {
                       index < trail.length - 1 ? "font-normal text-subtle" : ""
                     }`}
                   >
-                    {item.label}
+                    {tk(item.labelKey)}
                   </span>
                 </span>
               ))
@@ -267,13 +268,13 @@ export function AppShell({ children, mode, version, user }: Props) {
             */}
             <button
               type="button"
-              title="Ara ve git (Ctrl+K)"
+              title={t("shell.search.title")}
               onClick={() =>
                 window.dispatchEvent(
                   new KeyboardEvent("keydown", { key: "k", ctrlKey: true }),
                 )
               }
-              aria-label="Ara ve git"
+              aria-label={t("shell.search.label")}
               className="flex items-center justify-center gap-2 rounded-md border border-line px-2 py-1.5 text-subtle transition-colors hover:text-ink"
             >
               <Search className="size-4" />
@@ -281,7 +282,7 @@ export function AppShell({ children, mode, version, user }: Props) {
             </button>
             <Link
               href="/hesap"
-              title="Hesabım — parola ve iki adımlı doğrulama"
+              title={t("shell.account.title")}
               className="hidden rounded-md px-2 py-1 text-right transition-colors hover:bg-line/50 sm:block"
             >
               <div className="text-sm font-medium leading-tight">{user.displayName}</div>
@@ -291,8 +292,8 @@ export function AppShell({ children, mode, version, user }: Props) {
               type="button"
               onClick={logout}
               disabled={loggingOut}
-              title="Çıkış yap"
-              aria-label="Çıkış yap"
+              title={t("shell.logout")}
+              aria-label={t("shell.logout")}
               className="flex items-center justify-center rounded-md border border-line p-1.5 text-subtle transition-colors hover:text-danger disabled:opacity-50"
             >
               <LogOut className="size-4" />
@@ -320,6 +321,7 @@ function NavLink({
   compact?: boolean;
 }) {
   const Icon = item.icon;
+  const tk = useDynamicT();
 
   return (
     <Link
@@ -335,7 +337,7 @@ function NavLink({
       }`}
     >
       <Icon className={`shrink-0 ${compact ? "size-3.5" : "size-4"}`} aria-hidden />
-      <span className="truncate">{item.label}</span>
+      <span className="truncate">{tk(item.labelKey)}</span>
       {item.milestone && (
         <span className="ml-auto rounded border border-line px-1 py-px font-mono text-[10px] text-subtle">
           {item.milestone}

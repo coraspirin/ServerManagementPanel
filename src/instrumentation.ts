@@ -44,6 +44,12 @@ export async function register() {
     console.log(`[settings] env'den tohumlandı: ${seeded.join(", ")}`);
   }
 
+  // Arayüz dili — tohumlamadan SONRA: dil env'den gelmiş olabilir.
+  // Kütüphane kodu ve API uçları seçili dili yalnızca bu kayıt sayesinde
+  // görebiliyor; yapılmazsa hepsi Türkçeye düşer (bkz. lib/i18n/runtime.ts).
+  const { registerLocaleResolver } = await import("@/lib/i18n/server");
+  registerLocaleResolver();
+
   const { bootstrapAdmin } = await import("@/lib/auth/bootstrap");
   bootstrapAdmin();
 

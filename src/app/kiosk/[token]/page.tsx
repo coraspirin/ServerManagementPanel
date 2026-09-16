@@ -10,6 +10,7 @@ import { verifyKioskToken } from "@/lib/home/kiosk";
 import { internetStatus } from "@/lib/home/internet";
 import { currentWeather } from "@/lib/home/weather";
 import { getNumber, getString } from "@/lib/settings";
+import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ export default async function KioskPage({ params }: { params: Promise<{ token: s
 
   const [internet, weather] = await Promise.all([internetStatus(), currentWeather()]);
   const groups = appGroups(browserHost);
+  const t = getT();
 
   return (
     <main className="min-h-dvh bg-canvas p-6 text-ink">
@@ -57,7 +59,7 @@ export default async function KioskPage({ params }: { params: Promise<{ token: s
           return (
             <section key={group.category?.id ?? "diger"}>
               <h2 className="mb-2 text-base font-semibold">
-                {group.category?.name ?? "Diğer"}
+                {group.category?.name ?? t("common.uncategorized")}
               </h2>
               {/* Dokunmatik için daha az sütun: parmakla isabet ettirilecek
                   hedefler fare imlecinden büyük olmalı. */}

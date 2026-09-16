@@ -35,6 +35,11 @@ export type SettingType =
 
 export type SettingScope = "global" | "host" | "container" | "volume" | "app" | "repo";
 
+/**
+ * Bir ayarın YAPISI. Ekranda görünen metin (ad, yardım, birim, bölüm başlığı,
+ * enum seçenek adları) burada değil, sözlükte: `dict/*\/settings.ts` içindeki
+ * `items`, `sections` ve `units`. Şema iki dili birden taşıyamaz.
+ */
 export type SettingDef = {
   key: string;
   group: string;
@@ -45,12 +50,15 @@ export type SettingDef = {
   section?: string;
   type: SettingType;
   default: string | number | boolean;
-  label: string;
-  help?: string;
-  unit?: string;
   min?: number;
   max?: number;
-  options?: { value: string; label: string }[];
+  /**
+   * Enum değerleri — SIRASI ekrandaki sıradır.
+   *
+   * Yalnızca değerler: her değerin görünen adı sözlükte
+   * (`settings.items.<anahtar>.options.<değer>`).
+   */
+  options?: string[];
   /** Kaynak bazında ezilebilir mi (⭐ işaretli ayarlar). */
   overridable?: boolean;
   /** Değişiklik yürürlüğe girmesi için yeniden başlatma gerekiyor mu. */
@@ -65,11 +73,13 @@ export type SettingDef = {
  * Bir ayar kategorisi. `key` aynı zamanda URL parçasıdır (`/settings/<key>`),
  * bu yüzden yeni bir kategori eklemek yeni bir sayfa açar — ayrıca route
  * yazmak gerekmez.
+ *
+ * Kategorinin ADI ve AÇIKLAMASI burada değil, sözlükte: `dict/*\/settings.ts`
+ * içindeki `groups.<key>`. Şema iki dili birden taşıyamaz; burada kalan tek
+ * şey yapı.
  */
 export type SettingGroupDef = {
   key: string;
-  label: string;
-  description?: string;
 };
 
 export type ResolvedSetting = {

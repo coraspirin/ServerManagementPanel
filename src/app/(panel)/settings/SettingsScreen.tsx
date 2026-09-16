@@ -15,6 +15,15 @@ import { DirListEditor, DirPicker } from "@/components/settings/DirPicker";
 import { OwnerSelect } from "@/components/settings/HostUserSelect";
 import { RichTextField } from "@/components/settings/RichTextField";
 import { settingDefs, settingGroups } from "@/settings.schema";
+import { useDict, useLocale, useT } from "@/lib/i18n/client";
+import {
+  settingItemText,
+  settingSectionText,
+  settingsGroupText,
+  type SettingItemText,
+} from "@/lib/i18n/runtime";
+import { intlLocale, type Locale } from "@/lib/i18n/locales";
+import type { Dictionary } from "@/lib/i18n/dict/tr";
 
 /**
  * Geniş bir denetim isteyen ayar tipleri.
@@ -41,9 +50,16 @@ function readCsrfToken(): string {
   return match ? decodeURIComponent(match[1]) : "";
 }
 
-function matches(def: SettingDef, query: string): boolean {
-  return [def.key, def.label, def.section ?? "", def.help ?? ""].some((text) =>
-    text.toLocaleLowerCase("tr").includes(query),
+/**
+ * Arama, ekranda GÖRÜNEN metne bakar: kullanıcı ne okuduysa onu yazıyor.
+ * Anahtar da aranıyor çünkü "docker.stats" gibi bir anahtarı hatırlayan da var.
+ */
+function matches(def: SettingDef, query: string, dict: Dictionary, locale: Locale): boolean {
+  const text = settingItemText(dict, def.key);
+  const section = def.section ? settingSectionText(dict, def.section) : null;
+
+  return [def.key, text?.label ?? "", section ?? "", text?.help ?? ""].some((candidate) =>
+    candidate.toLocaleLowerCase(intlLocale(locale)).includes(query),
   );
 }
 
@@ -61,6 +77,16 @@ export function SettingsScreen({
   canEdit,
   initialQuery,
 }: Props) {
+  const t = useT();
+  const dict = useDict();
+  const locale = useLocale();
+
+  // Kategori adı sözlükten geliyor: şema artık yalnızca anahtarı tutuyor.
+  // Karşılığı yoksa anahtarın kendisi gösteriliyor — boş başlıktan iyidir.
+  const groupText = settingsGroupText(dict, group.key);
+  const groupLabel = groupText?.label ?? group.key;
+  const groupDescription = groupText?.description;
+
   const [values, setValues] = useState(
     () => new Map(initialValues.map((v) => [v.key, v])),
   );
@@ -69,17 +95,17 @@ export function SettingsScreen({
   const [errors, setErrors] = useState<Map<string, string>>(new Map());
   const [saved, setSaved] = useState<string | null>(null);
 
-  const needle = query.trim().toLocaleLowerCase("tr");
+  const needle = query.trim().toLocaleLowerCase(intlLocale(locale));
 
   const visibleSections = useMemo(() => {
     if (!needle) return sections;
     return sections
       .map((section) => ({
         ...section,
-        defs: section.defs.filter((def) => matches(def, needle)),
+        defs: section.defs.filter((def) => matches(def, needle, dict, locale)),
       }))
       .filter((section) => section.defs.length > 0);
-  }, [sections, needle]);
+  }, [sections, needle, dict, locale]);
 
   /**
    * Aranan şey başka bir kategorideyse kullanıcı bunu bilemez — kategori
@@ -90,13 +116,13 @@ export function SettingsScreen({
     if (!needle) return [];
     const counts = new Map<string, number>();
     for (const def of settingDefs) {
-      if (def.group === group.key || !matches(def, needle)) continue;
+      if (def.group === group.key || !matches(def, needle, dict, locale)) continue;
       counts.set(def.group, (counts.get(def.group) ?? 0) + 1);
     }
     return settingGroups
       .filter((candidate) => counts.has(candidate.key))
       .map((candidate) => ({ ...candidate, count: counts.get(candidate.key) ?? 0 }));
-  }, [needle, group.key]);
+  }, [needle, group.key, dict, locale]);
 
   async function send(key: string, payload: Record<string, unknown>) {
     setBusyKey(key);
@@ -118,7 +144,16 @@ export function SettingsScreen({
       const data = await response.json();
 
       if (!response.ok) {
-        setErrors((prev) => new Map(prev).set(key, data.error ?? "Kaydedilemedi."));
+        setErrors((prev) => new Map(prev).set(key, data.error ?? t("common.errors.notSaved")));
+        return;
+      }
+
+      // Dil değişti: sözlük kök layout'ta seçiliyor, sayfa başlığı ve
+      // <html lang> de oradan geliyor. `router.refresh()` yalnızca istemci
+      // ağacını tazeler ve ikisi eski dilde kalırdı — tam yeniden yükleme
+      // burada dürüst olan yol.
+      if (key === "general.language") {
+        window.location.reload();
         return;
       }
 
@@ -126,7 +161,7 @@ export function SettingsScreen({
       setSaved(key);
       setTimeout(() => setSaved((s) => (s === key ? null : s)), 1800);
     } catch {
-      setErrors((prev) => new Map(prev).set(key, "Sunucuya ulaşılamadı."));
+      setErrors((prev) => new Map(prev).set(key, t("common.errors.network")));
     } finally {
       setBusyKey(null);
     }
@@ -144,7 +179,7 @@ export function SettingsScreen({
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={`${group.label} içinde ara…`}
+            placeholder={t("settings.screen.searchPlaceholder", { group: groupLabel })}
             className="w-full rounded-md border border-line bg-surface py-2 pl-9 pr-3 text-sm outline-none focus:border-brand"
           />
         </div>
@@ -153,7 +188,7 @@ export function SettingsScreen({
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs text-subtle">
             <span className="flex items-center gap-1">
               <CornerDownRight className="size-3.5" aria-hidden />
-              Diğer kategorilerde:
+              {t("settings.screen.elsewhere")}
             </span>
             {elsewhere.map((candidate) => (
               <Link
@@ -161,15 +196,15 @@ export function SettingsScreen({
                 href={`/settings/${candidate.key}?q=${encodeURIComponent(query.trim())}`}
                 className="text-brand hover:underline"
               >
-                {candidate.label} ({candidate.count})
+                {settingsGroupText(dict, candidate.key)?.label ?? candidate.key} ({candidate.count})
               </Link>
             ))}
           </div>
         )}
       </div>
 
-      {group.description && !needle && (
-        <p className="px-1 text-sm text-subtle">{group.description}</p>
+      {groupDescription && !needle && (
+        <p className="px-1 text-sm text-subtle">{groupDescription}</p>
       )}
 
       {visibleSections.map((section, index) => (
@@ -179,7 +214,9 @@ export function SettingsScreen({
         >
           {section.title && (
             <div className="border-b border-line px-5 py-2.5">
-              <h2 className="text-sm font-semibold">{section.title}</h2>
+              <h2 className="text-sm font-semibold">
+                {settingSectionText(dict, section.title) ?? section.title}
+              </h2>
             </div>
           )}
 
@@ -188,6 +225,9 @@ export function SettingsScreen({
               const resolved = values.get(def.key);
               const overridden = resolved?.source !== "default";
               const error = errors.get(def.key);
+              // Sözlükte karşılığı yoksa anahtarın kendisi gösteriliyor:
+              // boş bir satır, ayarın kaybolduğunu düşündürürdü.
+              const text = settingItemText(dict, def.key);
 
               return (
                 <div
@@ -196,39 +236,37 @@ export function SettingsScreen({
                 >
                   <div className="min-w-0 sm:max-w-md">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium">{def.label}</span>
+                      <span className="text-sm font-medium">{text?.label ?? def.key}</span>
                       {def.overridable && (
                         <span
-                          title="Kaynak bazında ezilebilir"
+                          title={t("settings.screen.overridableTitle")}
                           className="rounded bg-brand/10 px-1 text-[10px] font-medium text-brand"
                         >
-                          ezilebilir
+                          {t("settings.screen.overridable")}
                         </span>
                       )}
                       {def.restartRequired && (
                         <span className="rounded bg-warn/15 px-1 text-[10px] font-medium text-warn">
-                          yeniden başlatma gerekir
+                          {t("settings.screen.restartRequired")}
                         </span>
                       )}
                       {def.seededFromEnv && (
                         <span
-                          title="İlk kurulumda env değişkeninden tohumlandı; artık panel otoriter"
+                          title={t("settings.screen.seededTitle")}
                           className="rounded border border-line px-1 text-[10px] text-subtle"
                         >
-                          env&apos;den tohumlandı
+                          {t("settings.screen.seeded")}
                         </span>
                       )}
                     </div>
                     <p className="mt-0.5 font-mono text-[11px] text-subtle">{def.key}</p>
-                    {def.help && <p className="mt-1 text-xs text-subtle">{def.help}</p>}
+                    {text?.help && <p className="mt-1 text-xs text-subtle">{text.help}</p>}
                     {resolved?.unreadable && (
                       // Boş bir alan "hiç girilmedi" demek. Oysa değer GİRİLDİ,
                       // sadece okunamıyor — sebebi söylenmezse kullanıcı
                       // panelin unuttuğunu sanır.
                       <p className="mt-1 text-xs text-warn">
-                        Kayıtlı bir değer var ama okunamıyor: MASTER_KEY, bu değer
-                        kaydedildiğindekinden farklı. Eski anahtar geri konabilir ya da
-                        değeri yeniden girebilirsin.
+                        {t("settings.screen.unreadable")}
                       </p>
                     )}
                     {error && <p className="mt-1 text-xs text-danger">{error}</p>}
@@ -241,15 +279,18 @@ export function SettingsScreen({
                   >
                     <SettingInput
                       def={def}
+                      text={text}
                       value={resolved?.value ?? def.default}
                       disabled={!canEdit || busyKey === def.key}
                       onCommit={(value) => send(def.key, { value })}
                     />
-                    {saved === def.key && <span className="text-xs text-ok">kaydedildi</span>}
+                    {saved === def.key && (
+                      <span className="text-xs text-ok">{t("settings.screen.saved")}</span>
+                    )}
                     {overridden && canEdit && (
                       <button
                         type="button"
-                        title={`Varsayılana dön (${String(def.default)})`}
+                        title={t("settings.screen.resetTitle", { value: String(def.default) })}
                         onClick={() => send(def.key, { reset: true })}
                         disabled={busyKey === def.key}
                         className="rounded border border-line p-1.5 text-subtle transition-colors hover:text-ink disabled:opacity-50"
@@ -267,7 +308,7 @@ export function SettingsScreen({
 
       {visibleSections.length === 0 && (
         <p className="rounded-lg border border-dashed border-line bg-surface px-5 py-8 text-center text-sm text-subtle">
-          {group.label} içinde &quot;{query}&quot; ile eşleşen ayar yok.
+          {t("settings.screen.noMatch", { group: groupLabel, query })}
         </p>
       )}
 
@@ -281,15 +322,19 @@ export function SettingsScreen({
 /** Tip → widget eşlemesi. Yeni bir tip eklenirse yalnızca burası genişler. */
 function SettingInput({
   def,
+  text,
   value,
   disabled,
   onCommit,
 }: {
   def: SettingDef;
+  /** Ayarın çevrilmiş metni: başlık, birim ve enum seçeneklerinin adları. */
+  text: SettingItemText | null;
   value: string | number | boolean;
   disabled: boolean;
   onCommit: (value: string | number | boolean) => void;
 }) {
+  const t = useT();
   const [draft, setDraft] = useState(String(value));
   const inputClass =
     "w-full rounded-md border border-line bg-canvas px-2 py-1.5 text-sm outline-none focus:border-brand disabled:opacity-50 sm:w-40";
@@ -316,7 +361,7 @@ function SettingInput({
         value={String(value)}
         disabled={disabled}
         onCommit={onCommit}
-        emptyMeans="Hiçbiri seçili değil — çalışan tüm container'lar toplanır."
+        emptyMeans={t("settings.screen.containersEmpty")}
       />
     );
   }
@@ -339,7 +384,7 @@ function SettingInput({
         value={String(value)}
         disabled={disabled}
         onCommit={onCommit}
-        title={def.label}
+        title={text?.label ?? def.key}
       />
     );
   }
@@ -365,8 +410,8 @@ function SettingInput({
         className={inputClass}
       >
         {def.options?.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
+          <option key={option} value={option}>
+            {text?.options?.[option] ?? option}
           </option>
         ))}
       </select>
@@ -402,7 +447,7 @@ function SettingInput({
         }}
         className={inputClass}
       />
-      {def.unit && <span className="w-8 text-xs text-subtle">{def.unit}</span>}
+      {text?.unit && <span className="w-8 text-xs text-subtle">{text.unit}</span>}
     </div>
   );
 }

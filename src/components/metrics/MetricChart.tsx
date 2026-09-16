@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { formatValue, type MetricFormat, type Series } from "@/lib/metrics/catalog";
+import { useDict, useLocale, useT } from "@/lib/i18n/client";
 
 /**
  * Bağımlılıksız zaman serisi grafiği (M1.1).
@@ -38,8 +39,8 @@ function niceCeil(value: number): number {
   return step * magnitude;
 }
 
-function seriesTitle(series: Series): string {
-  return series.label || "toplam";
+function seriesTitle(series: Series, total: string): string {
+  return series.label || total;
 }
 
 type Props = {
@@ -66,6 +67,9 @@ export function MetricChart({
   height = 180,
   names,
 }: Props) {
+  const t = useT();
+  const locale = useLocale();
+  const dict = useDict();
   const [hoverX, setHoverX] = useState<number | null>(null);
 
   const model = useMemo(() => {
@@ -119,12 +123,12 @@ export function MetricChart({
     return {
       ts: best,
       values: series.map((s, i) => ({
-        name: names?.[i] ?? seriesTitle(s),
+        name: names?.[i] ?? seriesTitle(s, t("metrics.legend.total")),
         color: CHART_PALETTE[i % CHART_PALETTE.length],
         point: model.byTs[i].get(best) ?? null,
       })),
     };
-  }, [hoverX, hasData, from, to, model, series, names]);
+  }, [hoverX, hasData, from, to, model, series, names, t]);
 
   const ticks = [0, 0.25, 0.5, 0.75, 1];
 
@@ -202,13 +206,13 @@ export function MetricChart({
         </svg>
 
         {/* Y ekseni etiketleri — SVG içinde olsalar yatayda ezilirdi. */}
-        {ticks.slice(0, 4).map((t) => (
+        {ticks.slice(0, 4).map((ratio) => (
           <span
-            key={t}
-            style={{ top: `${t * 100}%` }}
+            key={ratio}
+            style={{ top: `${ratio * 100}%` }}
             className="pointer-events-none absolute left-1 -translate-y-1/2 bg-surface/80 px-0.5 text-[10px] text-subtle"
           >
-            {formatValue(format, model.max * (1 - t))}
+            {formatValue(format, model.max * (1 - ratio), locale, dict)}
           </span>
         ))}
 
@@ -248,7 +252,7 @@ export function MetricChart({
                 />
                 <span className="text-subtle">{v.name}</span>
                 <span className="ml-auto font-medium">
-                  {v.point ? formatValue(format, v.point.avg) : "—"}
+                  {v.point ? formatValue(format, v.point.avg, locale, dict) : "—"}
                 </span>
               </div>
             ))}

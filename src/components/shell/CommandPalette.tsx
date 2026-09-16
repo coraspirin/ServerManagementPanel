@@ -15,6 +15,7 @@ import {
 import { fold } from "@/lib/text";
 import { navGroups } from "@/lib/nav";
 import type { PermissionKey } from "@/lib/auth/types";
+import { useDynamicT, useT } from "@/lib/i18n/client";
 
 /**
  * M3.13 — komut paleti (Ctrl+K / Cmd+K).
@@ -47,21 +48,22 @@ const KIND_ICON: Record<Entry["kind"], LucideIcon> = {
   monitor: HeartPulse,
 };
 
-const KIND_LABEL: Record<Entry["kind"], string> = {
-  page: "Sayfa",
-  container: "Container",
-  app: "Uygulama",
-  monitor: "Servis",
-};
-
-
 export function CommandPalette({ permissions }: { permissions: PermissionKey[] }) {
+  const t = useT();
+  const tk = useDynamicT();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [live, setLive] = useState<Entry[] | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const kindLabel: Record<Entry["kind"], string> = {
+    page: t("shell.palette.kind.page"),
+    container: t("shell.palette.kind.container"),
+    app: t("shell.palette.kind.app"),
+    monitor: t("shell.palette.kind.monitor"),
+  };
 
   /** Sayfalar — izne göre süzülmüş, ağ isteği yok. */
   const pages = useMemo<Entry[]>(() => {
@@ -71,8 +73,8 @@ export function CommandPalette({ permissions }: { permissions: PermissionKey[] }
         if (!permissions.includes(item.permission)) continue;
         out.push({
           id: `page:${item.href}`,
-          label: item.label,
-          hint: group.title,
+          label: tk(item.labelKey),
+          hint: tk(group.titleKey),
           href: item.href,
           kind: "page",
           external: false,
@@ -81,8 +83,8 @@ export function CommandPalette({ permissions }: { permissions: PermissionKey[] }
           if (!permissions.includes(child.permission)) continue;
           out.push({
             id: `page:${child.href}`,
-            label: `${item.label} · ${child.label}`,
-            hint: group.title,
+            label: `${tk(item.labelKey)} · ${tk(child.labelKey)}`,
+            hint: tk(group.titleKey),
             href: child.href,
             kind: "page",
             external: false,
@@ -91,7 +93,7 @@ export function CommandPalette({ permissions }: { permissions: PermissionKey[] }
       }
     }
     return out;
-  }, [permissions]);
+  }, [permissions, tk]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -169,7 +171,7 @@ export function CommandPalette({ permissions }: { permissions: PermissionKey[] }
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Komut paleti"
+      aria-label={t("shell.palette.label")}
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-4 sm:pt-[12vh]"
       onClick={(event) => {
         if (event.target === event.currentTarget) setOpen(false);
@@ -197,7 +199,7 @@ export function CommandPalette({ permissions }: { permissions: PermissionKey[] }
                 choose(results[activeIndex]);
               }
             }}
-            placeholder="Sayfa, container, uygulama veya servis ara…"
+            placeholder={t("shell.palette.placeholder")}
             className="w-full bg-transparent py-3 text-sm outline-none placeholder:text-subtle"
           />
           <kbd className="hidden shrink-0 rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-subtle sm:block">
@@ -208,7 +210,7 @@ export function CommandPalette({ permissions }: { permissions: PermissionKey[] }
           <button
             type="button"
             onClick={() => setOpen(false)}
-            aria-label="Kapat"
+            aria-label={t("common.actions.close")}
             className="-mr-1 flex shrink-0 items-center justify-center rounded p-1 text-subtle transition-colors hover:text-ink sm:hidden"
           >
             <X className="size-4" />
@@ -218,7 +220,7 @@ export function CommandPalette({ permissions }: { permissions: PermissionKey[] }
         <ul className="max-h-[50dvh] overflow-y-auto overscroll-contain py-1">
           {results.length === 0 && (
             <li className="px-4 py-6 text-center text-sm text-subtle">
-              Eşleşme yok{live === null ? " (canlı kayıtlar yükleniyor…)" : ""}.
+              {live === null ? t("shell.palette.emptyLoading") : t("shell.palette.empty")}
             </li>
           )}
           {results.map((entry, index) => {
@@ -237,7 +239,7 @@ export function CommandPalette({ permissions }: { permissions: PermissionKey[] }
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm">{entry.label}</span>
                     <span className="block truncate text-xs text-subtle">
-                      {KIND_LABEL[entry.kind]} · {entry.hint}
+                      {kindLabel[entry.kind]} · {entry.hint}
                     </span>
                   </span>
                   {entry.external ? (

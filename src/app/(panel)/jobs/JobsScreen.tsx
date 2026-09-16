@@ -5,29 +5,24 @@ import { Play } from "lucide-react";
 import type { JobStatusRow } from "@/lib/jobs/types";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import { describeCron } from "@/lib/cron/friendly";
+import { useFormat, useT } from "@/lib/i18n/client";
 
 function readCsrfToken(): string {
   const match = document.cookie.match(new RegExp(`(?:^|; )${CSRF_COOKIE}=([^;]*)`));
   return match ? decodeURIComponent(match[1]) : "";
 }
 
-function formatTime(ts: number | null): string {
-  if (!ts) return "—";
-  return new Date(ts * 1000).toLocaleString("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatRelative(ts: number | null): string {
-  if (!ts) return "—";
-  const diff = ts - Math.floor(Date.now() / 1000);
-  const abs = Math.abs(diff);
-  const unit = abs < 60 ? `${abs} sn` : abs < 3600 ? `${Math.round(abs / 60)} dk` : `${Math.round(abs / 3600)} sa`;
-  return diff >= 0 ? `${unit} sonra` : `${unit} önce`;
-}
+/**
+ * Durum veritabanında TÜRKÇE yazılı duruyor (eski kayıtlar da öyle). Değeri
+ * değiştirmek bir migration demekti; onun yerine ekranda anahtara çevrilip
+ * sözlükten okunuyor.
+ */
+const STATUS_KEY = {
+  başarılı: "success",
+  hata: "error",
+  çalışıyor: "running",
+  bekliyor: "waiting",
+} as const;
 
 const STATUS_STYLE: Record<string, string> = {
   başarılı: "bg-ok/15 text-ok",
@@ -36,6 +31,34 @@ const STATUS_STYLE: Record<string, string> = {
   bekliyor: "bg-line text-subtle",
 };
 
+type T = ReturnType<typeof useT>;
+type F = ReturnType<typeof useFormat>;
+
+// Bileşenin DIŞINDA: `Date.now()` render sırasında çağrılırsa React'in saflık
+// kuralı haklı olarak itiraz ediyor (react-hooks/purity).
+function formatTime(ts: number | null, f: F): string {
+  if (!ts) return "—";
+  return f.dateTime(ts * 1000, {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatRelative(ts: number | null, t: T): string {
+  if (!ts) return "—";
+  const diff = ts - Math.floor(Date.now() / 1000);
+  const abs = Math.abs(diff);
+  const value =
+    abs < 60
+      ? t("common.durationShort.second", { count: abs })
+      : abs < 3600
+        ? t("common.durationShort.minute", { count: Math.round(abs / 60) })
+        : t("common.durationShort.hour", { count: Math.round(abs / 3600) });
+  return diff >= 0 ? t("jobs.screen.inSeconds", { value }) : t("jobs.screen.agoSeconds", { value });
+}
+
 export function JobsScreen({
   initialJobs,
   canRun,
@@ -43,6 +66,8 @@ export function JobsScreen({
   initialJobs: JobStatusRow[];
   canRun: boolean;
 }) {
+  const t = useT();
+  const f = useFormat();
   const [jobs, setJobs] = useState(initialJobs);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -64,20 +89,31 @@ export function JobsScreen({
   return (
     <div className="space-y-4">
       <p className="text-sm text-subtle">
-        Zamanlamalar <strong className="text-ink">Ayarlar → Panel İşleri</strong> altından
-        değiştirilir; değişiklik anında uygulanır, yeniden başlatma gerekmez.
+        {(() => {
+          // Cümlenin ortasındaki ayar yolu KALIN. Yer tutucu doldurulmadan
+          // bırakılıp ona göre bölünüyor: cümleyi iki ayrı anahtara kesmek,
+          // sözdizimi farklı bir dilde parçaları yanlış sıraya sokardı.
+          const [oncesi, sonrasi] = t("jobs.screen.intro").split("{settings}");
+          return (
+            <>
+              {oncesi}
+              <strong className="text-ink">{t("jobs.screen.introSettings")}</strong>
+              {sonrasi}
+            </>
+          );
+        })()}
       </p>
 
       <div className="overflow-x-auto rounded-lg border border-line bg-surface">
         <table className="rtable w-full min-w-[720px] text-sm">
           <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-subtle">
             <tr>
-              <th className="px-4 py-2.5 font-medium">İş</th>
-              <th className="px-4 py-2.5 font-medium">Sıklık</th>
-              <th className="px-4 py-2.5 font-medium">Durum</th>
-              <th className="px-4 py-2.5 font-medium">Son çalışma</th>
-              <th className="px-4 py-2.5 font-medium">Sonraki</th>
-              <th className="px-4 py-2.5 font-medium">Çalışma/Hata</th>
+              <th className="px-4 py-2.5 font-medium">{t("jobs.screen.colJob")}</th>
+              <th className="px-4 py-2.5 font-medium">{t("jobs.screen.colSchedule")}</th>
+              <th className="px-4 py-2.5 font-medium">{t("jobs.screen.colStatus")}</th>
+              <th className="px-4 py-2.5 font-medium">{t("jobs.screen.colLastRun")}</th>
+              <th className="px-4 py-2.5 font-medium">{t("jobs.screen.colNext")}</th>
+              <th className="px-4 py-2.5 font-medium">{t("jobs.screen.colRuns")}</th>
               {canRun && <th className="px-4 py-2.5" />}
             </tr>
           </thead>
@@ -91,31 +127,33 @@ export function JobsScreen({
                     <div className="mt-1 text-xs text-danger">{job.lastError}</div>
                   )}
                 </td>
-                <td data-label="Sıklık" className="px-4 py-3 text-xs">
+                <td data-label={t("jobs.screen.colSchedule")} className="px-4 py-3 text-xs">
                   {/* Ham cron değil, insan diliyle. Aralık işleri zaten okunur. */}
                   {job.scheduleKind === "cron"
                     ? describeCron(job.scheduleText)
                     : job.scheduleText}
                 </td>
-                <td data-label="Durum" className="px-4 py-3">
+                <td data-label={t("jobs.screen.colStatus")} className="px-4 py-3">
                   <span
                     className={`rounded px-1.5 py-0.5 text-xs font-medium ${
                       STATUS_STYLE[job.lastStatus] ?? "bg-line text-subtle"
                     }`}
                   >
-                    {job.lastStatus}
+                    {job.lastStatus in STATUS_KEY
+                      ? t(`jobs.status.${STATUS_KEY[job.lastStatus as keyof typeof STATUS_KEY]}`)
+                      : job.lastStatus}
                   </span>
                 </td>
-                <td data-label="Son çalışma" className="px-4 py-3 text-xs text-subtle">
-                  {formatTime(job.lastFinishAt)}
+                <td data-label={t("jobs.screen.colLastRun")} className="px-4 py-3 text-xs text-subtle">
+                  {formatTime(job.lastFinishAt, f)}
                   {job.lastDurationMs !== null && (
                     <span className="ml-1 opacity-70">({job.lastDurationMs} ms)</span>
                   )}
                 </td>
-                <td data-label="Sonraki" className="px-4 py-3 text-xs text-subtle">
-                  {formatRelative(job.nextRunAt)}
+                <td data-label={t("jobs.screen.colNext")} className="px-4 py-3 text-xs text-subtle">
+                  {formatRelative(job.nextRunAt, t)}
                 </td>
-                <td data-label="Çalışma/Hata" className="px-4 py-3 text-xs text-subtle">
+                <td data-label={t("jobs.screen.colRuns")} className="px-4 py-3 text-xs text-subtle">
                   {job.runCount} / <span className={job.failCount > 0 ? "text-danger" : ""}>{job.failCount}</span>
                 </td>
                 {canRun && (
@@ -124,7 +162,7 @@ export function JobsScreen({
                       type="button"
                       onClick={() => run(job.key)}
                       disabled={busy === job.key}
-                      title="Şimdi çalıştır"
+                      title={t("jobs.screen.runNow")}
                       className="rounded border border-line p-1.5 text-subtle transition-colors hover:text-brand disabled:opacity-50"
                     >
                       <Play className="size-3.5" />
