@@ -194,6 +194,14 @@ Diğer değişkenler için [Ortam değişkenleri](#ortam-değişkenleri) bölüm
 docker compose up -d --build
 ```
 
+ARM64 sunucuda GitHub'daki kaynak koddan kurulum için de aynı komut kullanılmalı; bu komut imajı hedef makinede yeniden derler. Önceden yayınlanmış hazır bir imaj kullanıyorsan imajın ARM64 manifest'i olduğundan emin ol:
+
+```bash
+docker buildx imagetools inspect ghcr.io/<kullanici>/<repo>:<etiket>
+```
+
+Çıktıda `linux/arm64` görünmüyorsa ARM64 sunucuda o imaj çalışmaz; genellikle `exec format error` ya da `no matching manifest for linux/arm64` hatası alınır. Bu durumda kaynak koddan `docker compose up -d --build` ile derle veya ARM64/multi-arch olarak yeniden yayınlanmış imajı kullan.
+
 İlk açılışta veritabanı şeması oluşturulur ve yönetici hesabı açılır. `ADMIN_PASSWORD` boş bırakıldıysa rastgele üretilen parola container loguna yazılır:
 
 ```bash

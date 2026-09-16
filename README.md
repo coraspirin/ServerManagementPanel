@@ -278,6 +278,14 @@ Comment out the following line in `docker-compose.yml`. Otherwise compose will f
 docker compose up -d --build
 ```
 
+On ARM64 servers, use the same command when installing from the GitHub source; it rebuilds the image on the target machine. If you use a prebuilt published image instead, make sure the image has an ARM64 manifest:
+
+```bash
+docker buildx imagetools inspect ghcr.io/<user>/<repo>:<tag>
+```
+
+If the output does not include `linux/arm64`, that image will not run on an ARM64 server; the usual errors are `exec format error` or `no matching manifest for linux/arm64`. Build from source with `docker compose up -d --build`, or use an image that has been republished as ARM64/multi-arch.
+
 On first launch, the database schema is created and an admin account is opened. If `ADMIN_PASSWORD` was left blank, the randomly generated password is written to the container log:
 
 ```bash
