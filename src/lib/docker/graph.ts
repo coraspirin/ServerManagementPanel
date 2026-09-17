@@ -212,7 +212,7 @@ export function unusedResources(
   return {
     images: unusedImages.map((image) => ({
       id: image.id,
-      label: image.tags[0] ?? "<etiketsiz>",
+      label: image.tags[0] ?? serverT("docker.images.untagged"),
       sizeBytes: image.sizeBytes,
       dangling: image.dangling,
     })),

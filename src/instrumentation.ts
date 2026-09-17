@@ -16,9 +16,9 @@ export async function register() {
     const { randomBytes } = await import("node:crypto");
     const suggestion = randomBytes(32).toString("hex");
     throw new Error(
-      "MASTER_KEY tanımlı değil (T3 — secret şifreleme anahtarı).\n" +
-        `.env dosyasına ekle:\n\n  MASTER_KEY=${suggestion}\n\n` +
-        "Bu anahtarı panel dışında AYRI bir yerde de sakla; yedeğe girmez.",
+      "MASTER_KEY tanımlı değil (T3 — secret şifreleme anahtarı).\n" + // i18n-ignore — operatör logu
+        `.env dosyasına ekle:\n\n  MASTER_KEY=${suggestion}\n\n` + // i18n-ignore — operatör logu
+        "Bu anahtarı panel dışında AYRI bir yerde de sakla; yedeğe girmez.", // i18n-ignore — operatör logu
     );
   }
 
@@ -30,7 +30,7 @@ export async function register() {
       console.log(`[db] migration öncesi yedek: ${result.backupPath}`);
     }
     console.log(
-      `[db] şema ${result.from} → ${result.to} (uygulanan: ${result.applied.join(", ")})`,
+      `[db] şema ${result.from} → ${result.to} (uygulanan: ${result.applied.join(", ")})`, // i18n-ignore — operatör logu
     );
   } else {
     console.log(`[db] şema güncel (v${result.to})`);

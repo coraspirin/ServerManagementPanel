@@ -32,6 +32,17 @@ jobs:
       - name: Testler
         run: npm test
 
+      # Dil dosyaları: tamamlanmış her dil Türkçeyle aynı anahtarları ve yer
+      # tutucuları taşımalı. Eksik bir anahtar ekranda Türkçeye düşer ve
+      # İngilizce arayüzde fark edilmeden kalır.
+      - name: Dil dosyaları eksiksiz mi
+        run: npm run i18n:check
+
+      # Koda sabit yazılmış Türkçe metin dil dosyasını atlar; seçilen dil ne
+      # olursa olsun Türkçe görünür.
+      - name: Kodda sabit metin var mı
+        run: npm run i18n:scan
+
       # Şema kendi içinde geçerli mi (redocly) VE kodla uyuşuyor mu (betik).
       # İkincisi olmadan birincisi yanıltıcı: geçerli ama yanlış bir şema,
       # güvenilmez olduğu hâlde güvenilir görünen bir belgedir.

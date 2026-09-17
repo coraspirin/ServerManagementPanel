@@ -149,8 +149,8 @@ function rowToValue(def: SettingDef, row: Row): string | number | boolean | null
       if (!unreadable.has(def.key)) {
         unreadable.add(def.key);
         console.error(
-          `[settings] "${def.key}" şifresi çözülemedi — MASTER_KEY, bu değer ` +
-            "kaydedildiğindekinden farklı. Eski anahtar geri konmalı ya da değer yeniden girilmeli.",
+          `[settings] "${def.key}" şifresi çözülemedi — MASTER_KEY, bu değer ` + // i18n-ignore — operatör logu
+            "kaydedildiğindekinden farklı. Eski anahtar geri konmalı ya da değer yeniden girilmeli.", // i18n-ignore — operatör logu
         );
       }
       return null;

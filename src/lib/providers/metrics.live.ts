@@ -394,8 +394,8 @@ export const liveMetricsProvider: MetricsProvider = {
       warnedNoDisks = true;
       const { proc, root } = await roots();
       console.warn(
-        `[metrics] hiç disk bölümü okunamadı — ${proc}/1/mounts okunuyor mu ve ` +
-          `host kökü ${root} altında mount edilmiş mi? (docker-compose: /:/host/root:ro)`,
+        `[metrics] hiç disk bölümü okunamadı — ${proc}/1/mounts okunuyor mu ve ` + // i18n-ignore — operatör logu
+          `host kökü ${root} altında mount edilmiş mi? (docker-compose: /:/host/root:ro)`, // i18n-ignore — operatör logu
       );
     }
 
@@ -403,8 +403,8 @@ export const liveMetricsProvider: MetricsProvider = {
       warnedNoNet = true;
       const { sys } = await roots();
       console.warn(
-        `[metrics] hiç ağ arayüzü okunamadı — fiziksel arayüz ${sys}/class/net ` +
-          "altında bulunamadı. Ayarlardan monitoring.net_interfaces ile elle belirtilebilir.",
+        `[metrics] hiç ağ arayüzü okunamadı — fiziksel arayüz ${sys}/class/net ` + // i18n-ignore — operatör logu
+          "altında bulunamadı. Ayarlardan monitoring.net_interfaces ile elle belirtilebilir.", // i18n-ignore — operatör logu
       );
     }
 

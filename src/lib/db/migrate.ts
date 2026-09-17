@@ -109,7 +109,7 @@ function backupBefore(targetVersion: number): string | null {
   const removed = prunePreMigrationBackups(dir);
   if (removed > 0) {
     console.log(
-      `[db] ${removed} eski migration yedeği silindi (en yeni ${KEEP_PRE_MIGRATION_BACKUPS} tanesi saklanıyor)`,
+      `[db] ${removed} eski migration yedeği silindi (en yeni ${KEEP_PRE_MIGRATION_BACKUPS} tanesi saklanıyor)`, // i18n-ignore — operatör logu
     );
   }
 
@@ -160,10 +160,10 @@ export function runMigrations(): MigrationResult {
     } catch (error) {
       db.exec("ROLLBACK");
       const hint = backupPath
-        ? `Geri dönmek için: docker compose down && cp "${backupPath}" "${dbPath()}"`
-        : "Veritabanı boştu, yedek alınmadı; data/panel.db silinip yeniden başlatılabilir.";
+        ? `Geri dönmek için: docker compose down && cp "${backupPath}" "${dbPath()}"` // i18n-ignore — operatör logu
+        : "Veritabanı boştu, yedek alınmadı; data/panel.db silinip yeniden başlatılabilir."; // i18n-ignore — operatör logu
       throw new Error(
-        `Migration ${migration.version}_${migration.name} başarısız: ` +
+        `Migration ${migration.version}_${migration.name} başarısız: ` + // i18n-ignore — operatör logu
           `${error instanceof Error ? error.message : String(error)}\n${hint}`,
       );
     }

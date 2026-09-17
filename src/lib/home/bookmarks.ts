@@ -1,5 +1,6 @@
 import "server-only";
-import { serverT } from "@/lib/i18n/runtime";
+import { compareText } from "@/lib/i18n/format";
+import { currentDictionary, serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
 import { normalizeUrl } from "@/lib/apps/store";
@@ -64,7 +65,7 @@ export function bookmarkGroups(): BookmarkGroup[] {
     .sort((a, b) => {
       if (a.name === "") return 1;
       if (b.name === "") return -1;
-      return a.name.localeCompare(b.name, "tr");
+      return compareText(a.name, b.name, currentDictionary());
     });
 }
 

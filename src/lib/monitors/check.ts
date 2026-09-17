@@ -43,7 +43,15 @@ function pass(started: number): CheckResult {
  *   ""              → 400'ün altındaki her durum kodu başarılı (yönlendirme dahil)
  *   "200" / "200,204" → durum kodu listede olmalı
  *   "metin:hazır"   → gövde bu metni içermeli (durum kodu da 400'ün altında olmalı)
+ *   "text:ready"    → aynısı; İngilizce arayüzdeki yazılış
  */
+/** Gövde kuralının aranan metni; kural gövde kuralı değilse null. */
+function bodyNeedle(expected: string): string | null {
+  const rule = expected.trim();
+  const prefix = ["metin:", "text:"].find((p) => rule.toLowerCase().startsWith(p));
+  return prefix ? rule.slice(prefix.length).trim() : null;
+}
+
 function evaluateHttp(
   expected: string,
   status: number,
@@ -51,8 +59,8 @@ function evaluateHttp(
 ): { ok: boolean; error?: string } {
   const rule = expected.trim();
 
-  if (rule.toLocaleLowerCase("tr").startsWith("metin:")) {
-    const needle = rule.slice(6).trim();
+  const needle = bodyNeedle(rule);
+  if (needle !== null) {
     if (status >= 400) return { ok: false, error: `HTTP ${status}` };
     if (!body.includes(needle)) {
       return { ok: false, error: serverT("monitorCheck.notInResponse", { needle }) };
@@ -83,7 +91,7 @@ function httpCheck(monitor: Monitor, timeoutMs: number): Promise<CheckResult> {
 
   const secure = url.protocol === "https:";
   const client = secure ? https : http;
-  const needsBody = monitor.expected.toLocaleLowerCase("tr").startsWith("metin:");
+  const needsBody = bodyNeedle(monitor.expected) !== null;
 
   return new Promise<CheckResult>((resolve) => {
     const request = client.request(

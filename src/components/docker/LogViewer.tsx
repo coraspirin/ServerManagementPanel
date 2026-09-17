@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Minus, Pause, Play, Plus, Search } from "lucide-react";
 
 import { parseAnsi, stripAnsi, type AnsiSpan } from "@/lib/logs/ansi";
+import { fold } from "@/lib/text";
 import { useFormat, useT } from "@/lib/i18n/client";
 
 /**
@@ -167,7 +168,7 @@ export function LogViewer({
             dizisi yüzünden eşleşmeyi KAÇIRMAK, ikisi de yanlış sonuç verirdi.
           */
           lines.filter((line) =>
-            stripAnsi(line.text).toLocaleLowerCase("tr").includes(query.toLocaleLowerCase("tr")),
+            fold(stripAnsi(line.text)).includes(fold(query)),
           ),
     [lines, query],
   );

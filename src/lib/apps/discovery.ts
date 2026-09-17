@@ -2,6 +2,7 @@ import "server-only";
 import { serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
+import { fold } from "@/lib/text";
 import { getDockerProvider } from "@/lib/providers";
 import type { ContainerSummary } from "@/lib/providers/types";
 import { getBool, getString } from "@/lib/settings";
@@ -89,7 +90,7 @@ function categoryIdFor(name: string): number | null {
   if (!name) return null;
 
   const existing = listCategories().find(
-    (category) => category.name.toLocaleLowerCase("tr") === name.toLocaleLowerCase("tr"),
+    (category) => fold(category.name) === fold(name),
   );
   return existing ? existing.id : createCategory(name, "");
 }

@@ -3,6 +3,7 @@ import { formatPct } from "@/lib/i18n/format";
 import { currentDictionary, serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
+import { fold } from "@/lib/text";
 import { getNumber } from "@/lib/settings";
 import type { Severity } from "@/lib/alerts/types";
 
@@ -255,11 +256,11 @@ export function timeline(filter: TimelineFilter = {}): TimelineResult {
 
   if (kinds.has("spike")) entries.push(...findSpikes(since, until));
 
-  const needle = filter.q?.trim().toLocaleLowerCase("tr");
+  const needle = filter.q?.trim() ? fold(filter.q.trim()) : "";
   const filtered = needle
     ? entries.filter((entry) =>
         [entry.title, entry.detail, entry.actor, entry.source].some((text) =>
-          text.toLocaleLowerCase("tr").includes(needle),
+          fold(text).includes(needle),
         ),
       )
     : entries;

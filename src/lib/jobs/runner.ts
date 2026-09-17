@@ -148,7 +148,7 @@ export async function runJobNow(jobKey: string): Promise<{ ok: boolean; detail: 
   const db = getDb();
   const startedAt = Date.now();
 
-  db.prepare("UPDATE jobs SET last_run_at = ?, last_status = 'çalışıyor' WHERE key = ?").run(
+  db.prepare("UPDATE jobs SET last_run_at = ?, last_status = 'çalışıyor' WHERE key = ?").run( // i18n-ignore — DB değeri
     Math.floor(startedAt / 1000),
     job.key,
   );
@@ -159,6 +159,7 @@ export async function runJobNow(jobKey: string): Promise<{ ok: boolean; detail: 
     const detail = result?.detail ?? "";
 
     db.prepare(
+      // i18n-ignore-next-line — DB değeri (yorum şablonun İÇİNE yazılamaz: SQL'in parçası olur)
       `UPDATE jobs SET last_finish_at = ?, last_duration_ms = ?, last_status = 'başarılı',
                        last_error = NULL, run_count = run_count + 1, next_run_at = ?
        WHERE key = ?`,
@@ -166,7 +167,7 @@ export async function runJobNow(jobKey: string): Promise<{ ok: boolean; detail: 
 
     if (job.recordSuccessRuns !== false) {
       db.prepare(
-        "INSERT INTO job_runs (job_key, started_at, duration_ms, status, detail) VALUES (?, ?, ?, 'başarılı', ?)",
+        "INSERT INTO job_runs (job_key, started_at, duration_ms, status, detail) VALUES (?, ?, ?, 'başarılı', ?)", // i18n-ignore — DB değeri
       ).run(job.key, Math.floor(startedAt / 1000), duration, detail);
     }
 
@@ -182,7 +183,7 @@ export async function runJobNow(jobKey: string): Promise<{ ok: boolean; detail: 
     ).run(Math.floor(Date.now() / 1000), duration, message, computeNextRun(job), job.key);
 
     db.prepare(
-      "INSERT INTO job_runs (job_key, started_at, duration_ms, status, detail) VALUES (?, ?, ?, 'hata', ?)",
+      "INSERT INTO job_runs (job_key, started_at, duration_ms, status, detail) VALUES (?, ?, ?, 'hata', ?)", // i18n-ignore — DB değeri
     ).run(job.key, Math.floor(startedAt / 1000), duration, message);
 
     console.error(`[jobs] ${job.key} hata:`, message);

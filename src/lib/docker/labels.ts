@@ -39,7 +39,7 @@ export function flag(labels: Labels, key: string, fallback: boolean): boolean {
 
   const value = raw.trim().toLowerCase();
   if (["true", "yes", "1", "on", "evet"].includes(value)) return true;
-  if (["false", "no", "0", "off", "hayir", "hayır"].includes(value)) return false;
+  if (["false", "no", "0", "off", "hayir", "hayır"].includes(value)) return false; // i18n-ignore — "hayır" etiket ayrıştırma
   return fallback;
 }
 

@@ -32,7 +32,7 @@ function masterKey(): Buffer {
   const raw = process.env.MASTER_KEY;
   if (!raw) {
     throw new Error(
-      "MASTER_KEY tanımlı değil. Üretmek için: " +
+      "MASTER_KEY tanımlı değil. Üretmek için: " + // i18n-ignore — operatör logu
         "node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
     );
   }
@@ -40,7 +40,7 @@ function masterKey(): Buffer {
   const key = Buffer.from(raw.trim(), "hex");
   if (key.length !== 32) {
     throw new Error(
-      `MASTER_KEY 32 bayt (64 hex karakter) olmalı, ${key.length} bayt bulundu.`,
+      `MASTER_KEY 32 bayt (64 hex karakter) olmalı, ${key.length} bayt bulundu.`, // i18n-ignore — operatör logu
     );
   }
 

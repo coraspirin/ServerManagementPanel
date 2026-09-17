@@ -3,6 +3,8 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 
+import { useT } from "@/lib/i18n/client";
+
 /**
  * Basit modal — `<dialog>` üzerine kurulu.
  *
@@ -34,6 +36,7 @@ export function Modal({
   children: ReactNode;
   wide?: boolean;
 }) {
+  const t = useT();
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -63,7 +66,7 @@ export function Modal({
             <button
               type="button"
               onClick={onClose}
-              aria-label="Kapat"
+              aria-label={t("common.actions.close")}
               className="-mr-1 flex shrink-0 items-center justify-center rounded p-1 text-subtle transition-colors hover:text-ink"
             >
               <X className="size-4" />

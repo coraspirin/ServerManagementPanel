@@ -52,8 +52,8 @@ function readSecret(userId: number): { secret: string | null; enabled: boolean; 
     // kilitlememek için "2FA yok" gibi davranmıyoruz — sessizce yetki vermek
     // güvenlik açığı olurdu. Yönetici 2FA'yı sıfırlamalı.
     console.error(
-      `[2fa] kullanıcı ${userId} TOTP sırrı çözülemedi — MASTER_KEY değişmiş olabilir. ` +
-        "Yönetici Kullanıcılar ekranından 2FA'yı sıfırlayabilir.",
+      `[2fa] kullanıcı ${userId} TOTP sırrı çözülemedi — MASTER_KEY değişmiş olabilir. ` + // i18n-ignore — operatör logu
+        "Yönetici Kullanıcılar ekranından 2FA'yı sıfırlayabilir.", // i18n-ignore — operatör logu
     );
     return { secret: null, enabled: Number(row.totp_enabled) === 1, username: String(row.username) };
   }

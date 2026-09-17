@@ -10,6 +10,8 @@
  * i18n katmanı, migration'lar, sahte sağlayıcılar, text.ts'teki harf katlama
  * tablosu. Protokol gereği Türkçe kalması gereken bir satır (ör. host-helper
  * çıktısıyla eşleşme) satır sonuna `// i18n-ignore` yazılarak işaretlenir.
+ * Satır çok satırlı bir şablon metninin (`...`) içindeyse yorum metnin parçası
+ * olur — o durumda bir önceki satıra `// i18n-ignore-next-line` yazılır.
  *
  * Kullanım: npm run i18n:scan  — bulgu varsa çıkış kodu 1.
  */
@@ -91,6 +93,7 @@ for (const file of walk(ROOT)) {
   if (SKIP.some((re) => re.test(file))) continue;
   const lines = stripBlockComments(fs.readFileSync(file, "utf8")).split("\n");
   lines.forEach((raw, index) => {
+    if (index > 0 && lines[index - 1].includes("i18n-ignore-next-line")) return;
     if (/i18n-ignore|console\.(log|warn|error|info|debug)/.test(raw)) return;
     if (/^\s*(import|export .* from)\b/.test(raw)) return;
     const line = stripLineComment(raw);

@@ -116,5 +116,5 @@ export async function seedMockHistory(): Promise<string | null> {
     throw error;
   }
 
-  return `${rows} sahte metrik satırı üretildi (yalnızca MOCK_MODE)`;
+  return `${rows} sahte metrik satırı üretildi (yalnızca MOCK_MODE)`; // i18n-ignore — operatör logu
 }
