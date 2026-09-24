@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { hasPermission } from "@/lib/auth/session";
 import { readTable, runQuery } from "@/lib/dbadmin";
@@ -17,8 +17,9 @@ export const dynamic = "force-dynamic";
  * SELECT çalıştırabiliyor ama yanlışlıkla bile UPDATE atamıyor.
  */
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "db.read");
+  const guard = await guardHostApi(request, "db.read");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let body: Record<string, unknown>;
   try {

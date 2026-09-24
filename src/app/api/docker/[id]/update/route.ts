@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { updateContainerImage } from "@/lib/docker/update";
 import { refreshImageUpdates } from "@/lib/updates";
@@ -15,8 +15,9 @@ export const dynamic = "force-dynamic";
  * için istemci yanıt gövdesini kendisi okuyor.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardApi(request, "docker.action");
+  const guard = await guardHostApi(request, "docker.action");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   if (isMockMode()) {
     return Response.json(

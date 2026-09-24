@@ -1,4 +1,4 @@
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { parseCompose, readAllServices } from "@/lib/compose/service";
 import { specFromService } from "@/lib/docker/spec";
 import { serverT } from "@/lib/i18n/runtime";
@@ -43,8 +43,9 @@ export type ComposeImportService = {
 };
 
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "docker.action");
+  const guard = await guardHostApi(request, "docker.action");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let compose = "";
   try {

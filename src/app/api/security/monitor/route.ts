@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { fail2banState, failedLogins, unban } from "@/lib/security/fail2ban";
 import { auditSshKeys } from "@/lib/security/sshkeys";
@@ -22,8 +22,9 @@ export const dynamic = "force-dynamic";
  * yavaş parçayı beklemesi demek olurdu.
  */
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "security.view");
+  const guard = await guardHostApi(request, "security.view", { localOnly: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const mode = new URL(request.url).searchParams.get("mode");
 
@@ -47,8 +48,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "security.manage");
+  const guard = await guardHostApi(request, "security.manage", { localOnly: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let body: Record<string, unknown>;
   try {

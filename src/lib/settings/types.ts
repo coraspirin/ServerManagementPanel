@@ -67,6 +67,13 @@ export type SettingDef = {
   options?: string[];
   /** Kaynak bazında ezilebilir mi (⭐ işaretli ayarlar). */
   overridable?: boolean;
+  /**
+   * Sunucuya özgü mü (çoklu sunucu). İşaretliyse `getSetting` kapsam
+   * verilmeden çağrıldığında önce etkin sunucunun (`currentHostId()`)
+   * ezmesine bakar, yoksa genel değere düşer. Diskler, dizinler, kaynak
+   * listeleri gibi her sunucuda farklı olabilen değerler için.
+   */
+  hostScoped?: boolean;
   /** Değişiklik yürürlüğe girmesi için yeniden başlatma gerekiyor mu. */
   restartRequired?: boolean;
   /** İlk kurulumda bu env değişkeninden tohumlanır (T9). */

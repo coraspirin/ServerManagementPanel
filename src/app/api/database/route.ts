@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { listTables, tableStructure, testConnection } from "@/lib/dbadmin";
 import { discoverDatabases, importDiscovered } from "@/lib/dbadmin/discovery";
@@ -34,8 +34,9 @@ function parseInput(body: Record<string, unknown>): ConnectionInput {
 }
 
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "db.read");
+  const guard = await guardHostApi(request, "db.read");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const url = new URL(request.url);
   const mode = url.searchParams.get("mode");
@@ -83,8 +84,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   // Bağlantı tanımlamak yazma yetkisi değil ama yapılandırma değişikliği;
   // `db.read` yeterli sayılmıyor.
-  const guard = await guardApi(request, "db.write");
+  const guard = await guardHostApi(request, "db.write");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let body: Record<string, unknown>;
   try {
@@ -166,8 +168,9 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const guard = await guardApi(request, "db.write");
+  const guard = await guardHostApi(request, "db.write");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let body: Record<string, unknown>;
   try {
@@ -200,8 +203,9 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const guard = await guardApi(request, "db.write");
+  const guard = await guardHostApi(request, "db.write");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const id = Number(new URL(request.url).searchParams.get("id") ?? 0);
   if (!deleteConnection(id)) {

@@ -1,4 +1,4 @@
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { hostAccounts } from "@/lib/host/users";
 
 export const dynamic = "force-dynamic";
@@ -12,11 +12,12 @@ export const dynamic = "force-dynamic";
  * vermek, sırf bir açılır liste dolsun diye yetki genişletmek olurdu.
  */
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "cron.manage");
+  let guard = await guardHostApi(request, "cron.manage");
   if (!guard.ok) {
-    const fallback = await guardApi(request, "settings.edit");
-    if (!fallback.ok) return fallback.response;
+    guard = await guardHostApi(request, "settings.edit");
+    if (!guard.ok) return guard.response;
   }
+  enterHost(guard.hostId);
 
   return Response.json(await hostAccounts());
 }

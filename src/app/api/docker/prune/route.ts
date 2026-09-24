@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { getDockerProvider } from "@/lib/providers";
 import type { PruneScope } from "@/lib/providers/types";
@@ -23,8 +23,9 @@ const SCOPES: PruneScope[] = [
  * birlikte audit'e düşer.
  */
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "docker.action");
+  const guard = await guardHostApi(request, "docker.action");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let body: { scope?: unknown };
   try {

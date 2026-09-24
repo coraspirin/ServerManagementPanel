@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { exportConfig, importConfig, type ConfigExport } from "@/lib/backup/config";
 
@@ -9,8 +9,9 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   // Dışa aktarım tüm ayarları içeriyor; `settings.view` yetmez, düzenleme
   // yetkisi isteniyor: bu dosya başka bir kurulumu şekillendirebilir.
-  const guard = await guardApi(request, "settings.edit");
+  const guard = await guardHostApi(request, "settings.edit");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const data = exportConfig();
 
@@ -32,8 +33,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "settings.edit");
+  const guard = await guardHostApi(request, "settings.edit");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let data: ConfigExport;
   try {

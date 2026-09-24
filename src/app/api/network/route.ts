@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { ouiStatus, refreshOui } from "@/lib/network/oui";
 import { deleteDevice, detectSubnet, listDevices, runScan, setDeviceKnown } from "@/lib/network/scan";
@@ -17,15 +17,17 @@ export async function networkPayload() {
 }
 
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "network.manage");
+  const guard = await guardHostApi(request, "network.manage", { localOnly: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   return Response.json(await networkPayload());
 }
 
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "network.manage");
+  const guard = await guardHostApi(request, "network.manage", { localOnly: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let body: Record<string, unknown>;
   try {
@@ -68,8 +70,9 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const guard = await guardApi(request, "network.manage");
+  const guard = await guardHostApi(request, "network.manage", { localOnly: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const mac = new URL(request.url).searchParams.get("mac") ?? "";
   deleteDevice(mac);

@@ -47,6 +47,11 @@ export type NavItem = {
   milestone?: string;
   /** Alt maddeler — yalnızca üst madde etkinken açılır (bkz. Ayarlar). */
   children?: NavItem[];
+  /**
+   * Çoklu sunucu: ekran yalnızca panelin kendi sunucusunda çalışıyor (ufw,
+   * LAN taraması, host cron...). Uzak sunucu seçiliyken menüde gizlenir.
+   */
+  localOnly?: boolean;
 };
 
 /**
@@ -133,7 +138,13 @@ export const navGroups: NavGroup[] = [
         icon: Globe,
         permission: "proxy.manage",
       },
-      { href: "/network", labelKey: "nav.items.network", icon: Network, permission: "network.manage" },
+      {
+        href: "/network",
+        labelKey: "nav.items.network",
+        icon: Network,
+        permission: "network.manage",
+        localOnly: true,
+      },
       {
         href: "/ports",
         labelKey: "nav.items.ports",
@@ -145,13 +156,21 @@ export const navGroups: NavGroup[] = [
         labelKey: "nav.items.firewall",
         icon: Flame,
         permission: "security.view",
+        localOnly: true,
       },
-      { href: "/security", labelKey: "nav.items.security", icon: ShieldCheck, permission: "security.view" },
+      {
+        href: "/security",
+        labelKey: "nav.items.security",
+        icon: ShieldCheck,
+        permission: "security.view",
+        localOnly: true,
+      },
     ],
   },
   {
     titleKey: "nav.groups.system",
     items: [
+      { href: "/hosts", labelKey: "nav.items.hosts", icon: Server, permission: "hosts.view" },
       { href: "/host", labelKey: "nav.items.host", icon: Server, permission: "host.service" },
       { href: "/users", labelKey: "nav.items.users", icon: UsersRound, permission: "users.manage" },
       { href: "/audit", labelKey: "nav.items.audit", icon: FileClock, permission: "audit.view" },
@@ -161,6 +180,7 @@ export const navGroups: NavGroup[] = [
         labelKey: "nav.items.hostcron",
         icon: CalendarClock,
         permission: "cron.manage",
+        localOnly: true,
       },
       {
         href: "/settings",
@@ -174,10 +194,14 @@ export const navGroups: NavGroup[] = [
 ];
 
 /** Kullanıcının izinlerine göre menüyü süzer; boş kalan grupları atar. */
-export function visibleNavGroups(permissions: PermissionKey[]): NavGroup[] {
+export function visibleNavGroups(
+  permissions: PermissionKey[],
+  options: { remoteHost?: boolean } = {},
+): NavGroup[] {
   const filter = (items: NavItem[]): NavItem[] =>
     items
       .filter((item) => permissions.includes(item.permission))
+      .filter((item) => !(options.remoteHost && item.localOnly))
       .map((item) =>
         item.children ? { ...item, children: filter(item.children) } : item,
       );
@@ -209,6 +233,9 @@ export function findNavTrail(pathname: string): NavItem[] {
  * bağlantı.
  */
 const STANDALONE: Record<string, NavItem[]> = {
+  "/hosts/unavailable": [
+    { href: "/hosts", labelKey: "nav.items.hosts", icon: Server, permission: "hosts.view" },
+  ],
   "/hesap": [
     { href: "/hesap", labelKey: "nav.items.account", icon: UsersRound, permission: "panel.view" },
   ],

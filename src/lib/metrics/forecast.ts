@@ -3,6 +3,7 @@ import { formatPct } from "@/lib/i18n/format";
 import { currentDictionary, serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
+import { currentHostId } from "@/lib/hosts/context";
 import { getNumber } from "@/lib/settings";
 
 /**
@@ -70,10 +71,10 @@ function history(metric: string, label: string, days: number): Point[] {
   return getDb()
     .prepare(
       `SELECT ts, avg_value AS value FROM metrics_1d
-       WHERE host_id = 1 AND metric = ? AND label = ? AND ts >= ?
+       WHERE host_id = ? AND metric = ? AND label = ? AND ts >= ?
        ORDER BY ts`,
     )
-    .all(metric, label, since) as Point[];
+    .all(currentHostId(), metric, label, since) as Point[];
 }
 
 function forecastFor(metric: string, label: string): Forecast {
@@ -132,9 +133,9 @@ export function diskForecasts(): Forecast[] {
   const mounts = getDb()
     .prepare(
       `SELECT DISTINCT label FROM metrics_1d
-       WHERE metric = 'disk.used_pct' AND host_id = 1 ORDER BY label`,
+       WHERE metric = 'disk.used_pct' AND host_id = ? ORDER BY label`,
     )
-    .all() as { label: string }[];
+    .all(currentHostId()) as { label: string }[];
 
   return mounts.map((row) => forecastFor("disk.used_pct", row.label));
 }

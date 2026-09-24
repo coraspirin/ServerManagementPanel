@@ -1,3 +1,4 @@
+import { requireLocalPage } from "@/lib/hosts/request";
 import { requirePermission } from "@/lib/auth/guard";
 import { hasPermission } from "@/lib/auth/session";
 import { failedLogins } from "@/lib/security/fail2ban";
@@ -17,6 +18,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function SecurityPage() {
   const session = await requirePermission("security.view");
+  await requireLocalPage();
 
   return (
     <SecurityScreen

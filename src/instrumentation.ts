@@ -59,6 +59,12 @@ export async function register() {
 
   // T10 — yalnızca MOCK_MODE'da: uzun dönem grafikleri ve katman seçimi
   // haftalarca veri beklemeden sınanabilsin diye geçmiş üretilir.
+  // Çoklu sunucu: MOCK_HOSTS ile sahte sunucular (geçmişten ÖNCE — geçmiş
+  // onlar için de üretilsin).
+  const { seedMockHosts } = await import("@/lib/hosts/mock");
+  const seededHosts = seedMockHosts();
+  if (seededHosts) console.log(`[hosts] ${seededHosts}`);
+
   const { seedMockHistory } = await import("@/lib/metrics/mock-history");
   const seededHistory = await seedMockHistory();
   if (seededHistory) console.log(`[metrics] ${seededHistory}`);

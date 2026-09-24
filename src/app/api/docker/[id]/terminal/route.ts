@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { startSession } from "@/lib/docker/exec";
 import { getDockerProvider } from "@/lib/providers";
@@ -22,8 +22,9 @@ const USER_RE = /^[a-z_][a-z0-9_-]{0,31}$|^[0-9]{1,10}(:[0-9]{1,10})?$/i;
  * oturum kimliğini ele geçiren başka bir kullanıcı da bağlanamaz.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardApi(request, "docker.exec");
+  const guard = await guardHostApi(request, "docker.exec");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   if (isMockMode()) {
     return Response.json(

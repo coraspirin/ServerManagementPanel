@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getDb } from "@/lib/db/client";
+import { currentHostId } from "@/lib/hosts/context";
 import { getDockerProvider } from "@/lib/providers";
 import { getNumber } from "@/lib/settings";
 
@@ -69,12 +70,13 @@ export async function collectDockerMetrics(): Promise<{
     const db = getDb();
     const insert = db.prepare(
       `INSERT OR REPLACE INTO metrics_raw (host_id, metric, label, ts, value)
-       VALUES (1, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?)`,
     );
 
+    const hostId = currentHostId();
     db.exec("BEGIN IMMEDIATE");
     try {
-      for (const row of rows) insert.run(row.metric, row.label, now, row.value);
+      for (const row of rows) insert.run(hostId, row.metric, row.label, now, row.value);
       db.exec("COMMIT");
     } catch (error) {
       db.exec("ROLLBACK");

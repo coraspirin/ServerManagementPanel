@@ -1,3 +1,5 @@
+import { enterHost } from "@/lib/hosts/context";
+import { pageHostId } from "@/lib/hosts/request";
 import { CapacityPanel } from "@/components/metrics/CapacityPanel";
 import { HardwarePanel } from "@/components/metrics/HardwarePanel";
 import { requirePermission } from "@/lib/auth/guard";
@@ -19,6 +21,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function MonitoringPage() {
   await requirePermission("metrics.view");
+  enterHost(await pageHostId());
 
   const configured = getString("monitoring.chart_default_range");
   const range: RangeId = isRangeId(configured) ? configured : "24h";

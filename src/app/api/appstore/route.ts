@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import {
   installComposeStack,
   listStacks,
@@ -20,8 +20,9 @@ export const dynamic = "force-dynamic";
 const ACTIONS = new Set<StackAction>(["up", "down", "restart", "pull"]);
 
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "apps.install");
+  const guard = await guardHostApi(request, "apps.install");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const user = guard.session.user;
 
@@ -34,8 +35,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "apps.install");
+  const guard = await guardHostApi(request, "apps.install");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let body: Record<string, unknown>;
   try {

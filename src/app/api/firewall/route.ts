@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import {
   addRule,
@@ -23,15 +23,17 @@ export const dynamic = "force-dynamic";
  * `firewall.deny`, `firewall.delete`) — geçmiş kayıtlar sorgulanabilir kalmalı.
  */
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "security.view");
+  const guard = await guardHostApi(request, "security.view", { localOnly: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   return Response.json(await firewallState());
 }
 
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "security.manage");
+  const guard = await guardHostApi(request, "security.manage", { localOnly: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let body: Record<string, unknown>;
   try {

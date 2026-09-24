@@ -1,3 +1,4 @@
+import { requireLocalPage } from "@/lib/hosts/request";
 import { requirePermission } from "@/lib/auth/guard";
 import { hasPermission } from "@/lib/auth/session";
 import { firewallState } from "@/lib/security/firewall";
@@ -16,6 +17,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function FirewallPage() {
   const session = await requirePermission("security.view");
+  await requireLocalPage();
   const scan = cachedPortScan();
 
   return (

@@ -1,3 +1,5 @@
+import { enterHost } from "@/lib/hosts/context";
+import { pageHostId } from "@/lib/hosts/request";
 import { requirePermission } from "@/lib/auth/guard";
 import { cachedPortScan } from "@/lib/security/ports";
 import { PortsScreen } from "./PortsScreen";
@@ -13,6 +15,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function PortsPage() {
   await requirePermission("security.view");
+  enterHost(await pageHostId());
 
   return <PortsScreen initial={cachedPortScan()} />;
 }

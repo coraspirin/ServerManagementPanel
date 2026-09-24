@@ -1,3 +1,5 @@
+import { enterHost } from "@/lib/hosts/context";
+import { pageHostId } from "@/lib/hosts/request";
 import { requirePermission } from "@/lib/auth/guard";
 import { hasPermission } from "@/lib/auth/session";
 import { helperConfigured } from "@/lib/host/helper";
@@ -9,6 +11,7 @@ export const dynamic = "force-dynamic";
 /** Güç, systemd, compose ve konsol (M1.12 + M1.13). */
 export default async function HostPage() {
   const session = await requirePermission("host.service");
+  enterHost(await pageHostId());
 
   return (
     <HostScreen

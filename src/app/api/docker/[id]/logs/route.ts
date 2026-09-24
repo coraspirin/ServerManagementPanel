@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { getDockerProvider } from "@/lib/providers";
 import { getNumber } from "@/lib/settings";
 
@@ -18,8 +18,9 @@ export const dynamic = "force-dynamic";
  * bırakırdı.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardApi(request, "docker.view");
+  const guard = await guardHostApi(request, "docker.view");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const id = (await params).id;
   const url = new URL(request.url);

@@ -1,3 +1,5 @@
+import { enterHost } from "@/lib/hosts/context";
+import { pageHostId } from "@/lib/hosts/request";
 import { requirePermission } from "@/lib/auth/guard";
 import { hasPermission } from "@/lib/auth/session";
 import { listDirectory } from "@/lib/files/browse";
@@ -13,6 +15,7 @@ export default async function FilesPage({
   searchParams: Promise<{ path?: string }>;
 }) {
   const session = await requirePermission("files.read");
+  enterHost(await pageHostId());
   const roots = allowedRoots();
 
   // İlk açılışta ilk izinli kökten başlanır. `/` neredeyse hiçbir zaman

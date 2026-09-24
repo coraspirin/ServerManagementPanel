@@ -13,6 +13,7 @@ import { formatBytes } from "@/lib/metrics/catalog";
 import type { DockerImage, DockerVolume, ImageLayer } from "@/lib/providers/types";
 import { useFormat, useT } from "@/lib/i18n/client";
 import { Rich } from "@/lib/i18n/rich";
+import { withHostQuery } from "@/lib/client/host";
 
 /**
  * Image ve volume detay pencereleri (M3.24).
@@ -198,7 +199,7 @@ export function ImageDetail({
               almanın anlamı yok.
             */}
             <a
-              href={`/api/docker/resources?detail=export-image&id=${encodeURIComponent(image.id)}`}
+              href={withHostQuery(`/api/docker/resources?detail=export-image&id=${encodeURIComponent(image.id)}`)}
               className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-xs text-subtle transition-colors hover:border-brand hover:text-brand"
             >
               <Download className="size-3" aria-hidden />
@@ -406,7 +407,7 @@ export function VolumeDetail({
                 almanın anlamı yok.
               */}
               <a
-                href={`/api/docker/resources?detail=export&id=${encodeURIComponent(volume.name)}`}
+                href={withHostQuery(`/api/docker/resources?detail=export&id=${encodeURIComponent(volume.name)}`)}
                 className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-xs text-subtle transition-colors hover:border-brand hover:text-brand"
               >
                 <Download className="size-3" aria-hidden />

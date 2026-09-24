@@ -1,4 +1,4 @@
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { listStacks } from "@/lib/appstore/install";
 import { buildStacks } from "@/lib/docker/stacks";
 import { dockerOverview } from "@/lib/docker/view";
@@ -25,8 +25,9 @@ export const dynamic = "force-dynamic";
  * sayısına da girmiyor, iki ekran aynı gerçeği göstersin.
  */
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "docker.view");
+  const guard = await guardHostApi(request, "docker.view");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const overview = await dockerOverview();
   if (overview.error) {

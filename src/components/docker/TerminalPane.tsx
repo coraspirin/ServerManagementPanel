@@ -7,6 +7,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import { useT } from "@/lib/i18n/client";
+import { withHostQuery } from "@/lib/client/host";
 
 /**
  * Container içi terminal (M1.9).
@@ -151,7 +152,7 @@ export function TerminalPane({
         sessionId = payload.sessionId as string;
         setStatus("acik");
 
-        source = new EventSource(`/api/terminal/${sessionId}`);
+        source = new EventSource(withHostQuery(`/api/terminal/${sessionId}`));
         source.addEventListener("out", (event) => {
           term.write(JSON.parse((event as MessageEvent).data) as string);
         });

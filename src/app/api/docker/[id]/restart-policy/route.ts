@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { getDockerProvider } from "@/lib/providers";
 import type { RestartPolicy } from "@/lib/providers/types";
@@ -19,8 +19,9 @@ const POLICIES: RestartPolicy["name"][] = ["no", "always", "unless-stopped", "on
  * `compose up`'ta geri alınır; istemci bunu kullanıcıya söylüyor.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardApi(request, "docker.action");
+  const guard = await guardHostApi(request, "docker.action");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const id = (await params).id;
 

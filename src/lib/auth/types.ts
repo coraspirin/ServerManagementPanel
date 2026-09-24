@@ -31,7 +31,10 @@ export type PermissionKey =
   | "repos.manage"
   | "vault.view"
   // T12 (migration 025) — dış API anahtarı üretme/iptal.
-  | "api.manage";
+  | "api.manage"
+  // Çoklu sunucu (migration 026).
+  | "hosts.view"
+  | "hosts.manage";
 
 export type SessionUser = {
   id: number;

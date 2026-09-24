@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { collectLogs } from "@/lib/logs/collect";
 import { listPatterns, searchLogs } from "@/lib/logs/store";
@@ -40,8 +40,9 @@ function parseSearch(url: URL) {
 }
 
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "logs.view");
+  const guard = await guardHostApi(request, "logs.view");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const url = new URL(request.url);
   const result = searchLogs(parseSearch(url));
@@ -73,8 +74,9 @@ export async function GET(request: Request) {
 
 /** Elle toplama — zamanlanmış turu beklemeden "şimdi topla". */
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "logs.view");
+  const guard = await guardHostApi(request, "logs.view");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const outcome = await collectLogs();
 

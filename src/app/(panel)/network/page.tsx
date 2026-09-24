@@ -1,3 +1,4 @@
+import { requireLocalPage } from "@/lib/hosts/request";
 import { requirePermission } from "@/lib/auth/guard";
 import { networkPayload } from "@/app/api/network/route";
 import { SpeedtestSection } from "@/components/network/SpeedtestSection";
@@ -11,6 +12,7 @@ export const dynamic = "force-dynamic";
 /** Ağ keşfi ve Wake-on-LAN ekranı (M2.9 + M2.11). */
 export default async function NetworkPage() {
   await requirePermission("network.manage");
+  await requireLocalPage();
 
   const [payload, tailscale] = await Promise.all([networkPayload(), tailscaleStatus()]);
 

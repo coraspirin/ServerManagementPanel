@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { tagFor } from "@/lib/backup/engine";
 import { listSnapshotFiles, listSnapshots, runRestore } from "@/lib/backup/restic";
@@ -16,8 +16,9 @@ export const dynamic = "force-dynamic";
  * istediğini kendi taşır.
  */
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "backup.manage");
+  const guard = await guardHostApi(request, "backup.manage");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const url = new URL(request.url);
   const jobId = Number(url.searchParams.get("jobId") ?? 0);
@@ -41,8 +42,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "backup.manage");
+  const guard = await guardHostApi(request, "backup.manage");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let body: Record<string, unknown>;
   try {

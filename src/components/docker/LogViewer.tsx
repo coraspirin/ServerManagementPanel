@@ -6,6 +6,7 @@ import { Download, Minus, Pause, Play, Plus, Search } from "lucide-react";
 import { parseAnsi, stripAnsi, type AnsiSpan } from "@/lib/logs/ansi";
 import { fold } from "@/lib/text";
 import { useFormat, useT } from "@/lib/i18n/client";
+import { withHostQuery } from "@/lib/client/host";
 
 /**
  * Canlı container logu (M1.7).
@@ -125,7 +126,7 @@ export function LogViewer({
   // bu yüzden burada durumu elle sıfırlamak gerekmiyor.
   useEffect(() => {
     const source = new EventSource(
-      `/api/docker/${encodeURIComponent(containerId)}/logs?tail=${tail}`,
+      withHostQuery(`/api/docker/${encodeURIComponent(containerId)}/logs?tail=${tail}`),
     );
 
     source.onopen = () => setConnected(true);

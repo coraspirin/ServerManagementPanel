@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import {
   callHelper,
@@ -48,8 +48,9 @@ export async function POST(request: Request) {
   const permission = PERMISSION[action];
   if (!permission) return Response.json({ error: serverT("api.invalidAction") }, { status: 400 });
 
-  const guard = await guardApi(request, permission);
+  const guard = await guardHostApi(request, permission);
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   if (!helperConfigured()) {
     return Response.json(

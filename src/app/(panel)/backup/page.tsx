@@ -1,3 +1,5 @@
+import { enterHost } from "@/lib/hosts/context";
+import { pageHostId } from "@/lib/hosts/request";
 import { requirePermission } from "@/lib/auth/guard";
 import { listJobs, listRepos, listRuns } from "@/lib/backup/store";
 import { getDockerProvider } from "@/lib/providers";
@@ -8,6 +10,7 @@ export const dynamic = "force-dynamic";
 /** Yedekleme motoru (M3.4). */
 export default async function BackupPage() {
   await requirePermission("backup.manage");
+  enterHost(await pageHostId());
 
   // Kaynak seçicileri gerçek Docker envanterinden doldurulur; kullanıcı volume
   // adını elle yazarsa bir harf hatası yedeğin boş çıkmasına yol açardı.

@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { callHelper, helperConfigured, type HelperAction } from "@/lib/host/helper";
 import { getDockerProvider } from "@/lib/providers";
@@ -82,8 +82,9 @@ async function discoverStacks(): Promise<Stack[]> {
 }
 
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "docker.view");
+  const guard = await guardHostApi(request, "docker.view");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   try {
     return Response.json({
@@ -99,8 +100,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "host.service");
+  const guard = await guardHostApi(request, "host.service");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let body: { action?: unknown; dir?: unknown };
   try {

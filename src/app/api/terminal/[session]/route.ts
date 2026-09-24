@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import {
   closeSession,
@@ -20,8 +20,9 @@ export const dynamic = "force-dynamic";
  * yükseltmesi yapamıyor.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ session: string }> }) {
-  const guard = await guardApi(request, "docker.exec");
+  const guard = await guardHostApi(request, "docker.exec");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const session = getSession((await params).session, guard.session.user.username);
   if (!session) return Response.json({ error: serverT("api.notFound.session") }, { status: 404 });
@@ -68,8 +69,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
 
 /** Giriş ucu: tuş vuruşları ve pencere boyutu. */
 export async function POST(request: Request, { params }: { params: Promise<{ session: string }> }) {
-  const guard = await guardApi(request, "docker.exec");
+  const guard = await guardHostApi(request, "docker.exec");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const session = getSession((await params).session, guard.session.user.username);
   if (!session) return Response.json({ error: serverT("api.notFound.session") }, { status: 404 });
@@ -100,8 +102,9 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ session: string }> },
 ) {
-  const guard = await guardApi(request, "docker.exec");
+  const guard = await guardHostApi(request, "docker.exec");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const id = (await params).session;
   const session = getSession(id, guard.session.user.username);

@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { METRIC_META, isRangeId } from "@/lib/metrics/catalog";
 import { querySeriesForRange } from "@/lib/metrics/query";
 
@@ -14,8 +14,9 @@ export const dynamic = "force-dynamic";
  * söyler; grafik altında "1 saatlik ortalama" yazabilelim diye.
  */
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "metrics.view");
+  const guard = await guardHostApi(request, "metrics.view");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const params = new URL(request.url).searchParams;
 

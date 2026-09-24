@@ -31,6 +31,11 @@ export type JobDefinition = {
    * yazılır — asıl görmek istediğimiz onlar.
    */
   recordSuccessRuns?: boolean;
+  /**
+   * Çoklu sunucu: `perHost` işleri her etkin sunucuda ayrı bağlamda çalışır
+   * (`perHost()` sarmalayıcısı). Belirtilmezse merkezi iş.
+   */
+  scope?: "central" | "perHost";
   run: () => Promise<JobResult | void>;
 };
 

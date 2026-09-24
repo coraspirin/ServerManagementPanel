@@ -7,6 +7,7 @@ import { formatBytes } from "@/lib/metrics/catalog";
 import type { FileEntry } from "@/lib/docker/listing";
 import { useT } from "@/lib/i18n/client";
 import { Rich } from "@/lib/i18n/rich";
+import { withHostQuery } from "@/lib/client/host";
 
 /**
  * Volume içi dosya tarayıcı (M3.44).
@@ -169,7 +170,7 @@ export function VolumeBrowser({ volume, canAct }: { volume: string; canAct: bool
                     */}
                     {canAct && entry.type === "dosya" ? (
                       <a
-                        href={`/api/docker/resources?detail=volume-file&id=${encodeURIComponent(volume)}&path=${encodeURIComponent(entry.path)}`}
+                        href={withHostQuery(`/api/docker/resources?detail=volume-file&id=${encodeURIComponent(volume)}&path=${encodeURIComponent(entry.path)}`)}
                         title={t("docker.volumeBrowser.download", { name: entry.name })}
                         aria-label={t("docker.volumeBrowser.download", { name: entry.name })}
                         className="shrink-0 rounded p-1 text-subtle transition-colors hover:text-brand"

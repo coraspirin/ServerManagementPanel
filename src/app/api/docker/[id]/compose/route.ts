@@ -1,5 +1,6 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
+import { runWithHost } from "@/lib/hosts/context";
 import { applyFix, checkCompose, type Finding } from "@/lib/compose/checks";
 import {
   applyComposeEdit,
@@ -43,10 +44,11 @@ export const dynamic = "force-dynamic";
 
 /** Okuma `security.view` değil `docker.view` istiyor — bu bir Docker ekranı. */
 async function locate(request: Request, id: string, permission: "docker.view" | "docker.action") {
-  const guard = await guardApi(request, permission);
+  const guard = await guardHostApi(request, permission);
   if (!guard.ok) return { response: guard.response } as const;
 
-  const location = await locateCompose(id);
+  // Bağlam burada kurulamaz (çağırana geçmez); çağıran `enterHost` ile kurar.
+  const location = await runWithHost(guard.hostId, () => locateCompose(id));
   if (!isLocated(location)) {
     return { response: Response.json({ error: location.error }, { status: 409 }) } as const;
   }
@@ -113,6 +115,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const id = (await params).id;
   const found = await locate(request, id, "docker.view");
   if ("response" in found) return found.response;
+  enterHost(found.guard.hostId);
 
   const { location } = found;
   const file = await readComposeFile(location);
@@ -169,6 +172,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const id = (await params).id;
   const found = await locate(request, id, "docker.action");
   if ("response" in found) return found.response;
+  enterHost(found.guard.hostId);
 
   const { guard, location } = found;
 

@@ -1,4 +1,4 @@
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { hostDirExists, listHostDirs } from "@/lib/host/dirs";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +11,9 @@ export const dynamic = "force-dynamic";
  * sınırlanamaz (bkz. lib/host/dirs.ts). Yalnızca klasör ADLARI dönüyor.
  */
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "settings.edit");
+  const guard = await guardHostApi(request, "settings.edit");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const url = new URL(request.url);
   const target = url.searchParams.get("path") ?? "/";

@@ -10,6 +10,8 @@ import type { PermissionKey } from "@/lib/auth/types";
 import { useDynamicT, useT } from "@/lib/i18n/client";
 import { DESKTOP_QUERY, useMediaQuery } from "@/lib/useMediaQuery";
 import { CommandPalette } from "./CommandPalette";
+import { useHosts } from "./HostContext";
+import { HostSelector } from "./HostSelector";
 import { LinkPending } from "./LinkPending";
 import { PageHelp } from "./PageHelp";
 import { ThemeToggle } from "./ThemeToggle";
@@ -31,7 +33,8 @@ export function AppShell({ children, mode, version, user }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const trail = findNavTrail(pathname);
-  const groups = visibleNavGroups(user.permissions);
+  const { current: currentHost, multi } = useHosts();
+  const groups = visibleNavGroups(user.permissions, { remoteHost: multi && !currentHost.isLocal });
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
 
   // Adres değişince çekmece kapanır. Bağlantıların kendi `onNavigate`'i zaten
@@ -229,6 +232,8 @@ export function AppShell({ children, mode, version, user }: Props) {
             koymak, günde on kez basılanların arasına sıkıştırmak olurdu.
           */}
           <ThemeToggle />
+
+          <HostSelector />
 
           <h1 className="flex min-w-0 items-baseline gap-1.5 font-semibold">
             {trail.length === 0 ? (

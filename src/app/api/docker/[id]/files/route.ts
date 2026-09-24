@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import {
   listContainerPath,
   maxFileBytes,
@@ -32,8 +32,9 @@ async function containerName(id: string): Promise<string> {
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardApi(request, "docker.view");
+  const guard = await guardHostApi(request, "docker.view");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const id = (await params).id;
   const url = new URL(request.url);
@@ -94,8 +95,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardApi(request, "docker.action");
+  const guard = await guardHostApi(request, "docker.action");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const id = (await params).id;
 

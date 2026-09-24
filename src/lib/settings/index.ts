@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getDb } from "@/lib/db/client";
+import { currentHostId, hostSettingsOverlay } from "@/lib/hosts/context";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { audit } from "@/lib/auth/audit";
 import { sanitizeRichText } from "@/lib/richtext";
@@ -168,6 +169,12 @@ export function getSetting<T = string | number | boolean>(
 ): T {
   const def = findSetting(key);
   if (!def) throw new Error(serverT("settings.validation.unknownKey", { key }));
+
+  if (!scope && def.hostScoped) {
+    const overlay = hostSettingsOverlay();
+    if (overlay && key in overlay) return overlay[key] as T;
+    scope = { type: "host", id: String(currentHostId()) };
+  }
 
   if (scope) {
     const row = readRow(key, scope.type, scope.id);

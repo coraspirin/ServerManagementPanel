@@ -23,6 +23,7 @@ import type { CleanupItem } from "@/lib/files/cleanup";
 import { useFormat, useT } from "@/lib/i18n/client";
 import { Rich } from "@/lib/i18n/rich";
 import type { MessageKey } from "@/lib/i18n/translate";
+import { withHostQuery } from "@/lib/client/host";
 
 /**
  * M3.5 — dosya yöneticisi, disk analizi ve temizlik asistanı.
@@ -464,7 +465,7 @@ export function FilesScreen({
                   <div className="flex flex-wrap justify-end gap-1 max-md:justify-start">
                     {entry.kind === "file" && (
                       <a
-                        href={`/api/files?mode=download&path=${encodeURIComponent(entry.path)}`}
+                        href={withHostQuery(`/api/files?mode=download&path=${encodeURIComponent(entry.path)}`)}
                         title={t("docker.files.download")}
                         className="rounded border border-line p-1.5 text-subtle transition-colors hover:text-brand"
                       >

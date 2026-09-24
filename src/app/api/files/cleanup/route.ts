@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { runCleanup, scanCleanup } from "@/lib/files/cleanup";
 
@@ -7,15 +7,17 @@ export const dynamic = "force-dynamic";
 
 /** Disk temizlik asistanı (M3.5). Tarama okuma, temizlik yazma yetkisi ister. */
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "files.read");
+  const guard = await guardHostApi(request, "files.read");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   return Response.json(await scanCleanup());
 }
 
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "files.write");
+  const guard = await guardHostApi(request, "files.write");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let body: { id?: unknown };
   try {

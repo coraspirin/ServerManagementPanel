@@ -24,6 +24,7 @@ import type {
 } from "@/lib/logs/types";
 import { useFormat, useT } from "@/lib/i18n/client";
 import type { MessageKey } from "@/lib/i18n/translate";
+import { withHostQuery } from "@/lib/client/host";
 
 /**
  * M3.3 — merkezi log arama.
@@ -271,7 +272,7 @@ export function LogsScreen({
           ))}
 
           <a
-            href={`/api/logs?${toQuery(filters, 0)}&format=txt`}
+            href={withHostQuery(`/api/logs?${toQuery(filters, 0)}&format=txt`)}
             download
             className="ml-auto flex items-center gap-1 text-xs text-brand hover:underline"
           >

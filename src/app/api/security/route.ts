@@ -1,4 +1,4 @@
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { firewallState } from "@/lib/security/firewall";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +11,9 @@ export const dynamic = "force-dynamic";
  * kırılmaması için duran firewall okuması.
  */
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "security.view");
+  const guard = await guardHostApi(request, "security.view", { localOnly: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   return Response.json({ firewall: await firewallState() });
 }

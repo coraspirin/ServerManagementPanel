@@ -1,4 +1,4 @@
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { createContainerFromSpec } from "@/lib/docker/create";
 import { dockerOverview } from "@/lib/docker/view";
@@ -20,8 +20,9 @@ export const dynamic = "force-dynamic";
  * istemci ayrıca bir liste isteği atmasın diye.
  */
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "docker.action");
+  const guard = await guardHostApi(request, "docker.action");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   if (isMockMode()) {
     return Response.json(

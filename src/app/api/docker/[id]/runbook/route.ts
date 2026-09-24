@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { saveRunbook } from "@/lib/docker/runbooks";
 import { getDockerProvider } from "@/lib/providers";
@@ -19,8 +19,9 @@ const MAX_BODY_CHARS = 20_000;
  * ayarı değil, o container hakkında işletme bilgisi.
  */
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardApi(request, "docker.action");
+  const guard = await guardHostApi(request, "docker.action");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const id = (await params).id;
 

@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { checkRepo, initRepo } from "@/lib/backup/restic";
 import {
@@ -31,8 +31,9 @@ function parseInput(body: Record<string, unknown>): RepoInput {
 }
 
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "backup.manage");
+  const guard = await guardHostApi(request, "backup.manage");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let body: Record<string, unknown>;
   try {
@@ -95,8 +96,9 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const guard = await guardApi(request, "backup.manage");
+  const guard = await guardHostApi(request, "backup.manage");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let body: Record<string, unknown>;
   try {
@@ -128,8 +130,9 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const guard = await guardApi(request, "backup.manage");
+  const guard = await guardHostApi(request, "backup.manage");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const id = Number(new URL(request.url).searchParams.get("id") ?? 0);
   const outcome = deleteRepo(id);

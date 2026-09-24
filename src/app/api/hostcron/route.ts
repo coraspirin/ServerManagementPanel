@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import {
   deleteCron,
   forbiddenCommand,
@@ -11,15 +11,17 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "cron.manage");
+  const guard = await guardHostApi(request, "cron.manage", { localOnly: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   return Response.json(await readCron());
 }
 
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "cron.manage");
+  const guard = await guardHostApi(request, "cron.manage", { localOnly: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let body: Record<string, unknown>;
   try {

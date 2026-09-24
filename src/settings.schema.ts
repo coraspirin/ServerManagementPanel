@@ -177,6 +177,7 @@ export const settingDefs: SettingDef[] = [
   },
   {
     key: "monitoring.disks",
+    hostScoped: true,
     group: "monitoring",
     section: "collection",
     type: "string",
@@ -184,6 +185,7 @@ export const settingDefs: SettingDef[] = [
   },
   {
     key: "monitoring.net_interfaces",
+    hostScoped: true,
     group: "monitoring",
     section: "collection",
     type: "string",
@@ -425,6 +427,7 @@ export const settingDefs: SettingDef[] = [
   },
   {
     key: "docker.exec_shell",
+    hostScoped: true,
     group: "docker",
     section: "terminal",
     type: "enum",
@@ -497,6 +500,7 @@ export const settingDefs: SettingDef[] = [
 
   {
     key: "docker.public_host",
+    hostScoped: true,
     group: "docker",
     section: "metering",
     type: "string",
@@ -758,6 +762,7 @@ export const settingDefs: SettingDef[] = [
   // ---------- Uygulamalar (M2.1, M2.5) ----------
   {
     key: "apps.server_host",
+    hostScoped: true,
     group: "apps",
     section: "addressResolution",
     type: "string",
@@ -844,6 +849,7 @@ export const settingDefs: SettingDef[] = [
   },
   {
     key: "hardware.temp_sources",
+    hostScoped: true,
     group: "hardware",
     section: "temperature",
     type: "string",
@@ -1052,6 +1058,7 @@ export const settingDefs: SettingDef[] = [
   },
   {
     key: "backup.watch_dir",
+    hostScoped: true,
     group: "updates",
     section: "backupTracking",
     type: "string",
@@ -1078,6 +1085,7 @@ export const settingDefs: SettingDef[] = [
   */
   {
     key: "appstore.stacks_dir",
+    hostScoped: true,
     group: "files",
     section: "composeStacks",
     type: "dir",
@@ -1085,6 +1093,7 @@ export const settingDefs: SettingDef[] = [
   },
   {
     key: "appstore.file_owner",
+    hostScoped: true,
     group: "files",
     section: "composeStacks",
     type: "owner",
@@ -1161,6 +1170,7 @@ export const settingDefs: SettingDef[] = [
   // ---------- Dosya yöneticisi (M3.5) ----------
   {
     key: "files.roots",
+    hostScoped: true,
     group: "files",
     section: "access",
     type: "dirs",
@@ -1229,6 +1239,7 @@ export const settingDefs: SettingDef[] = [
   },
   {
     key: "logs.sources",
+    hostScoped: true,
     group: "logs",
     section: "collection",
     type: "containers",
@@ -1245,6 +1256,7 @@ export const settingDefs: SettingDef[] = [
   },
   {
     key: "logs.journald_enabled",
+    hostScoped: true,
     group: "logs",
     section: "collection",
     type: "bool",

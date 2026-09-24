@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { callHelper, helperConfigured, CONSOLE_TIMEOUT_MS } from "@/lib/host/helper";
 import { findPreset } from "@/lib/host/presets";
@@ -55,8 +55,9 @@ export async function POST(request: Request) {
     return Response.json({ error: serverT("api.host.unknownMode") }, { status: 400 });
   }
 
-  const guard = await guardApi(request, "host.shell");
+  const guard = await guardHostApi(request, "host.shell");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   if (!helperConfigured()) {
     return Response.json(

@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { analyzeUsage, listDirectory, openForDownload, readTextFile } from "@/lib/files/browse";
 import { allowedRoots } from "@/lib/files/paths";
@@ -31,8 +31,9 @@ function fail(error: unknown): Response {
 }
 
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "files.read");
+  const guard = await guardHostApi(request, "files.read");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const url = new URL(request.url);
   const target = url.searchParams.get("path") ?? "/";
@@ -77,8 +78,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "files.write");
+  const guard = await guardHostApi(request, "files.write");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const contentType = request.headers.get("content-type") ?? "";
 

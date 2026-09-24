@@ -1,3 +1,5 @@
+import { enterHost } from "@/lib/hosts/context";
+import { pageHostId } from "@/lib/hosts/request";
 import { requirePermission } from "@/lib/auth/guard";
 import { hasPermission } from "@/lib/auth/session";
 import { dockerOverview } from "@/lib/docker/view";
@@ -13,6 +15,7 @@ export default async function DockerPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const session = await requirePermission("docker.view");
+  enterHost(await pageHostId());
 
   /*
     `?tab=` (M3.37): `/appstore` yönlendirmesi ve volume satırındaki yığın

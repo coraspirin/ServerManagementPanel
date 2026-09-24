@@ -1,3 +1,5 @@
+import { enterHost } from "@/lib/hosts/context";
+import { pageHostId } from "@/lib/hosts/request";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { MaintenanceSection } from "@/components/maintenance/MaintenanceSection";
@@ -38,6 +40,7 @@ async function browserHost(): Promise<string> {
 
 export default async function OverviewPage() {
   const session = await requireSession();
+  enterHost(await pageHostId());
   const t = getT();
 
   // `panel.dashboard` yetkisi olmayan (varsayılanda 'izleyici' rolü) sade bir

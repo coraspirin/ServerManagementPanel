@@ -5,6 +5,7 @@ import type { Bookmark } from "@/lib/home/bookmarks";
 import type { MaintenanceWindow, MonitorView } from "@/lib/monitors/types";
 import type { Snapshot } from "@/lib/metrics/catalog";
 import type { HardwareReport, SystemInfo } from "@/lib/providers/types";
+import { LOCAL_HOST_ID } from "../hosts/context.ts";
 
 /**
  * T12 — iç görünüm modelleri → KARARLI v1 şekilleri.
@@ -29,8 +30,12 @@ import type { HardwareReport, SystemInfo } from "@/lib/providers/types";
  * "bu liste artık tüm host'ları kapsıyor" — kırıcı olur ve v2 gerektirirdi.
  */
 
-/** Çok-host hazırlığı: kaynak ve zaman serisi tabloları `host_id` taşıyor. */
-const HOST_ID = 1;
+/**
+ * Merkezi kaynaklar (izleyici, olay, uygulama, yer imi, bakım penceresi)
+ * panelin kendi sunucusuna ait sayılır. Sunucu bazlı kaynakların
+ * serileştiricileri `hostId`'yi parametre olarak alır.
+ */
+const HOST_ID = LOCAL_HOST_ID;
 
 // --- Sistem ---------------------------------------------------------------
 
@@ -61,9 +66,13 @@ export type V1System = {
   };
 };
 
-export function serializeSystem(info: SystemInfo, snapshot: Snapshot): V1System {
+export function serializeSystem(
+  info: SystemInfo,
+  snapshot: Snapshot,
+  hostId: number = LOCAL_HOST_ID,
+): V1System {
   return {
-    hostId: HOST_ID,
+    hostId,
     hostname: info.hostname,
     platform: info.platform,
     // İç ad `release`; dışarıda `kernel` çünkü değerin ne olduğunu söylüyor.
@@ -126,9 +135,9 @@ export type V1Hardware = {
   pools: { name: string; kind: string; state: string; healthy: boolean; detail: string; lastScrubAt: number | null; scrubResult: string | null }[];
 };
 
-export function serializeHardware(report: HardwareReport): V1Hardware {
+export function serializeHardware(report: HardwareReport, hostId: number = LOCAL_HOST_ID): V1Hardware {
   return {
-    hostId: HOST_ID,
+    hostId,
     reportedAt: report.reportedAt,
     virtualization: report.virtualization,
     notes: report.notes,
@@ -197,9 +206,9 @@ export type V1Container = {
  * daraltılamayacak bir yüzey açardı. Gerçekten gerekirse eklemek serbest;
  * çıkarmak değil.
  */
-export function serializeContainer(view: ContainerView): V1Container {
+export function serializeContainer(view: ContainerView, hostId: number = LOCAL_HOST_ID): V1Container {
   return {
-    hostId: HOST_ID,
+    hostId,
     id: view.id,
     name: view.name,
     image: view.image,

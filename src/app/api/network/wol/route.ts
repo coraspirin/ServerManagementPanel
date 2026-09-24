@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import {
   checkAwake,
@@ -14,8 +14,9 @@ import { networkPayload } from "../route";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "network.manage");
+  const guard = await guardHostApi(request, "network.manage", { localOnly: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let body: Record<string, unknown>;
   try {
@@ -88,8 +89,9 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const guard = await guardApi(request, "network.manage");
+  const guard = await guardHostApi(request, "network.manage", { localOnly: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const id = Number(new URL(request.url).searchParams.get("id") ?? "0");
   const device = getWolDevice(id);

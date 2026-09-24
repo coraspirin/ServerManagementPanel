@@ -29,7 +29,20 @@ import type { PruneScope } from "@/lib/providers/types";
 import { getBool, getNumber, getString } from "@/lib/settings";
 import { refreshImageUpdates } from "@/lib/updates";
 import { serverT } from "@/lib/i18n/runtime";
-import type { JobDefinition } from "./types";
+import { fanOut, summarizeOutcomes } from "@/lib/hosts/fanout";
+import { activeHosts } from "@/lib/hosts/store";
+import type { JobDefinition, JobResult } from "./types";
+
+/**
+ * Çoklu sunucu: işi her etkin sunucuda, o sunucunun bağlamında çalıştırır.
+ * Tek sunuculu kurulumda sonuç ve hata davranışı eskisiyle aynı.
+ */
+function perHost(run: () => Promise<JobResult | void>): () => Promise<JobResult> {
+  return async () => {
+    const outcomes = await fanOut(activeHosts(), async () => (await run())?.detail);
+    return { detail: summarizeOutcomes(outcomes) };
+  };
+}
 
 /**
  * Kayıtlı işler — STATİK dizi, çalışma zamanında doldurulan bir Map değil.
@@ -49,10 +62,11 @@ export const jobDefinitions: JobDefinition[] = [
     leaseSeconds: 30,
     // Saniyeler aralıkla çalışıyor; başarılı turlar geçmişi anlamsızlaştırır.
     recordSuccessRuns: false,
-    async run() {
+    scope: "perHost",
+    run: perHost(async () => {
       const { written } = await collectMetrics();
       return { detail: serverT("jobs.detail.samples", { count: written }) };
-    },
+    }),
   },
   {
     key: "metrics.rollup",
@@ -67,16 +81,18 @@ export const jobDefinitions: JobDefinition[] = [
     schedule: { kind: "interval", settingKey: "docker.stats_interval" },
     leaseSeconds: 120,
     recordSuccessRuns: false,
-    async run() {
+    scope: "perHost",
+    run: perHost(async () => {
       const { containers, running, written } = await collectDockerMetrics();
       return { detail: serverT("jobs.detail.dockerCollect", { running, containers, written }) };
-    },
+    }),
   },
   {
     key: "docker.autoprune",
     schedule: { kind: "cron", settingKey: "docker.autoprune.cron" },
     leaseSeconds: 600,
-    async run() {
+    scope: "perHost",
+    run: perHost(async () => {
       // Varsayılan KAPALI: silinen bir image'ı geri getirmek yeniden indirmek
       // demek. İş yine de kayıtlı kalıyor ki kullanıcı ne zaman çalışacağını
       // Panel İşleri ekranından görebilsin.
@@ -93,7 +109,7 @@ export const jobDefinitions: JobDefinition[] = [
           mb: (result.reclaimedBytes / 1024 ** 2).toFixed(0),
         }),
       };
-    },
+    }),
   },
   {
     key: "monitors.check",

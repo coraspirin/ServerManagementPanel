@@ -23,6 +23,6 @@ export async function GET(request: Request) {
   return apiOk({
     hostId: 1,
     measuredAt: overview.statsAt,
-    containers: overview.containers.map(serializeContainer),
+    containers: overview.containers.map((container) => serializeContainer(container)),
   });
 }

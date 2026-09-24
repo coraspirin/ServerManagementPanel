@@ -1,4 +1,4 @@
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { serverT } from "@/lib/i18n/runtime";
 import { audit } from "@/lib/auth/audit";
 import { installComposeStack } from "@/lib/appstore/install";
@@ -24,8 +24,9 @@ export const dynamic = "force-dynamic";
  */
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardApi(request, "docker.view");
+  const guard = await guardHostApi(request, "docker.view");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const id = (await params).id;
   const url = new URL(request.url);
@@ -74,8 +75,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardApi(request, "apps.install");
+  const guard = await guardHostApi(request, "apps.install");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const id = (await params).id;
   const body = (await request.json().catch(() => ({}))) as { name?: unknown; compose?: unknown };

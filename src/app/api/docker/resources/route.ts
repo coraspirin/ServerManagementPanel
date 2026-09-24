@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardApi, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { unusedResources } from "@/lib/docker/graph";
 import {
@@ -30,8 +30,9 @@ async function collect() {
 
 /** Image / volume / ağ listesi + kullanılmayan kaynak raporu (M1.8). */
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "docker.view");
+  const guard = await guardHostApi(request, "docker.view");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const params = new URL(request.url).searchParams;
   const detail = params.get("detail");
@@ -180,8 +181,9 @@ export async function GET(request: Request) {
  * alınır ama silinen şey her koşulda audit'e yazılır.
  */
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "docker.action");
+  const guard = await guardHostApi(request, "docker.action");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let body: {
     kind?: unknown;

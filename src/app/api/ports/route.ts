@@ -1,4 +1,4 @@
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { portScan } from "@/lib/security/ports";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +11,9 @@ export const dynamic = "force-dynamic";
  * bunu ödemesi gerekmiyor. `?refresh=1` bilerek istenen tazelemedir.
  */
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "security.view");
+  const guard = await guardHostApi(request, "security.view");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const refresh = new URL(request.url).searchParams.get("refresh") === "1";
   return Response.json(await portScan(refresh));

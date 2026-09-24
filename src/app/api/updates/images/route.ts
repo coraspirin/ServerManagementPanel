@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { cachedImageUpdates, refreshImageUpdates } from "@/lib/updates";
 
@@ -7,8 +7,9 @@ export const dynamic = "force-dynamic";
 
 /** Son kontrol sonucu (M1.10). */
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "docker.view");
+  const guard = await guardHostApi(request, "docker.view");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const cached = cachedImageUpdates();
   return Response.json({
@@ -24,8 +25,9 @@ export async function GET(request: Request) {
  * için yavaş olabilir; istemci bunu bekleyerek gösteriyor.
  */
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "docker.action");
+  const guard = await guardHostApi(request, "docker.action");
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   try {
     const updates = await refreshImageUpdates();
