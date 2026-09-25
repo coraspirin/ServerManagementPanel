@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /** Son kontrol sonucu (M1.10). */
 export async function GET(request: Request) {
-  const guard = await guardHostApi(request, "docker.view");
+  const guard = await guardHostApi(request, "docker.view", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
  * için yavaş olabilir; istemci bunu bekleyerek gösteriyor.
  */
 export async function POST(request: Request) {
-  const guard = await guardHostApi(request, "docker.action");
+  const guard = await guardHostApi(request, "docker.action", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

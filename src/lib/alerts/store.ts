@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getDb } from "@/lib/db/client";
+import { currentHostId } from "@/lib/hosts/context";
 import { getNumber } from "@/lib/settings";
 import type { EventRow, Severity } from "./types";
 
@@ -51,10 +52,12 @@ export function recordEvent(input: EventInput): number {
   const result = getDb()
     .prepare(
       `INSERT INTO events
-         (ts, alert_key, source, severity, title, detail, notified_channels, suppressed_reason)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (host_id, ts, alert_key, source, severity, title, detail, notified_channels, suppressed_reason)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
+      // Çoklu sunucu: olay hangi sunucunun bağlamında oluştuysa o.
+      currentHostId(),
       input.ts,
       input.alertKey,
       input.source,

@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
  * yükseltmesi yapamıyor.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ session: string }> }) {
-  const guard = await guardHostApi(request, "docker.exec");
+  const guard = await guardHostApi(request, "docker.exec", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
@@ -69,7 +69,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
 
 /** Giriş ucu: tuş vuruşları ve pencere boyutu. */
 export async function POST(request: Request, { params }: { params: Promise<{ session: string }> }) {
-  const guard = await guardHostApi(request, "docker.exec");
+  const guard = await guardHostApi(request, "docker.exec", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
@@ -102,7 +102,7 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ session: string }> },
 ) {
-  const guard = await guardHostApi(request, "docker.exec");
+  const guard = await guardHostApi(request, "docker.exec", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

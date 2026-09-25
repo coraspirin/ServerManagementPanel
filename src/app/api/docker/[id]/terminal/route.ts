@@ -4,6 +4,7 @@ import { audit } from "@/lib/auth/audit";
 import { startSession } from "@/lib/docker/exec";
 import { getDockerProvider } from "@/lib/providers";
 import { isMockMode } from "@/lib/env";
+import { getHost } from "@/lib/hosts/store";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +23,13 @@ const USER_RE = /^[a-z_][a-z0-9_-]{0,31}$|^[0-9]{1,10}(:[0-9]{1,10})?$/i;
  * oturum kimliğini ele geçiren başka bir kullanıcı da bağlanamaz.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardHostApi(request, "docker.exec");
+  const guard = await guardHostApi(request, "docker.exec", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
-  if (isMockMode()) {
+  // Mock modda sahte container'da kabuk yok; ama kayıtlı bir ajan sunucusu
+  // gerçektir ve terminali de gerçektir.
+  if (isMockMode() && getHost(guard.hostId)?.agentType !== "agent") {
     return Response.json(
       { error: serverT("api.mock.terminal") },
       { status: 503 },

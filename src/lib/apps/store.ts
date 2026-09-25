@@ -44,6 +44,7 @@ type AppRow = {
   enabled: number;
   show_on_login: number;
   sort_order: number;
+  host_id: number | null;
 };
 
 function toCategory(row: CategoryRow): AppCategory {
@@ -69,6 +70,7 @@ function toCard(row: AppRow): AppCard {
     enabled: row.enabled === 1,
     showOnLogin: row.show_on_login === 1,
     sortOrder: row.sort_order,
+    hostId: row.host_id,
   };
 }
 
@@ -443,14 +445,19 @@ function nextSortOrder(categoryId: number | null): number {
   return row.max_order + 10;
 }
 
-export function createApp(input: AppInput, source: AppSource = "manual"): number {
+/** `hostId`: keşfedilen kartın sunucusu (çoklu sunucu); elle eklenende null. */
+export function createApp(
+  input: AppInput,
+  source: AppSource = "manual",
+  hostId: number | null = null,
+): number {
   const result = getDb()
     .prepare(
       `INSERT INTO apps
          (category_id, name, description, url, internal_url, icon, color,
           monitor_id, container_name, source, open_new_tab, enabled,
-          show_on_login, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          show_on_login, sort_order, host_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       input.categoryId,
@@ -467,6 +474,7 @@ export function createApp(input: AppInput, source: AppSource = "manual"): number
       input.enabled ? 1 : 0,
       input.showOnLogin ? 1 : 0,
       nextSortOrder(input.categoryId),
+      hostId,
     );
   return Number(result.lastInsertRowid);
 }

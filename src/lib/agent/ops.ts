@@ -1,6 +1,17 @@
 import "server-only";
 
 import { existsSync } from "node:fs";
+import {
+  AGENT_EXEC_USER,
+  agentSession,
+  closeSession,
+  resizeSession,
+  startSession,
+  streamAgentSession,
+  writeInput,
+  type StartExecOptions,
+} from "@/lib/docker/exec";
+import { dockerEventStream } from "@/lib/docker/events";
 import { appVersion } from "@/lib/env";
 import { helperConfigured } from "@/lib/host/helper";
 import {
@@ -79,6 +90,41 @@ export const AGENT_OPS: Record<string, AgentOp> = {
     run: (args, signal) => {
       const options = (args[1] ?? {}) as Parameters<DockerProvider["logs"]>[1];
       return getDockerProvider().logs(String(args[0]), { ...options, signal });
+    },
+  },
+  "docker.events": {
+    kind: "stream",
+    run: (args, signal) => dockerEventStream(Number(args[0]) || 0, signal),
+  },
+  // Container terminali: oturum merkezde kullanıcıya bağlı; burada yalnızca
+  // exec'in kendisi. Kabuk ve kullanıcı merkezde izin listesinden geçti.
+  "exec.start": {
+    kind: "call",
+    run: async (args) => {
+      const options = (args[0] ?? {}) as Omit<StartExecOptions, "username">;
+      const session = await startSession({ ...options, username: AGENT_EXEC_USER });
+      return { id: session.id };
+    },
+  },
+  "exec.output": {
+    kind: "stream",
+    run: (args, signal) => streamAgentSession(String(args[0]), signal),
+  },
+  "exec.input": {
+    kind: "call",
+    run: async (args) => writeInput(agentSession(String(args[0])), String(args[1] ?? "")),
+  },
+  "exec.resize": {
+    kind: "call",
+    run: async (args) => {
+      agentSession(String(args[0]));
+      await resizeSession(String(args[0]), Number(args[1]), Number(args[2]));
+    },
+  },
+  "exec.close": {
+    kind: "call",
+    run: async (args) => {
+      closeSession(String(args[0]));
     },
   },
 };

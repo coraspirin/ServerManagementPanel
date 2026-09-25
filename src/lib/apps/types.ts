@@ -30,6 +30,11 @@ export type AppCard = {
   monitorId: number | null;
   containerName: string;
   source: AppSource;
+  /**
+   * Keşfedilen kartın sunucusu (çoklu sunucu). Elle eklenen ve çoklu sunucu
+   * öncesi keşfedilen kartlarda null — yerel sunucu sayılır.
+   */
+  hostId: number | null;
   widgetType: string;
   /**
    * Widget yapılandırması kayıtlı mı (M2.6).

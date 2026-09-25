@@ -6,6 +6,7 @@ import { audit } from "@/lib/auth/audit";
 import { getDb } from "@/lib/db/client";
 import { callHelper } from "@/lib/host/helper";
 import { panelImage } from "@/lib/host/self";
+import { currentHostId } from "@/lib/hosts/context";
 import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 import { getString } from "@/lib/settings";
@@ -96,9 +97,9 @@ export function listStacks(): InstalledStack[] {
       .prepare(
         `SELECT id, name, template_id, directory, variables, installed_by,
                 installed_at, last_action, last_error
-         FROM app_stacks ORDER BY name`,
+         FROM app_stacks WHERE host_id = ? ORDER BY name`,
       )
-      .all() as Record<string, string | number>[]
+      .all(currentHostId()) as Record<string, string | number>[]
   ).map((row) => ({
     id: Number(row.id),
     name: String(row.name),
@@ -294,10 +295,10 @@ export async function installComposeStack(
   const record = (action: string, error: string) =>
     getDb()
       .prepare(
-        `INSERT INTO app_stacks (name, template_id, directory, variables, installed_by, last_action, last_error)
-         VALUES (?, ?, ?, '{}', ?, ?, ?)`,
+        `INSERT INTO app_stacks (host_id, name, template_id, directory, variables, installed_by, last_action, last_error)
+         VALUES (?, ?, ?, ?, '{}', ?, ?, ?)`,
       )
-      .run(name, CUSTOM_TEMPLATE_ID, directory, actor.username, action, error.slice(0, 500));
+      .run(currentHostId(), name, CUSTOM_TEMPLATE_ID, directory, actor.username, action, error.slice(0, 500));
 
   // Doğrulama adımı. Geçersizse `up` HİÇ çalıştırılmıyor.
   const check = await callHelper("compose.config", { dir: directory }, actor);
@@ -382,8 +383,8 @@ export async function stackAction(
   const ok = response.ok && (response.exitCode ?? 1) === 0;
 
   getDb()
-    .prepare("UPDATE app_stacks SET last_action = ?, last_error = ? WHERE name = ?")
-    .run(action, ok ? "" : (response.error ?? response.stderr ?? "").slice(0, 500), name);
+    .prepare("UPDATE app_stacks SET last_action = ?, last_error = ? WHERE name = ? AND host_id = ?")
+    .run(action, ok ? "" : (response.error ?? response.stderr ?? "").slice(0, 500), name, currentHostId());
 
   audit({
     userId: actor.userId,
@@ -427,7 +428,7 @@ export async function removeStack(
   // Kayıt her hâlükârda siliniyor: kullanıcı "bu artık benim listemde olmasın"
   // dedi. Ama container'lar durmadıysa BUNU SÖYLEMEK zorundayız — "kaldırıldı"
   // deyip arkada çalışmaya devam etmesi, en kötü türden sessiz yalan olurdu.
-  getDb().prepare("DELETE FROM app_stacks WHERE name = ?").run(name);
+  getDb().prepare("DELETE FROM app_stacks WHERE name = ? AND host_id = ?").run(name, currentHostId());
 
   audit({
     userId: actor.userId,

@@ -126,6 +126,7 @@ describe("appPatchBase", () => {
     enabled: true,
     showOnLogin: true,
     sortOrder: 0,
+    hostId: null,
   };
 
   it("v1 şeklinde GÖRÜNMEYEN alanları da taşır", () => {

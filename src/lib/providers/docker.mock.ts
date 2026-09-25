@@ -163,7 +163,12 @@ export const mockDockerProvider: DockerProvider = {
   },
 
   async images(): Promise<DockerImage[]> {
-    return (await fixture()).images;
+    // Fixture'da `repoDigests` yok; güncelleme kontrolü onu dolaşıyor ve
+    // tanımsız değerde "is not iterable" ile düşüyordu.
+    return (await fixture()).images.map((image) => ({
+      ...image,
+      repoDigests: image.repoDigests ?? [],
+    }));
   },
 
   async volumes(): Promise<DockerVolume[]> {

@@ -3,6 +3,8 @@ import { serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
 import { fold } from "@/lib/text";
+import { currentHostId, LOCAL_HOST_ID } from "@/lib/hosts/context";
+import { getHost } from "@/lib/hosts/store";
 import { getDockerProvider } from "@/lib/providers";
 import type { ContainerSummary } from "@/lib/providers/types";
 import { getBool, getString } from "@/lib/settings";
@@ -52,7 +54,11 @@ function labelReader(container: ContainerSummary, prefix: string) {
  * yayınlayan bir web arayüzünde kullanıcıya ekstra etiket yazdırmanın anlamı
  * yok.
  */
-function urlFor(read: (name: string) => string, container: ContainerSummary): string | null {
+function urlFor(
+  read: (name: string) => string,
+  container: ContainerSummary,
+  address: string,
+): string | null {
   const explicit = read("url");
   if (explicit) return explicit;
 
@@ -61,7 +67,25 @@ function urlFor(read: (name: string) => string, container: ContainerSummary): st
   const port = read("port") || firstPublishedPort(container);
   if (!port) return null;
 
-  return `${scheme}://${HOST_PLACEHOLDER}:${port}${path && !path.startsWith("/") ? `/${path}` : path}`;
+  return `${scheme}://${address}:${port}${path && !path.startsWith("/") ? `/${path}` : path}`;
+}
+
+/**
+ * Kart adresindeki makine. Yerel sunucuda `{host}` yer tutucusu (panelin
+ * açıldığı adrese çözülüyor); uzak sunucuda yer tutucu yanlış makineyi
+ * gösterirdi, bu yüzden ajanın adresi yazılıyor.
+ */
+function cardAddress(hostId: number): string {
+  if (hostId === LOCAL_HOST_ID) return HOST_PLACEHOLDER;
+  const host = getHost(hostId);
+  if (host?.agentUrl) {
+    try {
+      return new URL(host.agentUrl).hostname;
+    } catch {
+      // Bozuk adres: aşağıdaki yedeğe düş.
+    }
+  }
+  return host?.hostname ?? HOST_PLACEHOLDER;
 }
 
 /**
@@ -102,6 +126,8 @@ export async function runDiscovery(): Promise<DiscoveryResult> {
   // Durmuş container'lar da taranıyor: kapalı bir servisin kartı kaybolup
   // açılınca geri gelirse launcher güvenilmez olur.
   const containers = await getDockerProvider().list(true);
+  const hostId = currentHostId();
+  const address = cardAddress(hostId);
 
   const wanted = new Map<string, ContainerSummary>();
   for (const container of containers) {
@@ -110,15 +136,17 @@ export async function runDiscovery(): Promise<DiscoveryResult> {
     wanted.set(container.name, container);
   }
 
+  // Yalnızca BU sunucunun kartları: başka sunucudaki aynı adlı container'ın
+  // kartı bu turda "etiketi kalkmış" sanılıp silinmesin.
   const existing = new Map(
     listApps()
-      .filter((card) => card.containerName !== "")
+      .filter((card) => card.containerName !== "" && (card.hostId ?? LOCAL_HOST_ID) === hostId)
       .map((card) => [card.containerName, card]),
   );
 
   for (const [name, container] of wanted) {
     const read = labelReader(container, prefix);
-    const url = urlFor(read, container);
+    const url = urlFor(read, container, address);
     if (!url) {
       result.skipped[name] = serverT("discovery.noAddress", { prefix });
       continue;
@@ -147,7 +175,7 @@ export async function runDiscovery(): Promise<DiscoveryResult> {
     };
 
     if (!card) {
-      createApp(input, "docker");
+      createApp(input, "docker", hostId);
       result.created.push(name);
       continue;
     }
@@ -181,6 +209,19 @@ export async function runDiscovery(): Promise<DiscoveryResult> {
   }
 
   return result;
+}
+
+/** Sunucu başına sonuçları tek özet için birleştirir. */
+export function mergeDiscovery(results: DiscoveryResult[]): DiscoveryResult {
+  return results.reduce<DiscoveryResult>(
+    (all, result) => ({
+      created: [...all.created, ...result.created],
+      updated: [...all.updated, ...result.updated],
+      removed: [...all.removed, ...result.removed],
+      skipped: { ...all.skipped, ...result.skipped },
+    }),
+    { created: [], updated: [], removed: [], skipped: {} },
+  );
 }
 
 /** İnsan okunur özet — job günlüğü ve ekran bildirimi aynı metni kullanır. */

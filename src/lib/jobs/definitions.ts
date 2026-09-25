@@ -31,7 +31,8 @@ import { refreshImageUpdates } from "@/lib/updates";
 import { serverT } from "@/lib/i18n/runtime";
 import { fanOut, summarizeOutcomes } from "@/lib/hosts/fanout";
 import { heartbeatAgents } from "@/lib/hosts/agents";
-import { activeHosts } from "@/lib/hosts/store";
+import { activeHosts, listHosts } from "@/lib/hosts/store";
+import { syncRemoteEventWatchers } from "@/lib/docker/events";
 import type { JobDefinition, JobResult } from "./types";
 
 /**
@@ -78,6 +79,8 @@ export const jobDefinitions: JobDefinition[] = [
     recordSuccessRuns: false,
     async run() {
       const summary = await heartbeatAgents();
+      // Olay izleyicileri durumu takip eder: çevrimiçi olana açılır, düşene kapanır.
+      syncRemoteEventWatchers(listHosts());
       return {
         detail:
           serverT("jobs.detail.heartbeat", { online: summary.online, checked: summary.checked }) +
@@ -184,7 +187,8 @@ export const jobDefinitions: JobDefinition[] = [
     // Kayıt defterine ağ isteği; yavaş bir bağlantıda image başına saniyeler
     // sürebilir, bu yüzden kira süresi cömert.
     leaseSeconds: 600,
-    async run() {
+    scope: "perHost",
+    run: perHost(async () => {
       const results = await refreshImageUpdates();
       const outdated = results.filter((entry) => entry.updateAvailable === true).length;
       const unknown = results.filter((entry) => entry.updateAvailable === null).length;
@@ -193,17 +197,19 @@ export const jobDefinitions: JobDefinition[] = [
           serverT("jobs.detail.images", { count: results.length, outdated }) +
           (unknown > 0 ? serverT("jobs.detail.imagesUnknown", { count: unknown }) : ""),
       };
-    },
+    }),
   },
   {
     key: "apps.discover",
     schedule: { kind: "cron", settingKey: "apps.discovery_cron" },
     leaseSeconds: 120,
+    scope: "perHost",
     async run() {
       // Kapalıyken de iş kayıtlı kalıyor: kullanıcı Panel İşleri ekranında
       // "bu iş var ama çalışmıyor" görebilmeli (docker.autoprune ile aynı).
       if (!discoveryEnabled()) return { detail: serverT("jobs.detail.discoveryOff") };
-      return { detail: describeDiscovery(await runDiscovery()) };
+      // Kartlar sunucuya bağlı: her sunucu yalnızca kendi kartlarını yönetir.
+      return perHost(async () => ({ detail: describeDiscovery(await runDiscovery()) }))();
     },
   },
   {
