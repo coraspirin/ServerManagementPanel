@@ -20,8 +20,23 @@
 import en from "./en.json" with { type: "json" };
 import tr from "./tr.json" with { type: "json" };
 import de from "./de.json" with { type: "json" };
-import fr from "./fr.json" with { type: "json" };
-import it from "./it.json" with { type: "json" };
+//import FR from "./FR.json" with { type: "json" };
+//import IT from "./IT.json" with { type: "json" };
+//import ES from "./ES.json" with { type: "json" };
+//import PT from "./PT.json" with { type: "json" };
+//import NL from "./NL.json" with { type: "json" };
+//import PL from "./PL.json" with { type: "json" };
+//import RU from "./RU.json" with { type: "json" };
+//import UK from "./UK.json" with { type: "json" };
+//import EL from "./EL.json" with { type: "json" };
+//import SV from "./SV.json" with { type: "json" };
+//import DA from "./DA.json" with { type: "json" };
+//import NB from "./NB.json" with { type: "json" };
+//import FI from "./FI.json" with { type: "json" };
+//import JA from "./JA.json" with { type: "json" };
+//import KO from "./KO.json" with { type: "json" };
+//import ZH from "./ZH.json" with { type: "json" };
+//import ID from "./ID.json" with { type: "json" };
 // i18n:imports-end
 
 import { SOURCE_LOCALE, type Dictionary, type Locale } from "../lib/i18n/locales.ts";
@@ -34,8 +49,24 @@ const FILES: Record<Locale, Dictionary> = {
   en,
   tr,
   de,
-  fr,
-  it,
+  //fr,
+  //it,
+  //es,
+  //pt,
+  //nl,
+  //pl,
+  //ru,
+  //uk,
+  //el,
+  //sv,
+  //da,
+  //nb,
+  //fi,
+  //ja,
+  //ko,
+  //zh,
+  //id,
+  //ar
   // i18n:files-end
 };
 

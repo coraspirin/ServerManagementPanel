@@ -3751,6 +3751,7 @@
   "hosts.screen.colSystem": "System",
   "hosts.screen.colLastSeen": "Last seen",
   "hosts.screen.disabled": "Disabled",
+  "hosts.screen.manageSoon": "Adding remote servers (panel-agent enrollment) comes to this screen in the next release.",
   "hosts.unavailable.offline.title": "{host} is unreachable",
   "hosts.unavailable.offline.body": "The agent on this server is not responding. Check that the server is up and the agent container is running.",
   "hosts.unavailable.incompatible.title": "The agent on {host} is incompatible",
