@@ -10,8 +10,14 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
  * oynatmayı engeller.
  */
 
-/** Uyumsuz bir değişiklikte artar; eşleşmeyen ajan "incompatible" sayılır. */
-export const AGENT_PROTOCOL = 1;
+/**
+ * Uyumsuz bir değişiklikte artar; eşleşmeyen ajan "incompatible" sayılır.
+ *
+ * 2: terminal (exec.*), Docker olayları, helper.call ve sunucu dosya
+ * işlemleri eklendi. 1.10.0 ajanı bunları bilmiyor; bağlanıp yarım
+ * çalışmak yerine açıkça uyumsuz görünsün.
+ */
+export const AGENT_PROTOCOL = 2;
 
 export const AGENT_HEADERS = {
   ts: "x-agent-ts",
