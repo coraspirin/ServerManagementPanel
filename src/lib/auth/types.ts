@@ -34,7 +34,9 @@ export type PermissionKey =
   | "api.manage"
   // Çoklu sunucu (migration 026).
   | "hosts.view"
-  | "hosts.manage";
+  | "hosts.manage"
+  // Kendini güncelleme (migration 027).
+  | "panel.update";
 
 export type SessionUser = {
   id: number;

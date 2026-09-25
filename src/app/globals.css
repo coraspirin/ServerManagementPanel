@@ -133,6 +133,23 @@
   }
 }
 
+/*
+  Kaydırılabildiği görünmesi gereken yatay çubuklar için ince çubuk: gizli
+  çubukta sağda kalan sekmelerin varlığı fark edilmiyordu.
+*/
+@utility thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+  &::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: var(--line);
+    border-radius: 3px;
+  }
+}
+
 @media (pointer: coarse) {
   /*
     iOS Safari, 16px'ten küçük yazılı bir alana odaklanınca sayfayı

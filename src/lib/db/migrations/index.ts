@@ -24,6 +24,7 @@ import { migration023 } from "./023_host_console";
 import { migration024 } from "./024_login_apps";
 import { migration025 } from "./025_api_tokens";
 import { migration026 } from "./026_multi_host";
+import { migration027 } from "./027_panel_update";
 import type { Migration } from "./types";
 
 /**
@@ -59,6 +60,7 @@ export const migrations: Migration[] = [
   migration024,
   migration025,
   migration026,
+  migration027,
 ];
 
 export type { Migration };

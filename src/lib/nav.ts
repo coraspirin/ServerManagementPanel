@@ -3,6 +3,7 @@ import {
   Archive,
   Bell,
   CalendarClock,
+  CloudDownload,
   Container,
   Database,
   FileClock,
@@ -175,6 +176,7 @@ export const navGroups: NavGroup[] = [
       { href: "/users", labelKey: "nav.items.users", icon: UsersRound, permission: "users.manage" },
       { href: "/audit", labelKey: "nav.items.audit", icon: FileClock, permission: "audit.view" },
       { href: "/jobs", labelKey: "nav.items.jobs", icon: ListChecks, permission: "settings.view" },
+      { href: "/update", labelKey: "nav.items.update", icon: CloudDownload, permission: "panel.update" },
       {
         href: "/hostcron",
         labelKey: "nav.items.hostcron",

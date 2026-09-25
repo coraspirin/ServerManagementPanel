@@ -36,6 +36,24 @@ export function AppShell({ children, mode, version, user }: Props) {
   const { current: currentHost, multi } = useHosts();
   const groups = visibleNavGroups(user.permissions, { remoteHost: multi && !currentHost.isLocal });
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const canUpdate = user.permissions.includes("panel.update");
+  const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
+
+  // Yeni panel sürümü var mı — sunucu 30 dk önbellekliyor, burada oturum
+  // başına tek istek. Hata sessiz: menü altındaki bir nokta için uyarı gerekmez.
+  useEffect(() => {
+    if (!canUpdate) return;
+    let cancelled = false;
+    fetch("/api/updates/panel", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { check?: { newer?: boolean; latest?: string | null } } | null) => {
+        if (!cancelled && data?.check?.newer) setUpdateAvailable(data.check.latest ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [canUpdate]);
 
   // Adres değişince çekmece kapanır. Bağlantıların kendi `onNavigate`'i zaten
   // bunu yapıyor; buradaki kural geri/ileri düğmesi ve palet gibi bağlantı
@@ -111,7 +129,7 @@ export function AppShell({ children, mode, version, user }: Props) {
       */}
       <aside
         inert={!isDesktop && !menuOpen}
-        className={`fixed bottom-0 left-0 top-0 z-40 flex w-64 max-w-[80vw] shrink-0 flex-col border-r border-line bg-surface pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)] transition-transform lg:sticky lg:bottom-auto lg:left-auto lg:h-dvh lg:max-w-none lg:translate-x-0 lg:self-start ${
+        className={`fixed bottom-0 left-0 top-0 z-40 flex w-max min-w-52 max-w-[85vw] shrink-0 flex-col border-r border-line bg-surface pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)] transition-transform lg:sticky lg:bottom-auto lg:left-auto lg:h-dvh lg:max-w-80 lg:translate-x-0 lg:self-start ${
           menuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -128,7 +146,13 @@ export function AppShell({ children, mode, version, user }: Props) {
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto overscroll-contain px-3 py-4">
+        {/*
+          Sütun genişliği en uzun maddeye göre (`w-max`), dile göre değişiyor;
+          `min-w`/`max-w` iki uçtaki sınırlar. Kaydırma çubuğunun yeri baştan
+          ayrılıyor (`scrollbar-gutter`): yoksa çubuk belirince en uzun madde
+          birkaç piksel sığmayıp kırpılırdı.
+        */}
+        <nav className="flex-1 overflow-y-auto overscroll-contain px-3 py-4 [scrollbar-gutter:stable]">
           {groups.map((group) => (
             <div key={group.titleKey} className="mb-5">
               <p className="px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-subtle">
@@ -150,8 +174,19 @@ export function AppShell({ children, mode, version, user }: Props) {
                         onNavigate={() => setMenuOpen(false)}
                       />
 
-                      {inSection && children.length > 0 && (
-                        <ul className="mb-1 ml-4 mt-0.5 space-y-0.5 border-l border-line pl-2">
+                      {/*
+                        Kapalıyken de belgede ama görünmez ve yüksekliksiz:
+                        genişliğe katılıyor, yoksa ayarlara girip çıkınca
+                        sütun genişleyip daralırdı. `invisible` odaklanmayı da
+                        kapatıyor.
+                      */}
+                      {children.length > 0 && (
+                        <ul
+                          aria-hidden={!inSection || undefined}
+                          className={`ml-4 space-y-0.5 border-l border-line pl-2 ${
+                            inSection ? "mb-1 mt-0.5" : "invisible h-0 overflow-hidden"
+                          }`}
+                        >
                           {children.map((child) => (
                             <li key={child.href}>
                               <NavLink
@@ -194,7 +229,19 @@ export function AppShell({ children, mode, version, user }: Props) {
 
         <div className="shrink-0 border-t border-line px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 text-xs text-subtle">
           <div className="flex items-center justify-between">
-            <span className="font-mono">v{version}</span>
+            {canUpdate ? (
+              <Link
+                href="/update"
+                onClick={() => setMenuOpen(false)}
+                title={updateAvailable ? t("shell.updateAvailable", { tag: updateAvailable }) : undefined}
+                className="flex items-center gap-1.5 font-mono hover:text-ink"
+              >
+                v{version}
+                {updateAvailable && <span className="size-1.5 rounded-full bg-brand" aria-hidden />}
+              </Link>
+            ) : (
+              <span className="font-mono">v{version}</span>
+            )}
             <span
               className={`rounded px-1.5 py-0.5 font-medium ${
                 mode === "mock" ? "bg-warn/15 text-warn" : "bg-ok/15 text-ok"

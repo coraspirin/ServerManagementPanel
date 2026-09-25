@@ -5,6 +5,9 @@ node_modules
 data
 *.log
 
+# Panelin kendini güncellerken aldığı yedekler (selfupdate).
+.panel-backups
+
 # Gerçek .env asla imaja girmez (MASTER_KEY içerir — T3).
 .env
 .env.*
