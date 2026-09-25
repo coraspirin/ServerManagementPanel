@@ -4,7 +4,7 @@ A self-hosted management panel written for a single Linux + Docker server. It br
 
 Designed at home-server (homelab) scale: a single container, embedded SQLite, no external database or queue. The interface and all text are in Turkish.
 
-> **Version:** 1.10.0 · **Stack:** Next.js 16, React 19, TypeScript, Tailwind CSS 4, Node 24 (`node:sqlite`)
+> **Version:** 1.11.0 · **Stack:** Next.js 16, React 19, TypeScript, Tailwind CSS 4, Node 24 (`node:sqlite`)
 
 ---
 
@@ -394,7 +394,7 @@ These are **deployment parameters**. Anything that can be changed from within th
 | `PANEL_REPORTS_DIR` | | `./reports` | The directory where host cron scripts drop JSON output. |
 | `TZ` | | `Europe/Istanbul` | Time zone. |
 | `MOCK_MODE` | | `0` | If set to `1`, all providers that touch the outside world return fake data from `fixtures/`. For development and debugging. |
-| `APP_VERSION` | | `1.10.0` | Version baked into the image. Visible in the `/api/health` response and the UI. |
+| `APP_VERSION` | | `1.11.0` | Version baked into the image. Visible in the `/api/health` response and the UI. |
 
 ---
 
