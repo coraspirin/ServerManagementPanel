@@ -30,7 +30,7 @@ async function collect() {
 
 /** Image / volume / ağ listesi + kullanılmayan kaynak raporu (M1.8). */
 export async function GET(request: Request) {
-  const guard = await guardHostApi(request, "docker.view");
+  const guard = await guardHostApi(request, "docker.view", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
@@ -181,7 +181,7 @@ export async function GET(request: Request) {
  * alınır ama silinen şey her koşulda audit'e yazılır.
  */
 export async function POST(request: Request) {
-  const guard = await guardHostApi(request, "docker.action");
+  const guard = await guardHostApi(request, "docker.action", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

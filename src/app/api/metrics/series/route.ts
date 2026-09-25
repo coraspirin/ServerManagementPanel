@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  * söyler; grafik altında "1 saatlik ortalama" yazabilelim diye.
  */
 export async function GET(request: Request) {
-  const guard = await guardHostApi(request, "metrics.view");
+  const guard = await guardHostApi(request, "metrics.view", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic";
  * kendisi okuyor.
  */
 export async function POST(request: Request) {
-  const guard = await guardHostApi(request, "docker.action");
+  const guard = await guardHostApi(request, "docker.action", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

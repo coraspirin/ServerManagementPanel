@@ -17,7 +17,7 @@ const ALLOWED: ContainerAction[] = ["start", "stop", "restart", "pause", "unpaus
  * 3'te yeniden başladı?" sorusunun cevabı bir yerde yazılı olmalı.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardHostApi(request, "docker.action");
+  const guard = await guardHostApi(request, "docker.action", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

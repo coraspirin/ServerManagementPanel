@@ -23,7 +23,7 @@ const SCOPES: PruneScope[] = [
  * birlikte audit'e düşer.
  */
 export async function POST(request: Request) {
-  const guard = await guardHostApi(request, "docker.action");
+  const guard = await guardHostApi(request, "docker.action", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

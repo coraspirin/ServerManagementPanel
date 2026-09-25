@@ -35,7 +35,7 @@ RUN groupadd --system --gid 1001 panel \
 # yetkisiyle geliyor; Docker varsayılan yetki kümesi CAP_NET_RAW içerdiği için
 # root olmayan kullanıcıyla da çalışır.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends iputils-ping \
+ && apt-get install -y --no-install-recommends iputils-ping openssl \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/public ./public
@@ -47,6 +47,11 @@ COPY --from=builder --chown=panel:panel /app/.next/static ./.next/static
 # sorunun UI'da mı yoksa entegrasyonda mı olduğunu ayırt edebilmek için.
 COPY --from=builder --chown=panel:panel /app/fixtures ./fixtures
 
+# Rol seçen giriş noktası (merkez / panel-agent). Standalone çıktı onu
+# izlemediği için ayrıca kopyalanıyor. openssl (yukarıda) panel-agent'ın
+# ilk açılışta kendi TLS sertifikasını üretmesi için.
+COPY --from=builder --chown=panel:panel /app/scripts/docker-entry.mjs ./docker-entry.mjs
+
 # SQLite ve migration kopyaları buraya (M0.3) — compose'da volume bağlanır.
 # Dizinler İMAJDA oluşturuluyor ki boş bir named volume ilk bağlandığında
 # sahipliği buradan devralsın. Yalnızca compose'da mount edilseydi volume
@@ -56,8 +61,10 @@ RUN mkdir -p /app/data /app/proxy && chown panel:panel /app/data /app/proxy
 
 USER panel
 EXPOSE 3000
+# panel-agent (PANEL_ROLE=agent) HTTPS portu.
+EXPOSE 7443
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-CMD ["node", "server.js"]
+CMD ["node", "docker-entry.mjs"]

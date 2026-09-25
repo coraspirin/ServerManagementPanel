@@ -11,6 +11,23 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
+  // Çoklu sunucu — ajan rolü: arayüz, oturum, işler ve sırlar merkezde.
+  // Burada yalnızca şema (kütüphane kodu tabloları okuyabilsin) ve dil
+  // çözücüsü kuruluyor; MASTER_KEY, yönetici hesabı ve iş zamanlayıcı YOK.
+  if (process.env.PANEL_ROLE === "agent") {
+    const { runMigrations } = await import("@/lib/db/migrate");
+    runMigrations();
+    const { registerLocaleResolver } = await import("@/lib/i18n/server");
+    registerLocaleResolver();
+    const token = (process.env.AGENT_TOKEN ?? "").trim();
+    console.log(
+      token.length >= 32
+        ? "[agent] hazır — merkezden kayıt bekleniyor" // i18n-ignore — operatör logu
+        : "[agent] AGENT_TOKEN tanımlı değil ya da kısa; merkez bağlanamaz", // i18n-ignore — operatör logu
+    );
+    return;
+  }
+
   const { masterKeyAvailable } = await import("@/lib/crypto");
   if (!masterKeyAvailable()) {
     const { randomBytes } = await import("node:crypto");

@@ -32,7 +32,7 @@ async function containerName(id: string): Promise<string> {
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardHostApi(request, "docker.view");
+  const guard = await guardHostApi(request, "docker.view", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
@@ -95,7 +95,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardHostApi(request, "docker.action");
+  const guard = await guardHostApi(request, "docker.action", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

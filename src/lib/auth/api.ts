@@ -72,11 +72,16 @@ export type HostGuardResult =
  *
  * `localOnly`: özellik yalnızca panelin kendi sunucusunda var (host cron,
  * ufw, LAN taraması...). Uzak sunucu seçiliyken 501 döner.
+ *
+ * `agent`: uç panel-agent üzerinden çalışacak şekilde taşındı (yalnızca
+ * sağlayıcılar/ajan işlemleri kullanıyor). İşaretsiz uçlar ajan sunucusunda
+ * 501 döner — yerel dosya sistemine ya da helper'a doğrudan dokunan bir uç,
+ * uzak sunucu seçiliyken MERKEZİN verisini gösterirdi.
  */
 export async function guardHostApi(
   request: Request,
   permission: PermissionKey,
-  options: { localOnly?: boolean } = {},
+  options: { localOnly?: boolean; agent?: boolean } = {},
 ): Promise<HostGuardResult> {
   const guard = await guardApi(request, permission);
   if (!guard.ok) return guard;
@@ -110,7 +115,10 @@ export async function guardHostApi(
     };
   }
 
-  if (options.localOnly && !isLocalHost(pick.hostId)) {
+  const unsupported =
+    (options.localOnly && !isLocalHost(pick.hostId)) ||
+    (host?.agentType === "agent" && !options.agent);
+  if (unsupported) {
     return {
       ok: false,
       response: Response.json(

@@ -15,7 +15,7 @@ export default async function DockerPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const session = await requirePermission("docker.view");
-  enterHost(await pageHostId());
+  enterHost(await pageHostId({ agent: true }));
 
   /*
     `?tab=` (M3.37): `/appstore` yönlendirmesi ve volume satırındaki yığın

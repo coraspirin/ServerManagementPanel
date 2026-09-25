@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getDb } from "@/lib/db/client";
-import { currentHostId, hostSettingsOverlay } from "@/lib/hosts/context";
+import { currentHostId, hostSettingsOverlay, runWithHost } from "@/lib/hosts/context";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { audit } from "@/lib/auth/audit";
 import { sanitizeRichText } from "@/lib/richtext";
@@ -170,10 +170,12 @@ export function getSetting<T = string | number | boolean>(
   const def = findSetting(key);
   if (!def) throw new Error(serverT("settings.validation.unknownKey", { key }));
 
-  if (!scope && def.hostScoped) {
+  if (!scope) {
+    // Ajan tarafı: merkez bu istek için ayarları çözüp gönderdi; ajanın kendi
+    // veritabanındaki (boş) değerlere bakılmaz.
     const overlay = hostSettingsOverlay();
     if (overlay && key in overlay) return overlay[key] as T;
-    scope = { type: "host", id: String(currentHostId()) };
+    if (def.hostScoped) scope = { type: "host", id: String(currentHostId()) };
   }
 
   if (scope) {
@@ -191,6 +193,22 @@ export function getSetting<T = string | number | boolean>(
   }
 
   return def.default as T;
+}
+
+/**
+ * Bir sunucu için gizli olmayan tüm ayarların etkin değerleri — ajana her
+ * istekte katman olarak gönderilir. Sırlar (bildirim anahtarları vb.) hiçbir
+ * zaman ajana gitmez; ajanın çalıştırdığı kod onlara ihtiyaç duymaz.
+ */
+export function resolvedSettingsFor(hostId: number): Record<string, unknown> {
+  return runWithHost(hostId, () => {
+    const out: Record<string, unknown> = {};
+    for (const def of settingDefs) {
+      if (def.type === "secret") continue;
+      out[def.key] = getSetting(def.key);
+    }
+    return out;
+  });
 }
 
 export function getNumber(key: string, scope?: { type: SettingScope; id: string }): number {

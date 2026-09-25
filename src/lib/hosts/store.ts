@@ -110,6 +110,12 @@ export function hostTokenEnc(id: number): string | null {
 
 export type HostStatusUpdate = {
   status: HostStatus;
+  /**
+   * Ajandan GERÇEKTEN yanıt alındı mı. `last_seen` yalnızca o zaman ilerler —
+   * durumdan türetilseydi başarısız bir yoklama "hâlâ çevrimiçi" yazarken
+   * son görülmeyi de tazeler ve sunucu hiçbir zaman çevrimdışı sayılmazdı.
+   */
+  seen?: boolean;
   latencyMs?: number | null;
   lastError?: string | null;
   agentVersion?: string | null;
@@ -120,7 +126,7 @@ export type HostStatusUpdate = {
 };
 
 export function updateHostStatus(id: number, update: HostStatusUpdate): void {
-  const seen = update.status === "online" || update.status === "incompatible";
+  const seen = update.seen === true;
   getDb()
     .prepare(
       `UPDATE hosts SET
@@ -182,4 +188,54 @@ export function removeHost(id: number): boolean {
     db.exec("ROLLBACK");
     throw error;
   }
+}
+
+export function hostNameTaken(name: string, exceptId?: number): boolean {
+  const row = getDb()
+    .prepare("SELECT id FROM hosts WHERE name = ? COLLATE NOCASE AND id != ?")
+    .get(name, exceptId ?? -1);
+  return row !== undefined;
+}
+
+/** Kayıt bekleyen uzak sunucu satırı; sır şifreli yazılır. */
+export function insertPendingHost(name: string, tokenEnc: string): number {
+  const result = getDb()
+    .prepare(
+      `INSERT INTO hosts (name, agent_type, is_local, status, token_enc, sort_order)
+       VALUES (?, 'agent', 0, 'pending', ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM hosts))`,
+    )
+    .run(name, tokenEnc);
+  return Number(result.lastInsertRowid);
+}
+
+export function markEnrolled(
+  id: number,
+  input: { agentUrl: string; fingerprint: string; update: HostStatusUpdate },
+): void {
+  getDb()
+    .prepare("UPDATE hosts SET agent_url = ?, address = ?, cert_fingerprint = ? WHERE id = ?")
+    .run(input.agentUrl, new URL(input.agentUrl).hostname, input.fingerprint, id);
+  updateHostStatus(id, input.update);
+}
+
+export function updateHostMeta(
+  id: number,
+  patch: { name?: string; enabled?: boolean; color?: string | null },
+): void {
+  const db = getDb();
+  if (patch.name !== undefined) db.prepare("UPDATE hosts SET name = ? WHERE id = ?").run(patch.name, id);
+  if (patch.enabled !== undefined) {
+    db.prepare("UPDATE hosts SET enabled = ? WHERE id = ?").run(patch.enabled ? 1 : 0, id);
+  }
+  if (patch.color !== undefined) db.prepare("UPDATE hosts SET color = ? WHERE id = ?").run(patch.color, id);
+}
+
+/** Yeni sır (yeniden kayıt): eski sabitleme de düşer, ajan yeniden bağlanmalı. */
+export function resetHostSecret(id: number, tokenEnc: string): void {
+  getDb()
+    .prepare(
+      `UPDATE hosts SET token_enc = ?, cert_fingerprint = NULL, status = 'pending', last_error = NULL
+       WHERE id = ? AND is_local = 0`,
+    )
+    .run(tokenEnc, id);
 }

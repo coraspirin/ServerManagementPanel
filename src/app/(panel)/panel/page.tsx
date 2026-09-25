@@ -40,7 +40,7 @@ async function browserHost(): Promise<string> {
 
 export default async function OverviewPage() {
   const session = await requireSession();
-  enterHost(await pageHostId());
+  enterHost(await pageHostId({ agent: true }));
   const t = getT();
 
   // `panel.dashboard` yetkisi olmayan (varsayılanda 'izleyici' rolü) sade bir

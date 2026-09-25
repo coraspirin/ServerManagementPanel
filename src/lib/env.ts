@@ -14,3 +14,13 @@ export function isMockMode(): boolean {
 export function appVersion(): string {
   return process.env.APP_VERSION ?? "1.9.0";
 }
+
+/**
+ * Çoklu sunucu: aynı imaj iki rolde çalışır.
+ *  - central (varsayılan): arayüz, veritabanı, işler.
+ *  - agent: yönetilen uzak sunucuda; yalnızca imzalı RPC uçlarını açar,
+ *    arayüzü, oturumu ve işleri yoktur.
+ */
+export function isAgent(): boolean {
+  return process.env.PANEL_ROLE === "agent";
+}

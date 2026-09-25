@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 /** Donanım sağlığı: sıcaklık, S.M.A.R.T, RAID/ZFS (M1.4). */
 export async function GET(request: Request) {
-  const guard = await guardHostApi(request, "metrics.view");
+  const guard = await guardHostApi(request, "metrics.view", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

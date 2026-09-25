@@ -53,6 +53,11 @@ const PUBLIC_PREFIXES = [
    */
   "/api/v1",
   "/metrics",
+  /*
+   * panel-agent uçları (çoklu sunucu). Çerezle değil HMAC imzasıyla doğrulanır
+   * ve yalnızca PANEL_ROLE=agent iken cevap verir; merkez rolünde 404.
+   */
+  "/api/agent",
 ];
 
 /**

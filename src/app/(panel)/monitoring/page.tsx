@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function MonitoringPage() {
   await requirePermission("metrics.view");
-  enterHost(await pageHostId());
+  enterHost(await pageHostId({ agent: true }));
 
   const configured = getString("monitoring.chart_default_range");
   const range: RangeId = isRangeId(configured) ? configured : "24h";

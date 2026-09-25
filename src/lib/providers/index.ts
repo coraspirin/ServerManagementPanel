@@ -5,6 +5,7 @@ import { serverT } from "@/lib/i18n/runtime";
 import { currentHostId, LOCAL_HOST_ID } from "@/lib/hosts/context";
 import { HostError } from "@/lib/hosts/errors";
 import { mockProvidersFor } from "@/lib/hosts/mock";
+import { remoteProviders } from "./remote";
 import { getHost } from "@/lib/hosts/store";
 import { liveDockerProvider } from "./docker.live";
 import { mockDockerProvider } from "./docker.mock";
@@ -61,7 +62,13 @@ export function providersFor(hostId: number): ProviderSet {
     return mockProvidersFor(host, localProviders());
   }
 
-  // Uzak (ajan) sağlayıcıları bir sonraki fazda bağlanıyor.
+  if (host.agentType === "agent") {
+    if (host.status === "offline" || host.status === "incompatible") {
+      throw new HostError(host.status, hostId, serverT(`hosts.errors.${host.status}`));
+    }
+    return remoteProviders(host);
+  }
+
   throw new HostError("unsupported", hostId, serverT("hosts.errors.unsupported"));
 }
 

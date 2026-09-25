@@ -88,6 +88,7 @@ function isTurkish(text) {
   return /\s/.test(inner.trim()) && WORDS.test(inner.replace(/\$\{[^}]*\}/g, " "));
 }
 
+/** @type {string[]} */
 const findings = [];
 for (const file of walk(ROOT)) {
   if (SKIP.some((re) => re.test(file))) continue;

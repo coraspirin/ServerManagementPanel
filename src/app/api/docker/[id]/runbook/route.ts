@@ -19,7 +19,7 @@ const MAX_BODY_CHARS = 20_000;
  * ayarı değil, o container hakkında işletme bilgisi.
  */
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardHostApi(request, "docker.action");
+  const guard = await guardHostApi(request, "docker.action", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

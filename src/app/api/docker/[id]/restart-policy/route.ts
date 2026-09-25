@@ -19,7 +19,7 @@ const POLICIES: RestartPolicy["name"][] = ["no", "always", "unless-stopped", "on
  * `compose up`'ta geri alınır; istemci bunu kullanıcıya söylüyor.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardHostApi(request, "docker.action");
+  const guard = await guardHostApi(request, "docker.action", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

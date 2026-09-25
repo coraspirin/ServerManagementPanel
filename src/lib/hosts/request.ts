@@ -51,8 +51,13 @@ export async function resolvePageHost(): Promise<Host> {
  *   await requirePermission("docker.view");
  *   enterHost(await pageHostId());
  */
-export async function pageHostId(): Promise<number> {
+export async function pageHostId(options: { agent?: boolean } = {}): Promise<number> {
   const host = await resolvePageHost();
+  // Ekran henüz panel-agent'a taşınmadıysa uzak sunucuda yerel veriyi
+  // göstermesin (bkz. guardHostApi'deki `agent` seçeneği).
+  if (host.agentType === "agent" && !options.agent) {
+    redirect("/hosts/unavailable?reason=unsupported");
+  }
   // Ulaşılamayan sunucunun ekranı yarı yüklenip hata sayfasına düşmesin;
   // bilgi sayfası, başka sunucu seçilince kendiliğinden geri döner.
   if (!host.isLocal && (host.status === "offline" || host.status === "incompatible")) {

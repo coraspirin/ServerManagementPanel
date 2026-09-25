@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getDb } from "@/lib/db/client";
+import { currentHostId } from "@/lib/hosts/context";
 
 export type AuditEntry = {
   userId?: number | null;
@@ -22,10 +23,12 @@ export function audit(entry: AuditEntry): void {
     getDb()
       .prepare(
         `INSERT INTO audit_log
-           (user_id, username, action, target_type, target_id, detail, ip, result)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           (host_id, user_id, username, action, target_type, target_id, detail, ip, result)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
+        // Çoklu sunucu: işlem hangi sunucu seçiliyken yapıldıysa o.
+        currentHostId(),
         entry.userId ?? null,
         entry.username ?? "",
         entry.action,

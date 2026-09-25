@@ -30,6 +30,7 @@ import { getBool, getNumber, getString } from "@/lib/settings";
 import { refreshImageUpdates } from "@/lib/updates";
 import { serverT } from "@/lib/i18n/runtime";
 import { fanOut, summarizeOutcomes } from "@/lib/hosts/fanout";
+import { heartbeatAgents } from "@/lib/hosts/agents";
 import { activeHosts } from "@/lib/hosts/store";
 import type { JobDefinition, JobResult } from "./types";
 
@@ -67,6 +68,22 @@ export const jobDefinitions: JobDefinition[] = [
       const { written } = await collectMetrics();
       return { detail: serverT("jobs.detail.samples", { count: written }) };
     }),
+  },
+  {
+    // Çoklu sunucu: uzak ajanların durumu, sürümü ve gecikmesi. Ajan yoksa
+    // hiçbir şey yapmaz; çevrimdışı olan sunucu diğer işlerin dışında kalır.
+    key: "hosts.heartbeat",
+    schedule: { kind: "fixed", seconds: 15, labelKey: "jobs.schedule.heartbeat" },
+    leaseSeconds: 60,
+    recordSuccessRuns: false,
+    async run() {
+      const summary = await heartbeatAgents();
+      return {
+        detail:
+          serverT("jobs.detail.heartbeat", { online: summary.online, checked: summary.checked }) +
+          (summary.changed.length > 0 ? ` · ${summary.changed.join(", ")}` : ""),
+      };
+    },
   },
   {
     key: "metrics.rollup",
