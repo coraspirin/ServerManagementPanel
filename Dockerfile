@@ -2,7 +2,13 @@
 
 # Alpine/musl DEĞİL: ileride gelecek native modüller (better-sqlite3 M0.3,
 # node-pty M1.9) glibc üzerinde çok daha sorunsuz derleniyor.
-FROM node:24-bookworm-slim AS base
+#
+# Derleme YAPI makinesinin mimarisinde ($BUILDPLATFORM), tek sefer yapılıyor:
+# Next'in standalone çıktısı saf JavaScript ve çalışma zamanı bağımlılıklarında
+# native modül yok, yani aynı çıktı her mimaride çalışıyor. Hem arm derlemesi
+# QEMU emülasyonundan kurtuluyor hem de 32-bit ARM (Raspberry Pi / DietPi,
+# panel-agent) mümkün oluyor: Node 24'ün linux/arm/v7 imajı yok.
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS base
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # ---------- bağımlılıklar ----------
@@ -16,12 +22,19 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-ARG APP_VERSION=1.11.0
+ARG APP_VERSION=1.11.1
 ENV APP_VERSION=${APP_VERSION}
 RUN npm run build
 
 # ---------- çalıştırma ----------
-FROM base AS runner
+# Hedef mimariye göre Node: 64-bit'te 24, 32-bit ARM'da (arm/v7) 22 — Node 24
+# o mimariyi bırakıyor. Kod Node 22'de olmayan bir API kullanmıyor; node:sqlite
+# 22.13'ten beri bayraksız.
+FROM node:24-bookworm-slim AS runtime-amd64
+FROM node:24-bookworm-slim AS runtime-arm64
+FROM node:22-bookworm-slim AS runtime-arm
+FROM runtime-${TARGETARCH} AS runner
+ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
