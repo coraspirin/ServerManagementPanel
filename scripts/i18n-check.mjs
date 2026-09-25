@@ -33,7 +33,8 @@ function registeredCodes() {
   return block
     .split("\n")
     .map((line) => line.trim().replace(/,$/, ""))
-    .filter(Boolean)
+    // Yorumlanmış satırlar (`//fr`) kayıt değil: dil geçici olarak kapatılmış.
+    .filter((line) => line && !line.startsWith("//"))
     .map((entry) => (entry.includes(":") ? entry.split(":")[0].replace(/"/g, "").trim() : entry));
 }
 
