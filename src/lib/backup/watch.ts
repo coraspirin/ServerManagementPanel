@@ -2,6 +2,7 @@ import { serverT } from "@/lib/i18n/runtime";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { getNumber, getString } from "@/lib/settings";
+import { onHost } from "@/lib/hosts/on-host";
 import { lastSuccessfulRunAt } from "./store";
 
 /**
@@ -81,6 +82,33 @@ export async function backupStatus(): Promise<BackupStatus> {
   // Klasör takibi kapalı olsa bile motor çalışıyorsa durum bilinebilir.
   if (dir === "") return { ...base, stale: engineLastRunAt !== null && tooOld(engineLastRunAt) };
 
+  const scan = await onHost("backup.scanDir", [dir], () => scanWatchDir(dir));
+  if (scan.error !== null) return { ...base, error: scan.error };
+
+  return {
+    ...base,
+    newestAt: scan.newestAt,
+    newestName: scan.newestName,
+    fileCount: scan.fileCount,
+    totalBytes: scan.totalBytes,
+    // İki kaynaktan biri tazeyse yedek alınıyor demektir.
+    stale: tooOld(newerOf(scan.newestAt, engineLastRunAt)),
+  };
+}
+
+export type WatchDirScan = {
+  newestAt: number | null;
+  newestName: string | null;
+  fileCount: number;
+  totalBytes: number;
+  error: string | null;
+};
+
+/**
+ * İzlenen klasörün bu makinedeki taraması. Uzak sunucuda ajan çalıştırır
+ * (`backup.scanDir`): klasör o sunucunun diskinde.
+ */
+export async function scanWatchDir(dir: string): Promise<WatchDirScan> {
   const resolved = resolveHostPath(dir);
 
   try {
@@ -111,19 +139,14 @@ export async function backupStatus(): Promise<BackupStatus> {
       }
     }
 
-    return {
-      ...base,
-      newestAt,
-      newestName,
-      fileCount,
-      totalBytes,
-      // İki kaynaktan biri tazeyse yedek alınıyor demektir.
-      stale: tooOld(newerOf(newestAt, engineLastRunAt)),
-    };
+    return { newestAt, newestName, fileCount, totalBytes, error: null };
   } catch (error) {
     const message = error instanceof Error ? error.message : serverT("backupWatch.unreadable");
     return {
-      ...base,
+      newestAt: null,
+      newestName: null,
+      fileCount: 0,
+      totalBytes: 0,
       // Okunamayan klasör "yedek yok" ile aynı şey değil; ayrı söylenmeli.
       error: message.includes("ENOENT")
         ? serverT("backupWatch.notFound", { dir, root: HOST_ROOT })

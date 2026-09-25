@@ -23,7 +23,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function StacksPage() {
   const session = await requirePermission("apps.install");
-  enterHost(await pageHostId());
+  enterHost(await pageHostId({ agent: true }));
 
   if (!hasPermission(session.user, "docker.view")) {
     const t = getT();

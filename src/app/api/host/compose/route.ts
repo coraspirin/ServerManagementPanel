@@ -82,7 +82,7 @@ async function discoverStacks(): Promise<Stack[]> {
 }
 
 export async function GET(request: Request) {
-  const guard = await guardHostApi(request, "docker.view");
+  const guard = await guardHostApi(request, "docker.view", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
@@ -100,7 +100,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const guard = await guardHostApi(request, "host.service");
+  const guard = await guardHostApi(request, "host.service", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

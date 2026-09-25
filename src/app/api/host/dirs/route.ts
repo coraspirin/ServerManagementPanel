@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  * sınırlanamaz (bkz. lib/host/dirs.ts). Yalnızca klasör ADLARI dönüyor.
  */
 export async function GET(request: Request) {
-  const guard = await guardHostApi(request, "settings.edit");
+  const guard = await guardHostApi(request, "settings.edit", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

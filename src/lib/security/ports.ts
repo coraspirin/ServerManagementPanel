@@ -2,6 +2,7 @@ import "server-only";
 import { serverT } from "@/lib/i18n/runtime";
 
 import { readCache, writeCache } from "@/lib/db/cache";
+import { currentHostId, LOCAL_HOST_ID } from "@/lib/hosts/context";
 import { panelImage } from "@/lib/host/self";
 import { getDockerProvider } from "@/lib/providers";
 import {
@@ -36,6 +37,12 @@ import {
 export type { ListeningPort, PortOwner } from "@/lib/security/portmap";
 
 const CACHE_KEY = "security.ports";
+
+/** Sunucu başına önbellek; yerel sunucu eski anahtarı koruyor. */
+function cacheKey(): string {
+  const hostId = currentHostId();
+  return hostId === LOCAL_HOST_ID ? CACHE_KEY : `h${hostId}:${CACHE_KEY}`;
+}
 
 /**
  * Container içinde çalışan sabit script.
@@ -235,7 +242,7 @@ export async function scanListeningPorts(): Promise<PortScan> {
     error: null,
   };
 
-  writeCache(CACHE_KEY, scan);
+  writeCache(cacheKey(), scan);
   return scan;
 }
 
@@ -248,7 +255,7 @@ export async function scanListeningPorts(): Promise<PortScan> {
  * ya `ports.scan` işiyle ya da kullanıcının düğmesiyle olur.
  */
 export function cachedPortScan(): CachedPortScan {
-  const cached = readCache<PortScan>(CACHE_KEY);
+  const cached = readCache<PortScan>(cacheKey());
   if (!cached) return { ...EMPTY, updatedAt: null };
   return { ...cached.value, updatedAt: cached.updatedAt };
 }

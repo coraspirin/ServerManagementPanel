@@ -2,6 +2,7 @@ import "server-only";
 import { serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
+import { currentHostId } from "@/lib/hosts/context";
 import type {
   LogKind,
   LogLevel,
@@ -56,13 +57,16 @@ export function insertLines(lines: IncomingLine[]): number {
 
   const db = getDb();
   const insert = db.prepare(
-    "INSERT INTO log_lines (ts, source, kind, stream, level, message) VALUES (?, ?, ?, ?, ?, ?)",
+    "INSERT INTO log_lines (host_id, ts, source, kind, stream, level, message) VALUES (?, ?, ?, ?, ?, ?, ?)",
   );
+  // Çoklu sunucu: satırlar toplandıkları sunucunun bağlamına yazılır.
+  const hostId = currentHostId();
 
   db.exec("BEGIN");
   try {
     for (const line of lines) {
       insert.run(
+        hostId,
         line.ts,
         line.source,
         line.kind,
@@ -108,8 +112,9 @@ export function toMatchQuery(raw: string): string | null {
 type Where = { sql: string; params: (string | number)[] };
 
 function buildWhere(search: LogSearch, matchQuery: string | null): Where {
-  const clauses: string[] = [];
-  const params: (string | number)[] = [];
+  // Arama her zaman seçili sunucunun satırlarında.
+  const clauses: string[] = ["l.host_id = ?"];
+  const params: (string | number)[] = [currentHostId()];
 
   if (matchQuery) {
     clauses.push("l.id IN (SELECT rowid FROM log_fts WHERE log_fts MATCH ?)");
@@ -136,7 +141,7 @@ function buildWhere(search: LogSearch, matchQuery: string | null): Where {
     params.push(search.until);
   }
 
-  return { sql: clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "", params };
+  return { sql: `WHERE ${clauses.join(" AND ")}`, params };
 }
 
 export function searchLogs(search: LogSearch = {}): LogSearchResult {
@@ -165,8 +170,8 @@ export function searchLogs(search: LogSearch = {}): LogSearchResult {
   );
 
   const summary = db
-    .prepare("SELECT COUNT(*) AS n, MIN(ts) AS oldest FROM log_lines")
-    .get() as { n: number; oldest: number | null };
+    .prepare("SELECT COUNT(*) AS n, MIN(ts) AS oldest FROM log_lines WHERE host_id = ?")
+    .get(currentHostId()) as { n: number; oldest: number | null };
 
   return {
     records,
@@ -206,11 +211,12 @@ export function listSources(): LogSourceInfo[] {
        FROM log_cursors c
        LEFT JOIN (
          SELECT source, COUNT(*) AS lines, MIN(ts) AS oldest, MAX(ts) AS newest
-         FROM log_lines GROUP BY source
+         FROM log_lines WHERE host_id = ? GROUP BY source
        ) s ON s.source = c.source
+       WHERE c.host_id = ?
        ORDER BY c.source`,
     )
-    .all() as Record<string, string | number | null>[];
+    .all(currentHostId(), currentHostId()) as Record<string, string | number | null>[];
 
   return rows.map((row) => ({
     source: String(row.source),
@@ -225,7 +231,9 @@ export function listSources(): LogSourceInfo[] {
 }
 
 export function readCursor(source: string): number {
-  const row = getDb().prepare("SELECT last_ts FROM log_cursors WHERE source = ?").get(source) as
+  const row = getDb()
+    .prepare("SELECT last_ts FROM log_cursors WHERE host_id = ? AND source = ?")
+    .get(currentHostId(), source) as
     | { last_ts: number }
     | undefined;
   return row ? Number(row.last_ts) : 0;
@@ -240,9 +248,9 @@ export function writeCursor(
 ): void {
   getDb()
     .prepare(
-      `INSERT INTO log_cursors (source, kind, last_ts, last_run_at, last_count, last_error)
-       VALUES (?, ?, ?, unixepoch(), ?, ?)
-       ON CONFLICT(source) DO UPDATE SET
+      `INSERT INTO log_cursors (host_id, source, kind, last_ts, last_run_at, last_count, last_error)
+       VALUES (?, ?, ?, ?, unixepoch(), ?, ?)
+       ON CONFLICT(host_id, source) DO UPDATE SET
          kind = excluded.kind,
          -- İmleç geri gitmemeli: bir turda hiç satır gelmediyse eski değer kalır,
          -- yoksa aynı satırlar tekrar tekrar toplanırdı.
@@ -251,12 +259,12 @@ export function writeCursor(
          last_count = excluded.last_count,
          last_error = excluded.last_error`,
     )
-    .run(source, kind, lastTs, count, error);
+    .run(currentHostId(), source, kind, lastTs, count, error);
 }
 
 /** Artık var olmayan kaynakların imleci temizlenir (container silinmiş vb.). */
 export function forgetSource(source: string): void {
-  getDb().prepare("DELETE FROM log_cursors WHERE source = ?").run(source);
+  getDb().prepare("DELETE FROM log_cursors WHERE host_id = ? AND source = ?").run(currentHostId(), source);
 }
 
 export type PruneOutcome = { removed: number; bySize: number };

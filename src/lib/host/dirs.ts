@@ -6,6 +6,7 @@ import path from "node:path";
 
 import { elevatedList, isPermissionError } from "@/lib/files/elevated";
 import { forbiddenPath, hostRoot } from "@/lib/files/paths";
+import { onHost } from "@/lib/hosts/on-host";
 
 /**
  * Ayarlardaki dizin seçici için host klasör listesi (M3.45).
@@ -46,7 +47,12 @@ function normalize(raw: string): string {
   return path.posix.normalize(input).replace(/\/+$/, "") || "/";
 }
 
-export async function listHostDirs(rawPath: string): Promise<DirListing> {
+/** Seçili sunucudaki klasörler; uzak sunucuda ajan listeler. */
+export function listHostDirs(rawPath: string): Promise<DirListing> {
+  return onHost("host.listDirs", [rawPath], () => localListHostDirs(rawPath));
+}
+
+export async function localListHostDirs(rawPath: string): Promise<DirListing> {
   const hostPath = normalize(rawPath);
   const parent = hostPath === "/" ? null : path.posix.dirname(hostPath);
 
@@ -95,7 +101,11 @@ export async function listHostDirs(rawPath: string): Promise<DirListing> {
 }
 
 /** Yolun gerçekten var olan bir klasör olup olmadığı — seçim onayı için. */
-export async function hostDirExists(rawPath: string): Promise<boolean> {
+export function hostDirExists(rawPath: string): Promise<boolean> {
+  return onHost("host.dirExists", [rawPath], () => localHostDirExists(rawPath));
+}
+
+export async function localHostDirExists(rawPath: string): Promise<boolean> {
   const hostPath = normalize(rawPath);
   if (forbiddenPath(hostPath)) return false;
 

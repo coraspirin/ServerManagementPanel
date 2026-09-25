@@ -1,5 +1,8 @@
 import "server-only";
 
+import { hostname } from "node:os";
+import { currentHostId } from "@/lib/hosts/context";
+import { getHost, isLocalHost } from "@/lib/hosts/store";
 import { getDockerProvider } from "@/lib/providers";
 
 /**
@@ -29,14 +32,50 @@ const CACHE_MS = 60_000;
  * bir imaj indirmek gerekmiyor ve sürümü panelinkiyle her zaman aynı.
  */
 export async function panelImage(): Promise<string | null> {
+  const hostId = currentHostId();
+  if (!isLocalHost(hostId)) return remotePanelImage(hostId);
   if (cachedImage && Date.now() - cachedImage.at < CACHE_MS) return cachedImage.name;
 
+  const name = await ownImage();
+  cachedImage = { name, at: Date.now() };
+  return name;
+}
+
+/**
+ * Bu makinede panelin (ya da ajanın) çalıştığı imaj. Önce bilinen container
+ * adı; bulunamazsa container'ın kendi hostname'i — Docker varsayılan olarak
+ * kısa container kimliğini verir ve ajanın container adı kuruluma göre değişir.
+ */
+export async function ownImage(): Promise<string | null> {
+  for (const candidate of [panelContainerName(), hostname()]) {
+    try {
+      const raw = (await getDockerProvider().inspectRaw(candidate)) as {
+        Config?: { Image?: string };
+      } | null;
+      if (raw?.Config?.Image) return raw.Config.Image;
+    } catch {
+      // Sıradaki aday.
+    }
+  }
+  return null;
+}
+
+const remoteImages = new Map<number, { name: string | null; at: number }>();
+
+/**
+ * Uzak sunucuda yükseltilmiş işlerin (dosya okuma, compose yazma) imajı:
+ * oradaki ajanın kendi imajı — içinde Node var ve o sunucuda zaten mevcut.
+ */
+async function remotePanelImage(hostId: number): Promise<string | null> {
+  const cached = remoteImages.get(hostId);
+  if (cached && Date.now() - cached.at < CACHE_MS) return cached.name;
+
+  const host = getHost(hostId);
+  if (!host || host.agentType !== "agent") return null;
+  const { agentCall } = await import("@/lib/agent/client");
   try {
-    const raw = (await getDockerProvider().inspectRaw(panelContainerName())) as {
-      Config?: { Image?: string };
-    } | null;
-    const name = raw?.Config?.Image ?? null;
-    cachedImage = { name, at: Date.now() };
+    const name = await agentCall<string | null>(host, "agent.image");
+    remoteImages.set(hostId, { name, at: Date.now() });
     return name;
   } catch {
     return null;

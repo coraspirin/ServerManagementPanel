@@ -496,7 +496,8 @@ export const jobDefinitions: JobDefinition[] = [
     // Konuşkan bir sistemde tur uzayabilir; kilit erken düşerse iki toplayıcı
     // aynı satırları çift yazar.
     leaseSeconds: 600,
-    async run() {
+    scope: "perHost",
+    run: perHost(async () => {
       const outcome = await collectLogs();
       const parts = [
         serverT("jobs.detail.logs", { lines: outcome.collected, sources: outcome.sources }),
@@ -508,7 +509,7 @@ export const jobDefinitions: JobDefinition[] = [
       if (outcome.errors.length > 0)
         parts.push(serverT("jobs.detail.logsErrors", { list: outcome.errors.join("; ") }));
       return { detail: parts.join(" · ") };
-    },
+    }),
   },
   {
     key: "logs.prune",

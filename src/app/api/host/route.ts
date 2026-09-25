@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   const permission = PERMISSION[action];
   if (!permission) return Response.json({ error: serverT("api.invalidAction") }, { status: 400 });
 
-  const guard = await guardHostApi(request, permission);
+  const guard = await guardHostApi(request, permission, { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

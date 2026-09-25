@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     return Response.json({ error: serverT("api.host.unknownMode") }, { status: 400 });
   }
 
-  const guard = await guardHostApi(request, "host.shell");
+  const guard = await guardHostApi(request, "host.shell", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

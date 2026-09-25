@@ -167,6 +167,7 @@ const HOST_SCOPED_TABLES = [
   "db_connections",
   "job_runs",
   "apps",
+  "log_cursors",
 ] as const;
 
 /**
@@ -181,6 +182,8 @@ export function removeHost(id: number): boolean {
       db.prepare(`DELETE FROM ${table} WHERE host_id = ?`).run(id);
     }
     db.prepare("DELETE FROM settings WHERE scope_type = 'host' AND scope_id = ?").run(String(id));
+    // Sunucu başına önbellekler (imaj güncellemeleri, port taraması): `h<id>:` önekli.
+    db.prepare("DELETE FROM cache WHERE key LIKE ?").run(`h${id}:%`);
     const result = db.prepare("DELETE FROM hosts WHERE id = ?").run(id);
     db.exec("COMMIT");
     return Number(result.changes) > 0;

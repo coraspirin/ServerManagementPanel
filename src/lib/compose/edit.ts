@@ -6,6 +6,8 @@ import path from "node:path";
 import { audit } from "@/lib/auth/audit";
 import { elevatedRead, isPermissionError } from "@/lib/files/elevated";
 import { hostRoot } from "@/lib/files/paths";
+import { currentHostId } from "@/lib/hosts/context";
+import { isLocalHost } from "@/lib/hosts/store";
 import { callHelper } from "@/lib/host/helper";
 import { panelImage } from "@/lib/host/self";
 import { serverT } from "@/lib/i18n/runtime";
@@ -48,6 +50,15 @@ export type ComposeReadResult = { text: string; error: null } | { text: null; er
  */
 export async function readComposeFile(location: ComposeLocation): Promise<ComposeReadResult> {
   const containerPath = path.posix.join(hostRoot(), location.file);
+
+  // Uzak sunucu: bu makinenin dosya sistemi o sunucunun değil — doğrudan
+  // okumak, aynı yolda duran YEREL dosyayı sessizce gösterirdi. Okuma o
+  // sunucuda, ajanın imajıyla açılan tek seferlik container'da yapılıyor.
+  if (!isLocalHost(currentHostId())) {
+    const remote = await elevatedRead(containerPath, MAX_EDIT_BYTES);
+    if ("error" in remote) return { text: null, error: `${location.file}: ${remote.error}` };
+    return { text: remote.buffer.toString("utf8"), error: null };
+  }
 
   try {
     const buffer = await readFile(containerPath);

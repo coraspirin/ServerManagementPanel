@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 const ACTIONS = new Set<StackAction>(["up", "down", "restart", "pull"]);
 
 export async function GET(request: Request) {
-  const guard = await guardHostApi(request, "apps.install");
+  const guard = await guardHostApi(request, "apps.install", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const guard = await guardHostApi(request, "apps.install");
+  const guard = await guardHostApi(request, "apps.install", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

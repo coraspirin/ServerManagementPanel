@@ -12,9 +12,9 @@ export const dynamic = "force-dynamic";
  * vermek, sırf bir açılır liste dolsun diye yetki genişletmek olurdu.
  */
 export async function GET(request: Request) {
-  let guard = await guardHostApi(request, "cron.manage");
+  let guard = await guardHostApi(request, "cron.manage", { agent: true });
   if (!guard.ok) {
-    guard = await guardHostApi(request, "settings.edit");
+    guard = await guardHostApi(request, "settings.edit", { agent: true });
     if (!guard.ok) return guard.response;
   }
   enterHost(guard.hostId);

@@ -75,7 +75,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardHostApi(request, "apps.install");
+  const guard = await guardHostApi(request, "apps.install", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

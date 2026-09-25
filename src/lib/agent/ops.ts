@@ -11,9 +11,21 @@ import {
   writeInput,
   type StartExecOptions,
 } from "@/lib/docker/exec";
-import { dockerEventStream } from "@/lib/docker/events";
+import { dockerEventStream } from "@/lib/docker/events";
+import { scanWatchDir } from "@/lib/backup/watch";
+import { localHostDirExists, localListHostDirs } from "@/lib/host/dirs";
+import { ownImage } from "@/lib/host/self";
+import { localHostAccounts } from "@/lib/host/users";
+import { localOsUpdateReport } from "@/lib/updates/os";
+
 import { appVersion } from "@/lib/env";
-import { helperConfigured } from "@/lib/host/helper";
+import { serverT } from "@/lib/i18n/runtime";
+import {
+  callLocalHelper,
+  helperConfigured,
+  remoteHelperAllowed,
+  type HelperAction,
+} from "@/lib/host/helper";
 import {
   getDockerProvider,
   getHardwareProvider,
@@ -74,6 +86,14 @@ void _dockerNames;
 
 export const AGENT_OPS: Record<string, AgentOp> = {
   "agent.hello": { kind: "call", run: () => agentHello() },
+  "agent.image": { kind: "call", run: () => ownImage() },
+  // Sunucunun kendi dosyaları (bkz. hosts/on-host.ts): merkez aynı işin
+  // yerel sürümünü burada çağırtır.
+  "host.accounts": { kind: "call", run: () => localHostAccounts() },
+  "host.listDirs": { kind: "call", run: (args) => localListHostDirs(String(args[0] ?? "/")) },
+  "host.dirExists": { kind: "call", run: (args) => localHostDirExists(String(args[0] ?? "/")) },
+  "updates.osReport": { kind: "call", run: () => localOsUpdateReport() },
+  "backup.scanDir": { kind: "call", run: (args) => scanWatchDir(String(args[0] ?? "")) },
   "system.info": { kind: "call", run: () => getSystemProvider().info() },
   "metrics.sample": { kind: "call", run: () => getMetricsProvider().sample() },
   "hardware.report": { kind: "call", run: () => getHardwareProvider().report() },
@@ -92,10 +112,31 @@ export const AGENT_OPS: Record<string, AgentOp> = {
       return getDockerProvider().logs(String(args[0]), { ...options, signal });
     },
   },
-  "docker.events": {
-    kind: "stream",
-    run: (args, signal) => dockerEventStream(Number(args[0]) || 0, signal),
-  },
+  // Helper: eylem bu sunucunun helper'ına iletilir; asıl izin listesi helper'ın
+  // kendi allow.conf'u. Burada yalnızca uzaktan yönetilen alanlar geçer.
+  "helper.call": {
+    kind: "call",
+    run: async (args) => {
+      const action = String(args[0] ?? "");
+      if (!remoteHelperAllowed(action)) throw new Error(serverT("hosts.errors.unsupported"));
+      const actor = (args[2] ?? {}) as { username?: unknown; userId?: unknown };
+      return callLocalHelper(
+        action as HelperAction,
+        (args[1] ?? {}) as Record<string, unknown>,
+        { username: String(actor.username ?? "?"), userId: Number(actor.userId ?? 0) },
+        Number(args[3]) || undefined,
+        args[4] === undefined ? undefined : String(args[4]),
+      );
+    },
+  },
+  "docker.events": {
+
+    kind: "stream",
+
+    run: (args, signal) => dockerEventStream(Number(args[0]) || 0, signal),
+
+  },
+
   // Container terminali: oturum merkezde kullanıcıya bağlı; burada yalnızca
   // exec'in kendisi. Kabuk ve kullanıcı merkezde izin listesinden geçti.
   "exec.start": {

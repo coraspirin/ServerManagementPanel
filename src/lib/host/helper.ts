@@ -4,7 +4,7 @@ import net from "node:net";
 import { createHmac, randomBytes } from "node:crypto";
 import { serverT } from "@/lib/i18n/runtime";
 import { currentHostId } from "@/lib/hosts/context";
-import { isLocalHost } from "@/lib/hosts/store";
+import { getHost, isLocalHost } from "@/lib/hosts/store";
 
 /**
  * host-helper istemcisi (T4 / M1.13).
@@ -77,32 +77,54 @@ export type HelperResponse = {
 };
 
 export function helperConfigured(): boolean {
-  if (!isLocalHost(currentHostId())) return remoteHelper?.configured() ?? false;
+  const hostId = currentHostId();
+  if (!isLocalHost(hostId)) {
+    // Ajan hello'da kendi HELPER_SECRET'ı olup olmadığını bildiriyor.
+    const host = getHost(hostId);
+    return host?.agentType === "agent" && host.capabilities?.helper === true;
+  }
   return (process.env.HELPER_SECRET ?? "") !== "";
 }
 
 /**
- * Çoklu sunucu: etkin sunucu uzaksa istek o sunucudaki helper'a ajan
- * üzerinden iletilir. Ajan istemcisi kendini buraya kaydeder (import döngüsü
- * olmasın diye helper ajan modülünü doğrudan import etmiyor). Uzak sunucunun
- * HELPER_SECRET'ı ve izin listesi o sunucuda kalır; panel yalnızca ajana
- * "şu eylemi iste" der.
+ * Uzak sunucuda helper'a yalnızca bu alanlar iletilir; güvenlik duvarı,
+ * fail2ban ve cron yalnızca yerel sunucuda yönetiliyor (menüde de gizli).
+ * Ajan aynı listeyi ayrıca uyguluyor — merkez atlatılsa bile.
  */
-export type RemoteHelper = {
-  configured(): boolean;
-  call(
-    action: HelperAction,
-    args: Record<string, unknown>,
-    actor: { username: string; userId: number },
-    timeoutMs: number,
-    requestId?: string,
-  ): Promise<HelperResponse>;
-};
+export const REMOTE_HELPER_PREFIXES = ["power.", "service.", "compose.", "journal.", "shell."] as const;
 
-let remoteHelper: RemoteHelper | null = null;
+export function remoteHelperAllowed(action: string): boolean {
+  return REMOTE_HELPER_PREFIXES.some((prefix) => action.startsWith(prefix));
+}
 
-export function registerRemoteHelper(impl: RemoteHelper): void {
-  remoteHelper = impl;
+/**
+ * Çoklu sunucu: etkin sunucu uzaksa istek o sunucudaki helper'a ajan
+ * üzerinden iletilir. Uzak sunucunun HELPER_SECRET'ı ve izin listesi o
+ * sunucuda kalır; panel yalnızca ajana "şu eylemi iste" der. Ajan istemcisi
+ * dinamik yükleniyor: helper pek çok yerden içe aktarılıyor ve istemcinin
+ * bağımlılıklarını her birine taşımanın gereği yok.
+ */
+async function callRemoteHelper(
+  hostId: number,
+  action: HelperAction,
+  args: Record<string, unknown>,
+  actor: { username: string; userId: number },
+  timeoutMs: number,
+  requestId?: string,
+): Promise<HelperResponse> {
+  const host = getHost(hostId);
+  if (!host || host.agentType !== "agent" || !remoteHelperAllowed(action)) {
+    return { ok: false, error: serverT("hosts.errors.unsupported") };
+  }
+  const { agentCall } = await import("@/lib/agent/client");
+  try {
+    return await agentCall<HelperResponse>(host, "helper.call", [action, args, actor, timeoutMs, requestId], {
+      // Ajanın helper'ı beklemesine ek pay: yanıt yolda kaybolmasın.
+      timeoutMs: timeoutMs + 15_000,
+    });
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 /**
@@ -175,10 +197,8 @@ export async function callHelper(
    */
   requestId?: string,
 ): Promise<HelperResponse> {
-  if (!isLocalHost(currentHostId())) {
-    if (!remoteHelper) return { ok: false, error: serverT("hosts.errors.unsupported") };
-    return remoteHelper.call(action, args, actor, timeoutMs, requestId);
-  }
+  const hostId = currentHostId();
+  if (!isLocalHost(hostId)) return callRemoteHelper(hostId, action, args, actor, timeoutMs, requestId);
   return callLocalHelper(action, args, actor, timeoutMs, requestId);
 }
 

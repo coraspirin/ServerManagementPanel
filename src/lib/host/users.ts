@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { hostRoot } from "@/lib/files/paths";
+import { onHost } from "@/lib/hosts/on-host";
 
 /**
  * Host'un kullanıcı ve grup listesi (M3.45).
@@ -103,7 +104,13 @@ function parseGroup(text: string): HostGroup[] {
   return groups.sort((a, b) => a.gid - b.gid);
 }
 
-export async function hostAccounts(): Promise<HostAccounts> {
+/** Seçili sunucunun hesapları; uzak sunucuda ajan okur. */
+export function hostAccounts(): Promise<HostAccounts> {
+  return onHost("host.accounts", [], localHostAccounts);
+}
+
+/** Bu makinenin hesapları (ajan da bunu çağırır). */
+export async function localHostAccounts(): Promise<HostAccounts> {
   const root = hostRoot();
 
   try {

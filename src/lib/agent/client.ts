@@ -190,7 +190,12 @@ function remoteError(error: { message: string; code?: string }): Error {
 
 // --- Genel API ---------------------------------------------------------------
 
-export async function agentCall<T = unknown>(host: Host, op: string, args: unknown[] = []): Promise<T> {
+export async function agentCall<T = unknown>(
+  host: Host,
+  op: string,
+  args: unknown[] = [],
+  options: { timeoutMs?: number } = {},
+): Promise<T> {
   const body = encodeValue({ op, args, settings: settingsFor(host.id) });
   const { status, response } = await agentExchange(
     host,
@@ -199,7 +204,7 @@ export async function agentCall<T = unknown>(host: Host, op: string, args: unkno
     host.certFingerprint,
     "/api/agent/rpc",
     body,
-    { timeoutMs: OP_TIMEOUTS[op] ?? DEFAULT_TIMEOUT_MS },
+    { timeoutMs: options.timeoutMs ?? OP_TIMEOUTS[op] ?? DEFAULT_TIMEOUT_MS },
   );
   const text = await readAll(response);
   if (status !== 200) throw statusError(host, status, text);

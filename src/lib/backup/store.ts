@@ -2,6 +2,7 @@ import "server-only";
 import { serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
+import { currentHostId } from "@/lib/hosts/context";
 import { decryptSecret, encryptSecret, type EncryptedValue } from "@/lib/crypto";
 import type {
   BackupJob,
@@ -413,8 +414,8 @@ export function listRuns(limit = 50, jobId?: number): BackupRun[] {
  */
 export function lastSuccessfulRunAt(): number | null {
   const row = getDb()
-    .prepare("SELECT MAX(finished_at) AS ts FROM backup_runs WHERE status = 'ok'")
-    .get() as { ts: number | null };
+    .prepare("SELECT MAX(finished_at) AS ts FROM backup_runs WHERE status = 'ok' AND host_id = ?")
+    .get(currentHostId()) as { ts: number | null };
   return row.ts === null ? null : Number(row.ts);
 }
 

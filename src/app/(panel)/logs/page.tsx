@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 /** Merkezi log arama (M3.3) — geçmişe dönük, tam metin. */
 export default async function LogsPage() {
   const session = await requirePermission("logs.view");
-  enterHost(await pageHostId());
+  enterHost(await pageHostId({ agent: true }));
 
   return (
     <LogsScreen

@@ -1,6 +1,7 @@
 import { serverT } from "@/lib/i18n/runtime";
 import { enterHost, guardHostApi } from "@/lib/auth/api";
-import { runWithHost } from "@/lib/hosts/context";
+import { currentHostId, runWithHost } from "@/lib/hosts/context";
+import { isLocalHost } from "@/lib/hosts/store";
 import { applyFix, checkCompose, type Finding } from "@/lib/compose/checks";
 import {
   applyComposeEdit,
@@ -44,7 +45,7 @@ export const dynamic = "force-dynamic";
 
 /** Okuma `security.view` değil `docker.view` istiyor — bu bir Docker ekranı. */
 async function locate(request: Request, id: string, permission: "docker.view" | "docker.action") {
-  const guard = await guardHostApi(request, permission);
+  const guard = await guardHostApi(request, permission, { agent: true });
   if (!guard.ok) return { response: guard.response } as const;
 
   // Bağlam burada kurulamaz (çağırana geçmez); çağıran `enterHost` ile kurar.
@@ -103,7 +104,8 @@ async function checkContext(location: ComposeLocation, containerId: string) {
   return {
     reserved,
     reservedAgeSeconds,
-    panelPorts: panelPorts(),
+    // Panelin portları yalnızca panelin çalıştığı sunucuda dolu sayılır.
+    panelPorts: isLocalHost(currentHostId()) ? panelPorts() : [],
     networks: networks === null ? null : networks.map((entry) => entry.name),
     containerNames: [] as string[],
     published: [...published],

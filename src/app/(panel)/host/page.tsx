@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 /** Güç, systemd, compose ve konsol (M1.12 + M1.13). */
 export default async function HostPage() {
   const session = await requirePermission("host.service");
-  enterHost(await pageHostId());
+  enterHost(await pageHostId({ agent: true }));
 
   return (
     <HostScreen

@@ -3,6 +3,7 @@ import path from "node:path";
 import { getNumber } from "@/lib/settings";
 import { isMockMode } from "@/lib/env";
 import { loadFixture } from "@/lib/fixtures";
+import { onHost } from "@/lib/hosts/on-host";
 
 /**
  * İşletim sistemi güncelleme raporu (M1.10).
@@ -46,7 +47,12 @@ const EMPTY: OsUpdateReport = {
   stale: false,
 };
 
-export async function osUpdateReport(): Promise<OsUpdateReport> {
+/** Seçili sunucunun raporu; uzak sunucuda ajan okur (rapor o sunucuda üretiliyor). */
+export function osUpdateReport(): Promise<OsUpdateReport> {
+  return onHost("updates.osReport", [], localOsUpdateReport);
+}
+
+export async function localOsUpdateReport(): Promise<OsUpdateReport> {
   const raw = isMockMode()
     ? await loadFixture<Omit<OsUpdateReport, "available" | "stale">>("os-updates").catch(() => null)
     : await readFile(path.join(REPORTS_DIR, "os-updates.json"), "utf8")

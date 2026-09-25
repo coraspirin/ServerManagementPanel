@@ -40,7 +40,7 @@ function parseSearch(url: URL) {
 }
 
 export async function GET(request: Request) {
-  const guard = await guardHostApi(request, "logs.view");
+  const guard = await guardHostApi(request, "logs.view", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
 
 /** Elle toplama — zamanlanmış turu beklemeden "şimdi topla". */
 export async function POST(request: Request) {
-  const guard = await guardHostApi(request, "logs.view");
+  const guard = await guardHostApi(request, "logs.view", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
