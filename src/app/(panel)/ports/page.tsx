@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function PortsPage() {
   await requirePermission("security.view");
-  enterHost(await pageHostId());
+  enterHost(await pageHostId({ agent: true }));
 
   return <PortsScreen initial={cachedPortScan()} />;
 }

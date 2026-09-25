@@ -472,13 +472,14 @@ export const jobDefinitions: JobDefinition[] = [
     // Host ad alanında geçici bir container açıyor; normalde saniyeler sürer
     // ama imaj çekilmesi gerekirse uzayabilir.
     leaseSeconds: 180,
-    async run() {
+    scope: "perHost",
+    run: perHost(async () => {
       const scan = await scanListeningPorts();
       // Hata yutulmuyor: önbellek eskiyip ekran sessizce yanlış "boş port"
       // önerirse, kullanıcı çakışan bir portu container'a verir.
       if (scan.error) throw new Error(scan.error);
       return { detail: serverT("jobs.detail.sockets", { count: scan.ports.length }) };
-    },
+    }),
   },
   {
     key: "backup.scheduler",

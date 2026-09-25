@@ -22,11 +22,15 @@ export const dynamic = "force-dynamic";
  * yavaş parçayı beklemesi demek olurdu.
  */
 export async function GET(request: Request) {
-  const guard = await guardHostApi(request, "security.view", { localOnly: true });
+  const mode = new URL(request.url).searchParams.get("mode");
+  // SSH denetimi seçili sunucuda çalışır; diğer izleyiciler yerel sunucuya özgü.
+  const guard = await guardHostApi(
+    request,
+    "security.view",
+    mode === "ssh" ? { agent: true } : { localOnly: true },
+  );
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
-
-  const mode = new URL(request.url).searchParams.get("mode");
 
   switch (mode) {
     case "fail2ban":

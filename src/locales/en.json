@@ -3834,5 +3834,6 @@
   "selfUpdate.errors.noData": "The panel's data mount (/app/data) was not found.",
   "selfUpdate.errors.download": "Could not download the release archive: {error}",
   "selfUpdate.errors.start": "Could not start the updater: {error}",
-  "selfUpdate.errors.updaterStopped": "The updater stopped midway; check the log."
+  "selfUpdate.errors.updaterStopped": "The updater stopped midway; check the log.",
+  "securityScreen.remoteNote": "SSH key audit and listening ports are available for this server. Firewall, fail2ban, CVE scanning and UPnP are only managed on the server running the panel."
 }

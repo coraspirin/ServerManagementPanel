@@ -164,7 +164,6 @@ export const navGroups: NavGroup[] = [
         labelKey: "nav.items.security",
         icon: ShieldCheck,
         permission: "security.view",
-        localOnly: true,
       },
     ],
   },

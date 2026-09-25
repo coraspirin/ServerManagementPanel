@@ -29,13 +29,39 @@ export function SecurityScreen({
   initialForwards,
   initialFailedLogins,
   canManage,
+  remote = false,
 }: {
   initialScans: ScanRow[];
   initialForwards: PortForward[];
   initialFailedLogins: FailedLogin[];
   canManage: boolean;
+  /**
+   * Uzak sunucu (çoklu sunucu): yalnızca SSH denetimi o sunucuda çalışıyor;
+   * güvenlik duvarı, fail2ban, CVE ve UPnP yerel sunucuya özgü.
+   */
+  remote?: boolean;
 }) {
   const t = useT();
+
+  if (remote) {
+    return (
+      <div className="space-y-5">
+        <p className="rounded-lg border border-dashed border-line px-5 py-3 text-sm text-subtle">
+          {t("securityScreen.remoteNote")}
+        </p>
+        <section className="grid gap-3 sm:grid-cols-2">
+          <NavCard
+            href="/ports"
+            title={t("securityScreen.ports")}
+            description={t("securityScreen.portsDesc")}
+            icon={<Waypoints className="size-4 text-subtle" aria-hidden />}
+          />
+        </section>
+        <SshPanel />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <section className="grid gap-3 sm:grid-cols-2">

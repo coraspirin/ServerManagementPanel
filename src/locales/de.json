@@ -3834,5 +3834,6 @@
   "selfUpdate.errors.noData": "Der Daten-Mount des Panels (/app/data) wurde nicht gefunden.",
   "selfUpdate.errors.download": "Release-Archiv konnte nicht geladen werden: {error}",
   "selfUpdate.errors.start": "Updater konnte nicht gestartet werden: {error}",
-  "selfUpdate.errors.updaterStopped": "Der Updater wurde mittendrin beendet; siehe Protokoll."
+  "selfUpdate.errors.updaterStopped": "Der Updater wurde mittendrin beendet; siehe Protokoll.",
+  "securityScreen.remoteNote": "Für diesen Server sind SSH-Schlüsselprüfung und lauschende Ports verfügbar. Firewall, fail2ban, CVE-Scan und UPnP werden nur auf dem Server verwaltet, auf dem das Panel läuft."
 }

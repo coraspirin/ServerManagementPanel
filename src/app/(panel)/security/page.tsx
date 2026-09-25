@@ -1,4 +1,6 @@
-import { requireLocalPage } from "@/lib/hosts/request";
+import { enterHost } from "@/lib/hosts/context";
+import { pageHostId } from "@/lib/hosts/request";
+import { isLocalHost } from "@/lib/hosts/store";
 import { requirePermission } from "@/lib/auth/guard";
 import { hasPermission } from "@/lib/auth/session";
 import { failedLogins } from "@/lib/security/fail2ban";
@@ -18,14 +20,18 @@ export const dynamic = "force-dynamic";
  */
 export default async function SecurityPage() {
   const session = await requirePermission("security.view");
-  await requireLocalPage();
+  const hostId = await pageHostId({ agent: true });
+  enterHost(hostId);
+  // Uzak sunucuda yalnızca SSH denetimi var; diğer izleyiciler yerel.
+  const local = isLocalHost(hostId);
 
   return (
     <SecurityScreen
-      initialScans={latestScans()}
-      initialForwards={storedForwards()}
-      initialFailedLogins={failedLogins()}
+      initialScans={local ? latestScans() : []}
+      initialForwards={local ? storedForwards() : []}
+      initialFailedLogins={local ? failedLogins() : []}
       canManage={hasPermission(session.user, "security.manage")}
+      remote={!local}
     />
   );
 }

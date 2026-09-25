@@ -3834,5 +3834,6 @@
   "selfUpdate.errors.noData": "Panelin veri bağlantısı (/app/data) bulunamadı.",
   "selfUpdate.errors.download": "Sürüm arşivi indirilemedi: {error}",
   "selfUpdate.errors.start": "Güncelleyici başlatılamadı: {error}",
-  "selfUpdate.errors.updaterStopped": "Güncelleyici yarıda durdu; günlüğe bakın."
+  "selfUpdate.errors.updaterStopped": "Güncelleyici yarıda durdu; günlüğe bakın.",
+  "securityScreen.remoteNote": "Bu sunucuda SSH anahtar denetimi ve dinleyen portlar görüntülenebilir. Güvenlik duvarı, fail2ban, CVE taraması ve UPnP yalnızca panelin çalıştığı sunucuda yönetiliyor."
 }

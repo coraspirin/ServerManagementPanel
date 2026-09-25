@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  * bunu ödemesi gerekmiyor. `?refresh=1` bilerek istenen tazelemedir.
  */
 export async function GET(request: Request) {
-  const guard = await guardHostApi(request, "security.view");
+  const guard = await guardHostApi(request, "security.view", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
