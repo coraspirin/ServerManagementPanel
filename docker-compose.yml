@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        APP_VERSION: ${APP_VERSION:-1.11.3}
+        APP_VERSION: ${APP_VERSION:-1.11.4}
     image: server-panel:local
     restart: unless-stopped
     # docker.sock kök:docker sahipliğinde ve 0660 modunda; panel root olmayan
@@ -18,7 +18,7 @@ services:
     environment:
       # T10 — sorun ayıklarken 1 yapılıp panel sahte veriyle ayağa kaldırılabilir.
       MOCK_MODE: ${MOCK_MODE:-0}
-      APP_VERSION: ${APP_VERSION:-1.11.3}
+      APP_VERSION: ${APP_VERSION:-1.11.4}
       TZ: ${TZ:-Europe/Istanbul}
       # T3 — secret şifreleme anahtarı. Yoksa panel açılmaz.
       # Panel dışında AYRI bir yerde de saklanmalı; yedeğe girmez.

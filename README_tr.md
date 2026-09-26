@@ -4,7 +4,7 @@ Tek bir Linux + Docker sunucusu için yazılmış, kendi sunucunda barındırdı
 
 Ev sunucusu (homelab) ölçeği düşünülerek tasarlandı: tek container, gömülü SQLite, harici veritabanı ya da kuyruk yok. Arayüz ve tüm metinler Türkçedir.
 
-> **Sürüm:** 1.11.3 · **Yığın:** Next.js 16, React 19, TypeScript, Tailwind CSS 4, Node 24 (`node:sqlite`)
+> **Sürüm:** 1.11.4 · **Yığın:** Next.js 16, React 19, TypeScript, Tailwind CSS 4, Node 24 (`node:sqlite`)
 
 ---
 
@@ -310,7 +310,7 @@ Buradakiler **dağıtım parametreleridir**. Panelden değiştirilebilen her şe
 | `PANEL_REPORTS_DIR` | | `./reports` | Host cron betiklerinin JSON bıraktığı dizin. |
 | `TZ` | | `Europe/Istanbul` | Saat dilimi. |
 | `MOCK_MODE` | | `0` | `1` yapılırsa dış dünyaya dokunan tüm sağlayıcılar `fixtures/` altındaki sahte veriyi döndürür. Geliştirme ve sorun ayıklama içindir. |
-| `APP_VERSION` | | `1.11.3` | İmaja gömülen sürüm. `/api/health` yanıtında ve arayüzde görünür. |
+| `APP_VERSION` | | `1.11.4` | İmaja gömülen sürüm. `/api/health` yanıtında ve arayüzde görünür. |
 
 ---
 
