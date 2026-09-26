@@ -138,6 +138,7 @@ export const navGroups: NavGroup[] = [
         labelKey: "nav.items.proxy",
         icon: Globe,
         permission: "proxy.manage",
+        localOnly: true,
       },
       {
         href: "/network",

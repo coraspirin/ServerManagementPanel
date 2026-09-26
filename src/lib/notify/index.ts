@@ -2,6 +2,8 @@ import "server-only";
 import { serverT } from "@/lib/i18n/runtime";
 
 import { SEVERITY_ORDER, isSeverity, type ChannelStatus, type Severity } from "@/lib/alerts/types";
+import { currentHostId } from "@/lib/hosts/context";
+import { getHost, listHosts } from "@/lib/hosts/store";
 import { getBool, getString } from "@/lib/settings";
 import { findChannel, notifyChannels } from "./channels";
 import type { NotifyMessage } from "./types";
@@ -49,6 +51,19 @@ export function hasUsableChannel(severity: Severity): boolean {
 }
 
 /**
+ * Birden fazla sunucu varken başlığın önüne mesajın ait olduğu sunucunun adı
+ * eklenir (`[web-01] CPU yüksek`): telefona düşen bildirimden hangi makinede
+ * olduğu anlaşılsın. Sunucu, gönderimin yapıldığı bağlamdan (`currentHostId`)
+ * gelir — alarm ve olay işleri her sunucu için kendi bağlamında çalışıyor.
+ * Tek sunuculu kurulumda başlık değişmez.
+ */
+function withHostName(message: NotifyMessage): NotifyMessage {
+  if (listHosts().length < 2) return message;
+  const name = getHost(currentHostId())?.name;
+  return name ? { ...message, title: `[${name}] ${message.title}` } : message;
+}
+
+/**
  * Mesajı uygun tüm kanallara gönderir.
  *
  * Kanallar PARALEL denenir ve biri patlarsa diğerleri etkilenmez: Telegram
@@ -60,6 +75,7 @@ export async function dispatch(
   filterSeverity: Severity = message.severity,
 ): Promise<DispatchResult> {
   const result: DispatchResult = { sent: [], failed: {}, skipped: [] };
+  const outgoing = withHostName(message);
 
   const targets = notifyChannels.filter((channel) => {
     if (!getBool(`notify.${channel.key}.enabled`)) return false;
@@ -78,7 +94,7 @@ export async function dispatch(
   await Promise.all(
     targets.map(async (channel) => {
       try {
-        await channel.send(message);
+        await channel.send(outgoing);
         result.sent.push(channel.key);
       } catch (error) {
         result.failed[channel.key] =

@@ -2,6 +2,7 @@ import "server-only";
 
 import { backupStatus } from "@/lib/backup/watch";
 import { getDb } from "@/lib/db/client";
+import { currentHostId, LOCAL_HOST_ID } from "@/lib/hosts/context";
 import { detectRestartLoops } from "@/lib/docker/collect";
 import { formatBytes } from "@/lib/metrics/catalog";
 import { formatPct as formatPctLocale } from "@/lib/i18n/format";
@@ -65,9 +66,9 @@ function averageOf(metric: string, label: string, seconds: number): number | nul
   const row = getDb()
     .prepare(
       `SELECT AVG(value) AS avg, COUNT(*) AS n FROM metrics_raw
-       WHERE metric = ? AND label = ? AND ts >= unixepoch() - ?`,
+       WHERE host_id = ? AND metric = ? AND label = ? AND ts >= unixepoch() - ?`,
     )
-    .get(metric, label, seconds) as { avg: number | null; n: number };
+    .get(currentHostId(), metric, label, seconds) as { avg: number | null; n: number };
 
   return row.n > 0 ? row.avg : null;
 }
@@ -154,7 +155,7 @@ function metricConditions(): Condition[] {
 }
 
 function monitorConditions(): Condition[] {
-  return listMonitors()
+  return listMonitors({ hostId: currentHostId() })
     .filter((monitor) => monitor.enabled && monitor.status !== "bilinmiyor")
     .map((monitor) => ({
       key: `monitor:${monitor.id}`,
@@ -516,21 +517,39 @@ function imageUpdateConditions(): Condition[] {
   ];
 }
 
+/**
+ * Etkin sunucunun (`currentHostId()`) koşulları. Alarm işi her sunucu için
+ * ayrı çağırır.
+ *
+ * Uzak sunucuda bir kaynağın hatası (ajan o özelliği desteklemiyor, bir an
+ * erişilemedi) diğer koşulları düşürmesin diye kaynaklar tek tek korunur;
+ * yerel sunucuda davranış eskisi gibi — hata işin kendisini başarısız yapar.
+ */
 export async function evaluateConditionsAsync(): Promise<Condition[]> {
-  const report = await getHardwareProvider().report();
+  const remote = currentHostId() !== LOCAL_HOST_ID;
+  const guarded = async <T,>(fallback: T, run: () => T | Promise<T>): Promise<T> => {
+    if (!remote) return run();
+    try {
+      return await run();
+    } catch {
+      return fallback;
+    }
+  };
+
+  const report = await guarded<HardwareReport | null>(null, () => getHardwareProvider().report());
   const [osConditions, backupConds] = await Promise.all([
-    osUpdateConditions(),
-    backupConditions(),
+    guarded([], osUpdateConditions),
+    guarded([], backupConditions),
   ]);
 
   return [
     ...monitorConditions(),
-    ...metricConditions(),
-    ...hardwareConditions(report),
-    ...capacityConditions(),
+    ...(await guarded([], metricConditions)),
+    ...(report ? hardwareConditions(report) : []),
+    ...(await guarded([], capacityConditions)),
     ...osConditions,
     ...backupConds,
-    ...imageUpdateConditions(),
-    ...dockerConditions(),
+    ...(await guarded([], imageUpdateConditions)),
+    ...(await guarded([], dockerConditions)),
   ];
 }

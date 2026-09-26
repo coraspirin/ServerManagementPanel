@@ -1,4 +1,5 @@
 import { requirePermission } from "@/lib/auth/guard";
+import { requireLocalPage } from "@/lib/hosts/request";
 import { currentCaddyConfig } from "@/lib/proxy/caddy";
 import { listDdnsRecords } from "@/lib/proxy/ddns";
 import { proxyTargets, publishedPort } from "@/lib/proxy/reachability";
@@ -11,6 +12,9 @@ export const dynamic = "force-dynamic";
 /** Yayınlama & DDNS ekranı (M2.8). */
 export default async function ProxyPage() {
   await requirePermission("proxy.manage");
+  // Caddy panelin kendi sunucusunda: uzak sunucu seçiliyken bu ekran o
+  // sunucuyu yönetiyormuş gibi görünmesin.
+  await requireLocalPage();
 
   // Hedef listesi artık yalnızca adları değil ERİŞİLEBİLİRLİĞİ de taşıyor:
   // Caddy ile ortak ağı olmayan bir container adı `reverse_proxy` tarafından

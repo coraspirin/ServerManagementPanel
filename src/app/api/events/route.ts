@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { acknowledgeEvents, listEvents, unacknowledgedCount } from "@/lib/alerts/store";
 import { isSeverity } from "@/lib/alerts/types";
@@ -8,8 +8,9 @@ import { channelStatuses } from "@/lib/notify";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "metrics.view");
+  const guard = await guardHostApi(request, "metrics.view", { agent: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const params = new URL(request.url).searchParams;
   const severity = params.get("severity") ?? "";
@@ -21,16 +22,18 @@ export async function GET(request: Request) {
       severity: isSeverity(severity) ? severity : undefined,
       source: source || undefined,
       onlyUnacknowledged: params.get("unacknowledged") === "1",
+      hostId: guard.hostId,
     }),
     channels: channelStatuses(),
-    unacknowledged: unacknowledgedCount(),
+    unacknowledged: unacknowledgedCount(guard.hostId),
   });
 }
 
 /** Okundu işaretleme — tırmandırmayı da durdurur. */
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "monitors.manage");
+  const guard = await guardHostApi(request, "monitors.manage", { agent: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let body: { ids?: unknown };
   try {
@@ -57,7 +60,7 @@ export async function POST(request: Request) {
   return Response.json({
     ok: true,
     changed,
-    events: listEvents({ limit: 100 }),
-    unacknowledged: unacknowledgedCount(),
+    events: listEvents({ limit: 100, hostId: guard.hostId }),
+    unacknowledged: unacknowledgedCount(guard.hostId),
   });
 }

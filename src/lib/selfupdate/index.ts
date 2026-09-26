@@ -1,6 +1,6 @@
 import "server-only";
 
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { dataDir } from "@/lib/db/client";
@@ -10,6 +10,7 @@ import { LOCAL_HOST_ID } from "@/lib/hosts/context";
 import { serverT } from "@/lib/i18n/runtime";
 import { providersFor } from "@/lib/providers";
 import {
+  IMAGE_UPDATER_SCRIPT,
   UPDATER_SCRIPT,
   compareTags,
   formatStateLine,
@@ -17,6 +18,7 @@ import {
   isRepoName,
   parseStateLine,
   pickLatestTag,
+  releaseImageRef,
   type UpdatePhase,
 } from "./plan";
 
@@ -210,6 +212,24 @@ async function download(tag: string): Promise<string> {
   return target;
 }
 
+/**
+ * Proje dizininde Dockerfile var mı: true/false, anlaşılamıyorsa null.
+ *
+ * `existsSync` izin hatasında da false döner. Panel uid 1001 ile çalışıyor ve
+ * proje çoğunlukla 750 izinli bir ev dizininin altında: Dockerfile varken
+ * "yok" denip güncelleme reddediliyordu. Bilinmeyen durumda karar imaj adına
+ * bırakılır; updater betiği arşivi açarken zaten kendi denetimini yapıyor.
+ */
+function dockerfilePresent(workdir: string): boolean | null {
+  if (!existsSync(/*turbopackIgnore: true*/ HOST_ROOT)) return null;
+  try {
+    statSync(/*turbopackIgnore: true*/ path.join(HOST_ROOT, workdir, "Dockerfile"));
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT" ? false : null;
+  }
+}
+
 function stamp(): string {
   return new Date().toISOString().replace(/[-:]/g, "").replace("T", "-").slice(0, 13);
 }
@@ -243,10 +263,18 @@ export async function startUpdate(tag: string): Promise<void> {
     throw new Error(serverT("selfUpdate.errors.notCompose"));
   }
 
-  // Host kökü bağlıysa ön kontrol: arşivden derlenen bir kurulum mu? Bağlı
-  // değilse kontrol atlanır, betik de arşivi açmadan önce kendi denetimini yapıyor.
-  if (existsSync(/*turbopackIgnore: true*/ HOST_ROOT) &&
-    !existsSync(/*turbopackIgnore: true*/ path.join(HOST_ROOT, workdir, "Dockerfile"))) {
+  // İki kurulum biçimi var:
+  //  - kaynaktan derleme (`git clone` + `build:`): sürüm arşivi indirilir,
+  //    dosyalar değiştirilip imaj yeniden derlenir;
+  //  - hazır imaj (`image: ghcr.io/…`, dizinde Dockerfile yok): yeni sürümün
+  //    imajı çekilir ve container onunla yeniden yaratılır.
+  // Host kökü bağlıysa Dockerfile'a bakılır; bağlı değilse imaj adından
+  // karar verilir (kayıt defteri adı olmayan imaj yerel derlemedir).
+  const panelImageRef = self?.Config?.Image ?? "";
+  const hasDockerfile =
+    dockerfilePresent(workdir) ?? !panelImageRef.includes("/");
+  const newImage = hasDockerfile ? null : releaseImageRef(panelImageRef, tag);
+  if (!hasDockerfile && !newImage) {
     throw new Error(serverT("selfUpdate.errors.notSource", { dir: workdir }));
   }
 
@@ -257,14 +285,16 @@ export async function startUpdate(tag: string): Promise<void> {
     self?.Mounts?.find((mount) => mount.Destination === "/var/run/docker.sock")?.Source ??
     "/var/run/docker.sock";
 
-  try {
-    await download(tag);
-  } catch (cause) {
-    throw new Error(
-      serverT("selfUpdate.errors.download", {
-        error: cause instanceof Error ? cause.message : String(cause),
-      }),
-    );
+  if (hasDockerfile) {
+    try {
+      await download(tag);
+    } catch (cause) {
+      throw new Error(
+        serverT("selfUpdate.errors.download", {
+          error: cause instanceof Error ? cause.message : String(cause),
+        }),
+      );
+    }
   }
 
   const name = updaterName();
@@ -281,14 +311,15 @@ export async function startUpdate(tag: string): Promise<void> {
     PROJECT: project,
     SERVICE: service,
     PANEL_CONTAINER: panelContainerName(),
-    PANEL_IMAGE: self?.Config?.Image ?? "",
+    PANEL_IMAGE: panelImageRef,
     STAMP: stamp(),
+    ...(newImage ? { NEW_IMAGE: newImage, OLD_VERSION: current } : {}),
     ...(configFiles ? { COMPOSE_FILE: configFiles.split(",").join(":") } : {}),
   };
 
   const payload = {
     Image: updaterImage(),
-    Cmd: ["sh", "-c", UPDATER_SCRIPT],
+    Cmd: ["sh", "-c", newImage ? IMAGE_UPDATER_SCRIPT : UPDATER_SCRIPT],
     Env: Object.entries(env).map(([key, value]) => `${key}=${value}`),
     Labels: { "server-panel.role": "updater" },
     User: "0:0",

@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db/client";
 import { fold } from "@/lib/text";
 import { getNumber } from "@/lib/settings";
 import type { Severity } from "@/lib/alerts/types";
+import { currentHostId } from "@/lib/hosts/context";
 
 /**
  * M3.2 — değişiklik zaman çizelgesi.
@@ -163,14 +164,14 @@ function findSpikes(since: number, until: number): TimelineEntry[] {
            SELECT metric, label, ts, avg_value,
                   LAG(avg_value) OVER (PARTITION BY metric, label ORDER BY ts) AS previous
            FROM metrics_1m
-           WHERE metric = ? AND ts >= ? AND ts <= ?
+           WHERE host_id = ? AND metric = ? AND ts >= ? AND ts <= ?
          )
          WHERE previous IS NOT NULL AND avg_value - previous >= ?
          ORDER BY ts`,
       )
       // Bir önceki kovayı da görebilmek için pencere bir dakika geriden başlıyor;
       // aksi halde aralığın ilk kovası hiçbir zaman sıçrama sayılmazdı.
-      .all(rule.metric, since - 60, until, threshold) as unknown as SpikeRow[];
+      .all(currentHostId(), rule.metric, since - 60, until, threshold) as unknown as SpikeRow[];
 
     for (const row of rows) {
       const jump = Number(row.avg_value) - Number(row.previous);
@@ -211,9 +212,9 @@ export function timeline(filter: TimelineFilter = {}): TimelineResult {
     const rows = db
       .prepare(
         `SELECT id, ts, severity, title, detail, source, suppressed_reason
-         FROM events WHERE ts >= ? AND ts <= ? ORDER BY ts`,
+         FROM events WHERE host_id = ? AND ts >= ? AND ts <= ? ORDER BY ts`,
       )
-      .all(since, until) as Record<string, string | number | null>[];
+      .all(currentHostId(), since, until) as Record<string, string | number | null>[];
 
     for (const row of rows) {
       entries.push({

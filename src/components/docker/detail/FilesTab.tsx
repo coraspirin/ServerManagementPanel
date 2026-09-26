@@ -20,6 +20,7 @@ import { useT } from "@/lib/i18n/client";
 import { Rich } from "@/lib/i18n/rich";
 
 import { bytes, readCsrfToken, Section } from "./shared";
+import { withHostQuery } from "@/lib/client/host";
 
 /**
  * Container içi dosya tarayıcı (M3.23).
@@ -292,7 +293,7 @@ export function FilesTab({
 
           <div className="flex flex-wrap items-center gap-2 border-t border-line px-3 py-2">
             <a
-              href={`${base}?mode=download&path=${encodeURIComponent(editing.path)}`}
+              href={withHostQuery(`${base}?mode=download&path=${encodeURIComponent(editing.path)}`)}
               className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-xs transition-colors hover:border-brand"
             >
               <Download className="size-3.5" /> {t("docker.files.download")}
@@ -362,7 +363,7 @@ export function FilesTab({
 
                   {entry.type === "dosya" && (
                     <a
-                      href={`${base}?mode=download&path=${encodeURIComponent(entry.path)}`}
+                      href={withHostQuery(`${base}?mode=download&path=${encodeURIComponent(entry.path)}`)}
                       title={t("docker.files.download")}
                       className="shrink-0 rounded border border-line p-1 text-subtle transition-colors hover:text-brand"
                     >

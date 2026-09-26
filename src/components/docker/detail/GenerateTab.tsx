@@ -8,6 +8,7 @@ import { CSRF_HEADER } from "@/lib/auth/types";
 import type { Finding } from "@/lib/compose/checks";
 import { useT } from "@/lib/i18n/client";
 import { Rich } from "@/lib/i18n/rich";
+import { copyText } from "@/lib/client/clipboard";
 
 /**
  * Container'dan compose üretme sekmesi (M3.31).
@@ -205,7 +206,7 @@ export function GenerateTab({
           action={
             <div className="flex flex-wrap items-center gap-1.5">
               <SmallButton
-                onClick={() => void navigator.clipboard?.writeText(data.yaml)}
+                onClick={() => void copyText(data.yaml)}
                 icon={<Copy className="size-3" />}
                 label={t("common.actions.copy")}
               />

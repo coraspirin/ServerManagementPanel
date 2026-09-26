@@ -2,6 +2,7 @@ import "server-only";
 import { serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
+import { currentHostId, LOCAL_HOST_ID } from "@/lib/hosts/context";
 import { isInMaintenance } from "@/lib/monitors/maintenance";
 import { dispatch, hasUsableChannel } from "@/lib/notify";
 import { runbookExcerpt } from "@/lib/docker/runbooks";
@@ -172,7 +173,13 @@ export async function runAlertCycle(
   now: number = Math.floor(Date.now() / 1000),
 ): Promise<CycleSummary> {
   const at = new Date(now * 1000);
-  const conditions = await evaluateConditionsAsync();
+  // Uzak sunucunun anahtarları `h<id>:` önekli: iki sunucudaki aynı koşul
+  // (`cpu`, `monitor:3`) durum defterinde ve olay listesinde karışmasın.
+  // Yerel sunucu öneksiz — mevcut kayıtlar ve onaylar geçerli kalır.
+  const hostId = currentHostId();
+  const conditions = (await evaluateConditionsAsync()).map((condition) =>
+    hostId === LOCAL_HOST_ID ? condition : { ...condition, key: `h${hostId}:${condition.key}` },
+  );
   const flapThreshold = Math.max(1, getNumber("alerts.flap_threshold"));
   const escalateAfter = getNumber("alerts.escalate_after") * 60;
 

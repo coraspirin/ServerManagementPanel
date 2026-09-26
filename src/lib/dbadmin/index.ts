@@ -1,5 +1,6 @@
 import "server-only";
 
+import { onHost } from "@/lib/hosts/on-host";
 import { getNumber } from "@/lib/settings";
 import { serverT } from "@/lib/i18n/runtime";
 import {
@@ -48,7 +49,7 @@ export type RunOutcome =
   | { ok: true; result: QueryResult }
   | { ok: false; error: string; needsConfirmation?: boolean; dangers?: string[] };
 
-export async function runQuery(
+export async function localRunQuery(
   connection: ConnectionSecrets,
   sql: string,
   options: RunOptions = {},
@@ -118,7 +119,7 @@ export async function runQuery(
   }
 }
 
-export async function listTables(connection: ConnectionSecrets): Promise<DbTable[]> {
+export async function localListTables(connection: ConnectionSecrets): Promise<DbTable[]> {
   switch (connection.engine) {
     case "sqlite":
       return sqliteTables(connection.host);
@@ -133,7 +134,7 @@ export async function listTables(connection: ConnectionSecrets): Promise<DbTable
   }
 }
 
-export async function tableStructure(
+export async function localTableStructure(
   connection: ConnectionSecrets,
   schema: string,
   table: string,
@@ -151,7 +152,7 @@ export async function tableStructure(
 }
 
 /** Bağlantıyı sınar; hata mesajı kullanıcıya olduğu gibi gösterilir. */
-export async function testConnection(
+export async function localTestConnection(
   connection: ConnectionSecrets,
 ): Promise<{ ok: boolean; message: string }> {
   try {
@@ -182,7 +183,7 @@ export async function testConnection(
  * (listTables/structure çıktısı), ama yine de tırnaklanıyor: adında boşluk ya
  * da ayrılmış sözcük geçen bir tablo aksi halde sözdizimi hatası verirdi.
  */
-export async function readTable(
+export async function localReadTable(
   connection: ConnectionSecrets,
   schema: string,
   table: string,
@@ -224,4 +225,48 @@ function describe(error: unknown): string {
     return serverT("dbadmin.notFound");
   }
   return message.slice(0, 600);
+}
+
+// --- Çoklu sunucu -------------------------------------------------------------
+//
+// Veritabanına SEÇİLİ SUNUCUDAN bağlanılır: uzak sunucudaki bir container adı
+// (`postgres`) merkezden çözülmez, SQLite dosyası da o sunucunun diskinde.
+// Uzak sunucuda iş, bağlantı bilgisiyle birlikte ajana yaptırılır; koruma
+// (salt-okunur kontrolü, limit, zaman aşımı) ajanda aynı kodla uygulanır.
+
+export function runQuery(
+  connection: ConnectionSecrets,
+  sql: string,
+  options: RunOptions = {},
+): Promise<RunOutcome> {
+  return onHost("db.query", [connection, sql, options], () => localRunQuery(connection, sql, options));
+}
+
+export function listTables(connection: ConnectionSecrets): Promise<DbTable[]> {
+  return onHost("db.tables", [connection], () => localListTables(connection));
+}
+
+export function tableStructure(
+  connection: ConnectionSecrets,
+  schema: string,
+  table: string,
+): Promise<DbStructure> {
+  return onHost("db.structure", [connection, schema, table], () =>
+    localTableStructure(connection, schema, table),
+  );
+}
+
+export function testConnection(connection: ConnectionSecrets): Promise<{ ok: boolean; message: string }> {
+  return onHost("db.test", [connection], () => localTestConnection(connection));
+}
+
+export function readTable(
+  connection: ConnectionSecrets,
+  schema: string,
+  table: string,
+  options: Parameters<typeof localReadTable>[3],
+): ReturnType<typeof localReadTable> {
+  return onHost("db.read", [connection, schema, table, options], () =>
+    localReadTable(connection, schema, table, options),
+  );
 }

@@ -86,16 +86,22 @@ async function remotePanelImage(hostId: number): Promise<string | null> {
 export async function panelDataVolume(): Promise<string | null> {
   if (cached && Date.now() - cached.at < CACHE_MS) return cached.name;
 
-  try {
-    const raw = (await getDockerProvider().inspectRaw(panelContainerName())) as {
-      Mounts?: { Type?: string; Name?: string; Destination?: string }[];
-    } | null;
+  // Ajan olarak çalışırken container adı kuruluma göre değişir; ownImage gibi
+  // container'ın kendi hostname'i (kısa kimliği) de denenir.
+  for (const candidate of [panelContainerName(), hostname()]) {
+    try {
+      const raw = (await getDockerProvider().inspectRaw(candidate)) as {
+        Mounts?: { Type?: string; Name?: string; Destination?: string }[];
+      } | null;
+      if (!raw) continue;
 
-    const mount = raw?.Mounts?.find((entry) => entry.Destination === "/app/data");
-    const name = mount?.Type === "volume" && mount.Name ? mount.Name : null;
-    cached = { name, at: Date.now() };
-    return name;
-  } catch {
-    return null;
+      const mount = raw.Mounts?.find((entry) => entry.Destination === "/app/data");
+      const name = mount?.Type === "volume" && mount.Name ? mount.Name : null;
+      cached = { name, at: Date.now() };
+      return name;
+    } catch {
+      // Sıradaki aday.
+    }
   }
+  return null;
 }

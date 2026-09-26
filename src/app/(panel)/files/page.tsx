@@ -15,7 +15,7 @@ export default async function FilesPage({
   searchParams: Promise<{ path?: string }>;
 }) {
   const session = await requirePermission("files.read");
-  enterHost(await pageHostId());
+  enterHost(await pageHostId({ agent: true }));
   const roots = allowedRoots();
 
   // İlk açılışta ilk izinli kökten başlanır. `/` neredeyse hiçbir zaman

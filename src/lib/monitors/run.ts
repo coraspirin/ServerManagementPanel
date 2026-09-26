@@ -1,6 +1,7 @@
 import "server-only";
 import { serverT } from "@/lib/i18n/runtime";
 
+import { runWithHost } from "@/lib/hosts/context";
 import { runCheck, type CheckResult } from "./check";
 import { effectiveSettings, getMonitor, listMonitors, recordCheck } from "./store";
 import type { Monitor, MonitorStatus } from "./types";
@@ -36,7 +37,13 @@ export async function checkMonitor(monitor: Monitor): Promise<MonitorOutcome> {
 
   for (let attempt = 0; attempt <= effective.retries; attempt++) {
     attempts = attempt + 1;
-    result = await runCheck(monitor, effective.timeoutSeconds);
+    try {
+      // Container monitörü kendi sunucusunun Docker'ına bakar.
+      result = await runWithHost(monitor.hostId, () => runCheck(monitor, effective.timeoutSeconds));
+    } catch (error) {
+      // Uzak sunucu erişilemiyor: turun geri kalanı düşmesin, monitör hata alsın.
+      result = { ok: false, latencyMs: 0, error: error instanceof Error ? error.message : String(error) };
+    }
     if (result.ok) break;
     if (attempt < effective.retries) await sleep(500);
   }

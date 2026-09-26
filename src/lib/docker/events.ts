@@ -6,7 +6,7 @@ import { agentStream } from "@/lib/agent/client";
 import { announce } from "@/lib/alerts/announce";
 import { recordEvent } from "@/lib/alerts/store";
 import { isMockMode } from "@/lib/env";
-import { runWithHost } from "@/lib/hosts/context";
+import { currentHostId, runWithHost } from "@/lib/hosts/context";
 import { getHost } from "@/lib/hosts/store";
 import type { Host } from "@/lib/hosts/types";
 import { getBool } from "@/lib/settings";
@@ -64,17 +64,17 @@ let sonZaman = 0;
  * etmemesi demek — sunucuda günde yüzlerce böyle olay oluyor.
  */
 async function handle(raw: DockerEventRaw, remote?: { host: Host; state: { lastTs: number } }): Promise<void> {
+  // Uzak sunucunun olayı o sunucunun bağlamında kaydedilir/bildirilir: olay
+  // listesinde o sunucuya düşer, bildirim başlığı sunucu adını taşır.
+  if (remote && currentHostId() !== remote.host.id) return runWithHost(remote.host.id, () => handle(raw, remote));
+
   const classified = classify(raw);
   if (!classified) return;
 
-  // Uzak sunucuda başlık sunucu adını taşır ve bastırma anahtarı sunucuya
-  // özeldir: iki sunucudaki aynı adlı container tek alarmda birleşmesin.
+  // Uzak sunucuda bastırma anahtarı sunucuya özeldir: iki sunucudaki aynı
+  // adlı container tek alarmda birleşmesin.
   const event = remote
-    ? {
-        ...classified,
-        title: `${remote.host.name} · ${classified.title}`,
-        alertKey: `h${remote.host.id}:${classified.alertKey}`,
-      }
+    ? { ...classified, alertKey: `h${remote.host.id}:${classified.alertKey}` }
     : classified;
 
   if (remote) remote.state.lastTs = Math.max(remote.state.lastTs, event.ts);

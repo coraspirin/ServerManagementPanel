@@ -223,6 +223,17 @@ export function getString(key: string, scope?: { type: SettingScope; id: string 
   return String(getSetting(key, scope));
 }
 
+/**
+ * Yalnızca o sunucuya özel olarak girilmiş değer; yoksa null. Genel değere
+ * düşülmez — panelin kendi adresi gibi ayarlar uzak sunucuya taşınmasın.
+ */
+export function getHostOnlyString(key: string, hostId: number): string | null {
+  const def = findSetting(key);
+  const row = def ? readRow(key, "host", String(hostId)) : undefined;
+  const value = def && row ? rowToValue(def, row) : null;
+  return value === null ? null : String(value);
+}
+
 export type SetResult = { ok: true } | { ok: false; error: string };
 
 export function setSetting(

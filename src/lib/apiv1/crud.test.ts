@@ -75,6 +75,7 @@ describe("monitorPatchBase", () => {
     lastError: null,
     nextCheckAt: 1_700_000_060,
     sortOrder: 3,
+    hostId: 1,
   };
 
   it("yalnızca YAZILABİLİR alanları taşır", () => {

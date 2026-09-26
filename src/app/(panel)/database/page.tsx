@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 /** Veritabanı yöneticisi (M3.6). */
 export default async function DatabasePage() {
   const session = await requirePermission("db.read");
-  enterHost(await pageHostId());
+  enterHost(await pageHostId({ agent: true }));
 
   return (
     <DatabaseScreen

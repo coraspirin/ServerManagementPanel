@@ -21,6 +21,8 @@ export const MONITOR_TYPES: { value: MonitorType }[] = [
 
 export type Monitor = {
   id: number;
+  /** Monitörün ait olduğu sunucu — Servis Durumu ekranı seçili sunucuya göre süzer. */
+  hostId: number;
   name: string;
   type: MonitorType;
   target: string;

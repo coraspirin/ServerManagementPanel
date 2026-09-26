@@ -1,20 +1,22 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { createMonitor, monitorViews, parseMonitorInput } from "@/lib/monitors/store";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "metrics.view");
+  const guard = await guardHostApi(request, "metrics.view", { agent: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
-  return Response.json({ monitors: monitorViews() });
+  return Response.json({ monitors: monitorViews(60, { hostId: guard.hostId }) });
 }
 
 export async function POST(request: Request) {
-  const guard = await guardApi(request, "monitors.manage");
+  const guard = await guardHostApi(request, "monitors.manage", { agent: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   let body: Record<string, unknown>;
   try {
@@ -37,5 +39,5 @@ export async function POST(request: Request) {
     result: "ok",
   });
 
-  return Response.json({ ok: true, id, monitors: monitorViews() });
+  return Response.json({ ok: true, id, monitors: monitorViews(60, { hostId: guard.hostId }) });
 }

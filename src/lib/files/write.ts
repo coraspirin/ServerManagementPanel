@@ -7,6 +7,7 @@ import { randomBytes } from "node:crypto";
 
 import { dataDir } from "@/lib/db/client";
 import { panelDataVolume } from "@/lib/host/self";
+import { onHost } from "@/lib/hosts/on-host";
 import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 import { getString } from "@/lib/settings";
@@ -105,14 +106,14 @@ function resolveTarget(rawPath: string): { parent: string; name: string } | { er
   return { parent, name: path.posix.basename(check.hostPath) };
 }
 
-export async function createDirectory(rawPath: string): Promise<WriteOutcome> {
+export async function localCreateDirectory(rawPath: string): Promise<WriteOutcome> {
   const target = resolveTarget(rawPath);
   if ("error" in target) return { ok: false, message: target.error };
 
   return runInParent(target.parent, ["mkdir", "-p", path.posix.join(WORK, target.name)]);
 }
 
-export async function removeEntry(rawPath: string, recursive: boolean): Promise<WriteOutcome> {
+export async function localRemoveEntry(rawPath: string, recursive: boolean): Promise<WriteOutcome> {
   const target = resolveTarget(rawPath);
   if ("error" in target) return { ok: false, message: target.error };
 
@@ -122,7 +123,7 @@ export async function removeEntry(rawPath: string, recursive: boolean): Promise<
   return runInParent(target.parent, [...args, path.posix.join(WORK, target.name)]);
 }
 
-export async function renameEntry(rawPath: string, newName: string): Promise<WriteOutcome> {
+export async function localRenameEntry(rawPath: string, newName: string): Promise<WriteOutcome> {
   const target = resolveTarget(rawPath);
   if ("error" in target) return { ok: false, message: target.error };
 
@@ -141,7 +142,7 @@ export async function renameEntry(rawPath: string, newName: string): Promise<Wri
   ]);
 }
 
-export async function changeMode(rawPath: string, mode: string): Promise<WriteOutcome> {
+export async function localChangeMode(rawPath: string, mode: string): Promise<WriteOutcome> {
   const target = resolveTarget(rawPath);
   if ("error" in target) return { ok: false, message: target.error };
 
@@ -192,7 +193,7 @@ export async function removeFilesIn(
  * sonra o volume geçici container'a salt-okunur bağlanıp hedefe kopyalanıyor.
  * Ara dosya her durumda siliniyor.
  */
-export async function writeFile(
+export async function localWriteFile(
   rawPath: string,
   content: Buffer,
 ): Promise<WriteOutcome> {
@@ -228,4 +229,30 @@ export async function writeFile(
   } finally {
     rmSync(tempPath, { force: true });
   }
+}
+
+// --- Çoklu sunucu -------------------------------------------------------------
+//
+// Yazma işlemleri seçili sunucuda yapılır: uzak sunucuda iş (geçici container
+// ve ara dosya dahil) o sunucunun ajanına yaptırılır — ara dosya merkezin veri
+// volume'ünde dururken uzak sunucudaki container onu göremezdi.
+
+export function createDirectory(rawPath: string): Promise<WriteOutcome> {
+  return onHost("files.mkdir", [rawPath], () => localCreateDirectory(rawPath));
+}
+
+export function removeEntry(rawPath: string, recursive: boolean): Promise<WriteOutcome> {
+  return onHost("files.remove", [rawPath, recursive], () => localRemoveEntry(rawPath, recursive));
+}
+
+export function renameEntry(rawPath: string, newName: string): Promise<WriteOutcome> {
+  return onHost("files.rename", [rawPath, newName], () => localRenameEntry(rawPath, newName));
+}
+
+export function changeMode(rawPath: string, mode: string): Promise<WriteOutcome> {
+  return onHost("files.chmod", [rawPath, mode], () => localChangeMode(rawPath, mode));
+}
+
+export function writeFile(rawPath: string, content: Buffer): Promise<WriteOutcome> {
+  return onHost("files.write", [rawPath, content], () => localWriteFile(rawPath, content));
 }

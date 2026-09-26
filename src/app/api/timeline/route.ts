@@ -1,4 +1,4 @@
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { hasPermission } from "@/lib/auth/session";
 import { timeline, type TimelineKind } from "@/lib/timeline";
 
@@ -8,8 +8,9 @@ const ALL_KINDS: TimelineKind[] = ["audit", "event", "spike"];
 const DEFAULT_WINDOW_SECONDS = 24 * 3600;
 
 export async function GET(request: Request) {
-  const guard = await guardApi(request, "metrics.view");
+  const guard = await guardHostApi(request, "metrics.view", { agent: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const url = new URL(request.url);
   const now = Math.floor(Date.now() / 1000);

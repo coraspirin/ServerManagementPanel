@@ -5,6 +5,7 @@ import { createReadStream } from "node:fs";
 import { lstat, readdir, readFile, readlink, stat } from "node:fs/promises";
 import path from "node:path";
 
+import { currentAgentHost, onHost } from "@/lib/hosts/on-host";
 import { getNumber } from "@/lib/settings";
 import { elevatedList, elevatedRead, elevatedUsage, isPermissionError } from "./elevated";
 import { checkPath, contentReadable } from "./paths";
@@ -47,7 +48,7 @@ function modeToText(mode: number): string {
 
 const MAX_ENTRIES = 2000;
 
-export async function listDirectory(rawPath: string): Promise<Listing> {
+export async function localListDirectory(rawPath: string): Promise<Listing> {
   const check = checkPath(rawPath);
   if (!check.ok) throw new Error(check.error);
 
@@ -166,7 +167,7 @@ export type FileContent = {
  * İkili dosya tespiti: ilk 8 KB içinde NUL baytı varsa ikili sayılır. Kusursuz
  * değil ama pratik — bir PNG'yi metin editörüne açıp kaydetmek dosyayı bozardı.
  */
-export async function readTextFile(rawPath: string): Promise<FileContent> {
+export async function localReadTextFile(rawPath: string): Promise<FileContent> {
   const check = checkPath(rawPath);
   if (!check.ok) throw new Error(check.error);
 
@@ -209,7 +210,7 @@ export async function readTextFile(rawPath: string): Promise<FileContent> {
 }
 
 /** İndirme için akış — büyük dosyalar belleğe alınmadan geçsin. */
-export async function openForDownload(
+export async function localOpenForDownload(
   rawPath: string,
 ): Promise<{ stream: ReadableStream; name: string; sizeBytes: number }> {
   const check = checkPath(rawPath);
@@ -290,7 +291,7 @@ export type UsageEntry = { path: string; name: string; bytes: number; isDir: boo
  * eder; kullanıcı "hangi klasör şişmiş" sorusunun cevabını saniyeler içinde
  * istiyor, tam bir envanter değil.
  */
-export async function analyzeUsage(
+export async function localAnalyzeUsage(
   rawPath: string,
 ): Promise<{ path: string; entries: UsageEntry[]; totalBytes: number; timedOut: boolean }> {
   const check = checkPath(rawPath);
@@ -378,4 +379,69 @@ export async function analyzeUsage(
     totalBytes: entries.reduce((sum, entry) => sum + entry.bytes, 0),
     timedOut,
   };
+}
+
+// --- Çoklu sunucu -------------------------------------------------------------
+//
+// Yukarıdaki `local*` fonksiyonları BU makinenin `/host/root`una bakar. Uzak
+// sunucu seçiliyken aynı iş o sunucunun ajanına yaptırılır; ajan tarafında op
+// aynı `local*` fonksiyonunu çağırır (bkz. `agent/ops.ts`).
+
+export function listDirectory(rawPath: string): Promise<Listing> {
+  return onHost("files.list", [rawPath], () => localListDirectory(rawPath));
+}
+
+export function readTextFile(rawPath: string): Promise<FileContent> {
+  return onHost("files.read", [rawPath], () => localReadTextFile(rawPath));
+}
+
+export function analyzeUsage(rawPath: string): ReturnType<typeof localAnalyzeUsage> {
+  return onHost("files.usage", [rawPath], () => localAnalyzeUsage(rawPath));
+}
+
+type Download = Awaited<ReturnType<typeof localOpenForDownload>>;
+
+/**
+ * Uzak sunucuda indirme ajandan akış olarak gelir: ilk çerçeve ad ve boyut,
+ * sonrakiler dosyanın parçaları. Büyük dosya merkezde de belleğe alınmaz.
+ */
+export async function openForDownload(rawPath: string): Promise<Download> {
+  const host = currentAgentHost();
+  if (!host) return localOpenForDownload(rawPath);
+
+  const { agentStream } = await import("@/lib/agent/client");
+  const abort = new AbortController();
+  const frames = agentStream<unknown>(host, "files.download", [rawPath], abort.signal);
+  const first = await frames.next();
+  if (first.done) throw new Error(serverT("api.unexpectedError"));
+  const meta = first.value as { name: string; sizeBytes: number };
+
+  const stream = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const step = await frames.next();
+      if (step.done) controller.close();
+      else controller.enqueue(new Uint8Array(step.value as Buffer));
+    },
+    async cancel() {
+      abort.abort();
+      await frames.return(undefined);
+    },
+  });
+  return { stream, name: meta.name, sizeBytes: meta.sizeBytes };
+}
+
+/** Ajan tarafı: `openForDownload`ın akışını çerçevelere böler. */
+export async function* downloadFrames(rawPath: string, signal: AbortSignal): AsyncGenerator<unknown> {
+  const file = await localOpenForDownload(rawPath);
+  yield { name: file.name, sizeBytes: file.sizeBytes };
+  const reader = file.stream.getReader();
+  try {
+    while (!signal.aborted) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      yield Buffer.from(value);
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
 }

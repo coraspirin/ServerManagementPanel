@@ -13,6 +13,28 @@ import {
 } from "@/lib/docker/exec";
 import { dockerEventStream } from "@/lib/docker/events";
 import { scanWatchDir } from "@/lib/backup/watch";
+import {
+  downloadFrames,
+  localAnalyzeUsage,
+  localListDirectory,
+  localReadTextFile,
+} from "@/lib/files/browse";
+import { localRunCleanup, localScanCleanup } from "@/lib/files/cleanup";
+import {
+  localListTables,
+  localReadTable,
+  localRunQuery,
+  localTableStructure,
+  localTestConnection,
+} from "@/lib/dbadmin";
+import type { ConnectionSecrets } from "@/lib/dbadmin/store";
+import {
+  localChangeMode,
+  localCreateDirectory,
+  localRemoveEntry,
+  localRenameEntry,
+  localWriteFile,
+} from "@/lib/files/write";
 import { localHostDirExists, localListHostDirs } from "@/lib/host/dirs";
 import { ownImage } from "@/lib/host/self";
 import { localHostAccounts } from "@/lib/host/users";
@@ -94,6 +116,62 @@ export const AGENT_OPS: Record<string, AgentOp> = {
   "host.dirExists": { kind: "call", run: (args) => localHostDirExists(String(args[0] ?? "/")) },
   "updates.osReport": { kind: "call", run: () => localOsUpdateReport() },
   "backup.scanDir": { kind: "call", run: (args) => scanWatchDir(String(args[0] ?? "")) },
+  // Dosya yöneticisi: yol denetimi (izinli kökler, gizli dosyalar) ajanda da
+  // aynı `checkPath` ile yapılır; kökler merkezin gönderdiği ayar katmanından.
+  "files.list": { kind: "call", run: (args) => localListDirectory(String(args[0] ?? "/")) },
+  "files.read": { kind: "call", run: (args) => localReadTextFile(String(args[0] ?? "")) },
+  "files.usage": { kind: "call", run: (args) => localAnalyzeUsage(String(args[0] ?? "")) },
+  "files.download": { kind: "stream", run: (args, signal) => downloadFrames(String(args[0] ?? ""), signal) },
+  "files.mkdir": { kind: "call", run: (args) => localCreateDirectory(String(args[0] ?? "")) },
+  "files.remove": {
+    kind: "call",
+    run: (args) => localRemoveEntry(String(args[0] ?? ""), args[1] === true),
+  },
+  "files.rename": {
+    kind: "call",
+    run: (args) => localRenameEntry(String(args[0] ?? ""), String(args[1] ?? "")),
+  },
+  "files.chmod": {
+    kind: "call",
+    run: (args) => localChangeMode(String(args[0] ?? ""), String(args[1] ?? "")),
+  },
+  "files.write": {
+    kind: "call",
+    run: (args) => {
+      if (!Buffer.isBuffer(args[1])) throw new Error(serverT("api.invalidRequest"));
+      return localWriteFile(String(args[0] ?? ""), args[1]);
+    },
+  },
+  "files.cleanupScan": { kind: "call", run: () => localScanCleanup() },
+  "files.cleanupRun": { kind: "call", run: (args) => localRunCleanup(String(args[0] ?? "")) },
+  // Veritabanı yöneticisi: bağlantı bilgisi (parola dahil) istekle gelir,
+  // ajanda saklanmaz.
+  "db.query": {
+    kind: "call",
+    run: (args) =>
+      localRunQuery(
+        args[0] as ConnectionSecrets,
+        String(args[1] ?? ""),
+        (args[2] ?? {}) as Parameters<typeof localRunQuery>[2],
+      ),
+  },
+  "db.tables": { kind: "call", run: (args) => localListTables(args[0] as ConnectionSecrets) },
+  "db.structure": {
+    kind: "call",
+    run: (args) =>
+      localTableStructure(args[0] as ConnectionSecrets, String(args[1] ?? ""), String(args[2] ?? "")),
+  },
+  "db.test": { kind: "call", run: (args) => localTestConnection(args[0] as ConnectionSecrets) },
+  "db.read": {
+    kind: "call",
+    run: (args) =>
+      localReadTable(
+        args[0] as ConnectionSecrets,
+        String(args[1] ?? ""),
+        String(args[2] ?? ""),
+        (args[3] ?? { limit: 50, offset: 0 }) as Parameters<typeof localReadTable>[3],
+      ),
+  },
   "system.info": { kind: "call", run: () => getSystemProvider().info() },
   "metrics.sample": { kind: "call", run: () => getMetricsProvider().sample() },
   "hardware.report": { kind: "call", run: () => getHardwareProvider().report() },

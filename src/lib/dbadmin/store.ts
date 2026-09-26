@@ -2,6 +2,7 @@ import "server-only";
 import { serverT } from "@/lib/i18n/runtime";
 
 import { getDb } from "@/lib/db/client";
+import { currentHostId } from "@/lib/hosts/context";
 import { decryptSecret, encryptSecret, type EncryptedValue } from "@/lib/crypto";
 import { DEFAULT_PORT, type DbConnection, type DbEngine } from "./types";
 
@@ -24,9 +25,10 @@ export function listConnections(): DbConnection[] {
       .prepare(
         `SELECT id, name, engine, host, port, username, password_enc, database,
                 writable, source, container, last_ok_at, last_error
-         FROM db_connections ORDER BY name COLLATE NOCASE`,
+         FROM db_connections WHERE host_id = ? ORDER BY name COLLATE NOCASE`,
       )
-      .all() as Record<string, string | number | null>[]
+      // Bağlantılar sunucuya bağlı: veritabanına o sunucunun ajanı bağlanır.
+      .all(currentHostId()) as Record<string, string | number | null>[]
   ).map((row) => {
     const enc = String(row.password_enc ?? "");
     return {
@@ -96,10 +98,11 @@ export function createConnection(input: ConnectionInput, source = "manual", cont
   const info = getDb()
     .prepare(
       `INSERT INTO db_connections
-         (name, engine, host, port, username, password_enc, database, writable, source, container)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (host_id, name, engine, host, port, username, password_enc, database, writable, source, container)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
+      currentHostId(),
       input.name.trim(),
       input.engine,
       input.host.trim(),
@@ -120,7 +123,7 @@ export function updateConnection(id: number, input: ConnectionInput): boolean {
     .prepare(
       `UPDATE db_connections
        SET name = ?, engine = ?, host = ?, port = ?, username = ?, database = ?, writable = ?
-       WHERE id = ?`,
+       WHERE id = ? AND host_id = ?`,
     )
     .run(
       input.name.trim(),
@@ -131,7 +134,9 @@ export function updateConnection(id: number, input: ConnectionInput): boolean {
       input.database.trim(),
       input.writable ? 1 : 0,
       id,
+      currentHostId(),
     ).changes;
+  if (Number(changes) === 0) return false;
 
   // Parola yalnızca yeni bir değer girildiyse değişir; boş bırakmak "aynı
   // kalsın" demek.
@@ -146,7 +151,13 @@ export function updateConnection(id: number, input: ConnectionInput): boolean {
 }
 
 export function deleteConnection(id: number): boolean {
-  return Number(getDb().prepare("DELETE FROM db_connections WHERE id = ?").run(id).changes) > 0;
+  return (
+    Number(
+      getDb()
+        .prepare("DELETE FROM db_connections WHERE id = ? AND host_id = ?")
+        .run(id, currentHostId()).changes,
+    ) > 0
+  );
 }
 
 export function markConnection(id: number, ok: boolean, error: string): void {

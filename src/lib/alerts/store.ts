@@ -75,10 +75,16 @@ export function listEvents(options: {
   severity?: Severity;
   source?: string;
   onlyUnacknowledged?: boolean;
+  /** Yalnızca bu sunucunun olayları (Olaylar ekranı seçili sunucuyu gösterir). */
+  hostId?: number;
 }): EventRow[] {
   const clauses: string[] = [];
   const params: (string | number)[] = [];
 
+  if (options.hostId !== undefined) {
+    clauses.push("host_id = ?");
+    params.push(options.hostId);
+  }
   if (options.severity) {
     clauses.push("severity = ?");
     params.push(options.severity);
@@ -166,12 +172,15 @@ export function acknowledgeEvents(ids: number[], by: string, now: number): numbe
   return Number(result.changes);
 }
 
-export function unacknowledgedCount(): number {
-  const row = getDb()
-    .prepare(
-      "SELECT COUNT(*) AS n FROM events WHERE acknowledged_at IS NULL AND severity IN ('warning','critical')",
-    )
-    .get() as { n: number };
+/** Okunmamış uyarı/kritik olay sayısı; `hostId` verilirse yalnızca o sunucunun. */
+export function unacknowledgedCount(hostId?: number): number {
+  const sql =
+    "SELECT COUNT(*) AS n FROM events WHERE acknowledged_at IS NULL AND severity IN ('warning','critical')";
+  const row = (
+    hostId === undefined
+      ? getDb().prepare(sql).get()
+      : getDb().prepare(`${sql} AND host_id = ?`).get(hostId)
+  ) as { n: number };
   return row.n;
 }
 

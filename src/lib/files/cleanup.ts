@@ -5,6 +5,7 @@ import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { dataDir } from "@/lib/db/client";
+import { onHost } from "@/lib/hosts/on-host";
 import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 import type { PruneScope } from "@/lib/providers/types";
@@ -100,7 +101,7 @@ function hostView(hostPath: string): string {
   return path.posix.join(hostRoot(), hostPath);
 }
 
-export async function scanCleanup(): Promise<{ items: CleanupItem[]; totalBytes: number }> {
+export async function localScanCleanup(): Promise<{ items: CleanupItem[]; totalBytes: number }> {
   const items: CleanupItem[] = [];
 
   /* --- Docker --- */
@@ -314,8 +315,8 @@ function panelMigrationBackups(): { bytes: number; count: number; files: string[
 
 export type CleanupResult = { ok: boolean; message: string; reclaimedBytes: number };
 
-export async function runCleanup(itemId: string): Promise<CleanupResult> {
-  const { items } = await scanCleanup();
+export async function localRunCleanup(itemId: string): Promise<CleanupResult> {
+  const { items } = await localScanCleanup();
   const item = items.find((entry) => entry.id === itemId);
   if (!item) return { ok: false, message: serverT("cleanup.notInList"), reclaimedBytes: 0 };
 
@@ -386,4 +387,14 @@ export async function runCleanup(itemId: string): Promise<CleanupResult> {
       (failures.length > 0 ? ` ${serverT("cleanup.failedSome", { names: failures.slice(0, 2).join(" · ") })}` : ""),
     reclaimedBytes: failures.length === 0 ? reclaimed : 0,
   };
+}
+
+// --- Çoklu sunucu -------------------------------------------------------------
+
+export function scanCleanup(): ReturnType<typeof localScanCleanup> {
+  return onHost("files.cleanupScan", [], () => localScanCleanup());
+}
+
+export function runCleanup(itemId: string): Promise<CleanupResult> {
+  return onHost("files.cleanupRun", [itemId], () => localRunCleanup(itemId));
 }

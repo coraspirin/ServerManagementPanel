@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /** Disk temizlik asistanı (M3.5). Tarama okuma, temizlik yazma yetkisi ister. */
 export async function GET(request: Request) {
-  const guard = await guardHostApi(request, "files.read");
+  const guard = await guardHostApi(request, "files.read", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const guard = await guardHostApi(request, "files.write");
+  const guard = await guardHostApi(request, "files.write", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

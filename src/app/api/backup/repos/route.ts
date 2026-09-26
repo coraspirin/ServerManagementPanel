@@ -31,7 +31,7 @@ function parseInput(body: Record<string, unknown>): RepoInput {
 }
 
 export async function POST(request: Request) {
-  const guard = await guardHostApi(request, "backup.manage");
+  const guard = await guardHostApi(request, "backup.manage", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const guard = await guardHostApi(request, "backup.manage");
+  const guard = await guardHostApi(request, "backup.manage", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
@@ -130,7 +130,7 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const guard = await guardHostApi(request, "backup.manage");
+  const guard = await guardHostApi(request, "backup.manage", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

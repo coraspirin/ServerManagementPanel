@@ -109,11 +109,11 @@ export function detectRestartLoops(): RestartLoop[] {
     .prepare(
       `SELECT label, MAX(value) - MIN(value) AS delta
        FROM metrics_raw
-       WHERE metric = 'docker.restart_count' AND ts >= ?
+       WHERE host_id = ? AND metric = 'docker.restart_count' AND ts >= ?
        GROUP BY label
        HAVING delta >= ?`,
     )
-    .all(since, threshold) as { label: string; delta: number }[];
+    .all(currentHostId(), since, threshold) as { label: string; delta: number }[];
 
   return rows.map((row) => ({
     container: row.label,

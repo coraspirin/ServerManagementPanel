@@ -353,7 +353,15 @@ export function AppShell({ children, mode, version, user }: Props) {
           </div>
         </header>
 
-        <main className="pad-main min-w-0 flex-1">{children}</main>
+        {/*
+          Sunucu değişince sayfa baştan kurulur: ekranların çoğu ilk veriyi
+          `useState(initial…)` ile alıyor ve `router.refresh()`in getirdiği
+          yeni sunucunun verisini görmüyordu (Loglar, Olaylar… eski sunucuda
+          kalıyordu). Anahtar, istemci durumunu seçimle birlikte sıfırlar.
+        */}
+        <main key={currentHost.id} className="pad-main min-w-0 flex-1">
+          {children}
+        </main>
       </div>
 
       <CommandPalette permissions={user.permissions} />

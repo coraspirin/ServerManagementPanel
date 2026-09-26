@@ -39,9 +39,12 @@ import type { JobDefinition, JobResult } from "./types";
  * Çoklu sunucu: işi her etkin sunucuda, o sunucunun bağlamında çalıştırır.
  * Tek sunuculu kurulumda sonuç ve hata davranışı eskisiyle aynı.
  */
-function perHost(run: () => Promise<JobResult | void>): () => Promise<JobResult> {
+function perHost(
+  run: () => Promise<JobResult | void>,
+  hosts: () => { id: number; name: string }[] = activeHosts,
+): () => Promise<JobResult> {
   return async () => {
-    const outcomes = await fanOut(activeHosts(), async () => (await run())?.detail);
+    const outcomes = await fanOut(hosts(), async () => (await run())?.detail);
     return { detail: summarizeOutcomes(outcomes) };
   };
 }
@@ -162,7 +165,10 @@ export const jobDefinitions: JobDefinition[] = [
     schedule: { kind: "fixed", seconds: 30, labelKey: "jobs.schedule.alerts" },
     leaseSeconds: 120,
     recordSuccessRuns: false,
-    async run() {
+    // Her sunucunun metrikleri, monitörleri ve Docker'ı ayrı değerlendirilir;
+    // olaylar ve bildirimler o sunucunun adıyla düşer.
+    scope: "perHost",
+    run: perHost(async () => {
       const summary = await runAlertCycle();
       const suppressed = Object.entries(summary.suppressed)
         .map(([reason, count]) => `${reason}:${count}`)
@@ -179,7 +185,10 @@ export const jobDefinitions: JobDefinition[] = [
             notified: summary.notified,
           }) + (suppressed ? serverT("jobs.detail.alertsSuppressed", { list: suppressed }) : ""),
       };
-    },
+      // Çevrimdışı sunucular da: monitörleri merkezden denetleniyor ve o
+      // sunucunun servisleri tam da bu durumda düşmüş olabilir. Ajana giden
+      // kaynaklar (donanım, OS güncellemeleri) orada sessizce atlanır.
+    }, () => listHosts().filter((host) => host.enabled)),
   },
   {
     key: "updates.images",
@@ -487,9 +496,9 @@ export const jobDefinitions: JobDefinition[] = [
     // Yedekler saatlerce sürebilir; kilit erken düşerse aynı iş ikinci kez
     // başlar ve restic depo kilidine takılır.
     leaseSeconds: 6 * 3600,
-    async run() {
-      return { detail: await runDueBackups() };
-    },
+    // Depolar ve işler sunucuya bağlı; restic o sunucunun Docker'ında çalışır.
+    scope: "perHost",
+    run: perHost(async () => ({ detail: await runDueBackups() })),
   },
   {
     key: "logs.collect",

@@ -5,6 +5,7 @@ import { Copy, KeyRound, ShieldCheck, ShieldOff, Smartphone } from "lucide-react
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import { useT } from "@/lib/i18n/client";
 import { Rich } from "@/lib/i18n/rich";
+import { copyText } from "@/lib/client/clipboard";
 
 /**
  * M3.1 — kendi hesabının iki adımlı doğrulaması.
@@ -145,7 +146,7 @@ export function TwoFactorSection({
           <div className="mt-3 flex gap-2">
             <button
               type="button"
-              onClick={() => void navigator.clipboard?.writeText(stage.codes.join("\n"))}
+              onClick={() => void copyText(stage.codes.join("\n"))}
               className="flex items-center gap-1.5 rounded-md border border-line bg-surface px-3 py-1.5 text-sm transition-colors hover:border-brand"
             >
               <Copy className="size-4" /> {t("common.actions.copy")}

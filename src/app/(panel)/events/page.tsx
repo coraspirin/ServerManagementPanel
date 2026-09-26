@@ -1,5 +1,7 @@
 import { listEvents } from "@/lib/alerts/store";
 import { requirePermission } from "@/lib/auth/guard";
+import { enterHost } from "@/lib/hosts/context";
+import { pageHostId } from "@/lib/hosts/request";
 import { hasPermission } from "@/lib/auth/session";
 import { channelStatuses } from "@/lib/notify";
 import { getNumber } from "@/lib/settings";
@@ -18,10 +20,13 @@ export const dynamic = "force-dynamic";
 export default async function EventsPage() {
   const session = await requirePermission("metrics.view");
   const canSeeAudit = hasPermission(session.user, "audit.view");
+  // Olaylar ve zaman çizelgesi seçili sunucununkiler.
+  const hostId = await pageHostId({ agent: true });
+  enterHost(hostId);
 
   return (
     <EventCenter
-      initialEvents={listEvents({ limit: 200 })}
+      initialEvents={listEvents({ limit: 200, hostId })}
       initialChannels={channelStatuses()}
       initialTimeline={timeline({
         kinds: canSeeAudit ? ["audit", "event", "spike"] : ["event", "spike"],

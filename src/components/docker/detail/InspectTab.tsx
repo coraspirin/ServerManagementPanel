@@ -6,6 +6,7 @@ import { Check, Copy } from "lucide-react";
 import { Section } from "./shared";
 import { useFormat, useT } from "@/lib/i18n/client";
 import { Rich } from "@/lib/i18n/rich";
+import { copyText } from "@/lib/client/clipboard";
 
 /**
  * Ham `docker inspect` çıktısı (M3.20).
@@ -31,13 +32,10 @@ export function InspectTab({ raw }: { raw: unknown }) {
   }, [text, filter, f]);
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Pano izni yoksa sessiz kal; metin zaten ekranda seçilebilir durumda.
-    }
+    // Pano izni yoksa sessiz kal; metin zaten ekranda seçilebilir durumda.
+    if (!(await copyText(text))) return;
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
 
   return (

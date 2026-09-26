@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import { guardApi } from "@/lib/auth/api";
+import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import {
   deleteMonitor,
@@ -14,8 +14,9 @@ export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: Request, { params }: Context) {
-  const guard = await guardApi(request, "monitors.manage");
+  const guard = await guardHostApi(request, "monitors.manage", { agent: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const id = Number((await params).id);
   const existing = getMonitor(id);
@@ -42,12 +43,13 @@ export async function PATCH(request: Request, { params }: Context) {
     result: "ok",
   });
 
-  return Response.json({ ok: true, monitors: monitorViews() });
+  return Response.json({ ok: true, monitors: monitorViews(60, { hostId: guard.hostId }) });
 }
 
 export async function DELETE(request: Request, { params }: Context) {
-  const guard = await guardApi(request, "monitors.manage");
+  const guard = await guardHostApi(request, "monitors.manage", { agent: true });
   if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
 
   const id = Number((await params).id);
   const existing = getMonitor(id);
@@ -64,5 +66,5 @@ export async function DELETE(request: Request, { params }: Context) {
     result: "ok",
   });
 
-  return Response.json({ ok: true, monitors: monitorViews() });
+  return Response.json({ ok: true, monitors: monitorViews(60, { hostId: guard.hostId }) });
 }

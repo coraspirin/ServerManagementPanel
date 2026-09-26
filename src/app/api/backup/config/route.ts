@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   // Dışa aktarım tüm ayarları içeriyor; `settings.view` yetmez, düzenleme
   // yetkisi isteniyor: bu dosya başka bir kurulumu şekillendirebilir.
-  const guard = await guardHostApi(request, "settings.edit");
+  const guard = await guardHostApi(request, "settings.edit", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
@@ -33,7 +33,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const guard = await guardHostApi(request, "settings.edit");
+  const guard = await guardHostApi(request, "settings.edit", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

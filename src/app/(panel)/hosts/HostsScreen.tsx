@@ -8,6 +8,7 @@ import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import type { HostView } from "@/lib/hosts/view";
 import { formatDateTime } from "@/lib/i18n/format";
 import { useDict, useDynamicT, useT } from "@/lib/i18n/client";
+import { copyText } from "@/lib/client/clipboard";
 
 type InstallKit = { token: string; image: string; port: number; env: string; compose: string };
 
@@ -318,7 +319,7 @@ function CopyBlock({ label, text }: { label: string; text: string }) {
           type="button"
           className="flex items-center gap-1 hover:text-ink"
           onClick={() => {
-            void navigator.clipboard?.writeText(text).then(() => setCopied(true));
+            void copyText(text).then(setCopied);
           }}
         >
           <Copy className="size-3" aria-hidden />

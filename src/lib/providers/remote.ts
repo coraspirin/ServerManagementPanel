@@ -35,6 +35,14 @@ function remoteDocker(host: Host): DockerProvider {
       if (STREAMS.has(property)) {
         return (...args: unknown[]) => agentStream(host, `docker.${property}`, args);
       }
+      if (property === "runThrowaway") {
+        // Geçici container'ın kendi süre sınırı var (restic yedeği saatler
+        // sürebilir); RPC ondan önce kopmasın.
+        return (options: Parameters<DockerProvider["runThrowaway"]>[0]) =>
+          agentCall(host, "docker.runThrowaway", [options], {
+            timeoutMs: Math.max(60 * 60_000, (options.timeoutMs ?? 0) + 60_000),
+          });
+      }
       if (CALLS.has(property)) {
         return (...args: unknown[]) => agentCall(host, `docker.${property}`, args);
       }

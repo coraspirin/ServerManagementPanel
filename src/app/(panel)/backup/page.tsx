@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 /** Yedekleme motoru (M3.4). */
 export default async function BackupPage() {
   await requirePermission("backup.manage");
-  enterHost(await pageHostId());
+  enterHost(await pageHostId({ agent: true }));
 
   // Kaynak seçicileri gerçek Docker envanterinden doldurulur; kullanıcı volume
   // adını elle yazarsa bir harf hatası yedeğin boş çıkmasına yol açardı.

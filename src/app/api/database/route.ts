@@ -34,7 +34,7 @@ function parseInput(body: Record<string, unknown>): ConnectionInput {
 }
 
 export async function GET(request: Request) {
-  const guard = await guardHostApi(request, "db.read");
+  const guard = await guardHostApi(request, "db.read", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
@@ -84,7 +84,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   // Bağlantı tanımlamak yazma yetkisi değil ama yapılandırma değişikliği;
   // `db.read` yeterli sayılmıyor.
-  const guard = await guardHostApi(request, "db.write");
+  const guard = await guardHostApi(request, "db.write", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
@@ -168,7 +168,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const guard = await guardHostApi(request, "db.write");
+  const guard = await guardHostApi(request, "db.write", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
@@ -203,7 +203,7 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const guard = await guardHostApi(request, "db.write");
+  const guard = await guardHostApi(request, "db.write", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

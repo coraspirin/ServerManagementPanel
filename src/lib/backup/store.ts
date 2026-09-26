@@ -13,7 +13,13 @@ import type {
   SourceKind,
 } from "./types";
 
-/** M3.4 — yedekleme deposu, işleri ve çalışma geçmişi. */
+/**
+ * M3.4 — yedekleme deposu, işleri ve çalışma geçmişi.
+ *
+ * Çoklu sunucu: kayıtlar sunucuya bağlı (`host_id`). Liste, ekleme ve
+ * kimlikle erişim etkin sunucuyla (`currentHostId()`) sınırlı — bir sunucunun
+ * ekranından başka sunucunun deposu/işi görülemez ya da çalıştırılamaz.
+ */
 
 const REPO_KINDS = new Set<RepoKind>(["local", "rclone", "s3"]);
 const SOURCE_KINDS = new Set<SourceKind>(["volume", "host_dir", "panel_db"]);
@@ -34,9 +40,9 @@ export function listRepos(): BackupRepo[] {
         `SELECT r.id, r.name, r.kind, r.location, r.password_enc, r.initialized,
                 r.last_check_at, r.last_error,
                 (SELECT COUNT(*) FROM backup_jobs j WHERE j.repo_id = r.id) AS job_count
-         FROM backup_repos r ORDER BY r.name COLLATE NOCASE`,
+         FROM backup_repos r WHERE r.host_id = ? ORDER BY r.name COLLATE NOCASE`,
       )
-      .all() as Record<string, string | number | null>[]
+      .all(currentHostId()) as Record<string, string | number | null>[]
   ).map((row) => {
     const enc = String(row.password_enc ?? "");
     return {
@@ -66,8 +72,10 @@ export type RepoSecrets = {
 
 export function repoSecrets(id: number): RepoSecrets | null {
   const row = getDb()
-    .prepare("SELECT id, name, kind, location, password_enc, env_enc FROM backup_repos WHERE id = ?")
-    .get(id) as Record<string, string | number> | undefined;
+    .prepare(
+      "SELECT id, name, kind, location, password_enc, env_enc FROM backup_repos WHERE id = ? AND host_id = ?",
+    )
+    .get(id, currentHostId()) as Record<string, string | number> | undefined;
   if (!row) return null;
 
   const password = readEncrypted(String(row.password_enc ?? ""));
@@ -127,10 +135,11 @@ export function validateRepo(input: RepoInput, isNew: boolean): string | null {
 export function createRepo(input: RepoInput): number {
   const info = getDb()
     .prepare(
-      `INSERT INTO backup_repos (name, kind, location, password_enc, env_enc)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO backup_repos (host_id, name, kind, location, password_enc, env_enc)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     )
     .run(
+      currentHostId(),
       input.name.trim(),
       input.kind,
       input.location.trim(),
@@ -143,8 +152,9 @@ export function createRepo(input: RepoInput): number {
 export function updateRepo(id: number, input: RepoInput): boolean {
   const db = getDb();
   const changes = db
-    .prepare("UPDATE backup_repos SET name = ?, kind = ?, location = ? WHERE id = ?")
-    .run(input.name.trim(), input.kind, input.location.trim(), id).changes;
+    .prepare("UPDATE backup_repos SET name = ?, kind = ?, location = ? WHERE id = ? AND host_id = ?")
+    .run(input.name.trim(), input.kind, input.location.trim(), id, currentHostId()).changes;
+  if (Number(changes) === 0) return false;
 
   // Parola yalnızca YENİ bir değer girildiyse değişir. Boş bırakmak "aynı
   // kalsın" demek; aksi halde her düzenleme parolayı silerdi.
@@ -176,7 +186,7 @@ export function deleteRepo(id: number): { ok: boolean; error?: string } {
   }
   // Depo KAYDI siliniyor, deponun kendisi değil: diskteki restic verisine
   // panel dokunmuyor. Yanlışlıkla silinen bir kayıt yeniden eklenebilir.
-  getDb().prepare("DELETE FROM backup_repos WHERE id = ?").run(id);
+  getDb().prepare("DELETE FROM backup_repos WHERE id = ? AND host_id = ?").run(id, currentHostId());
   return { ok: true };
 }
 
@@ -196,9 +206,10 @@ export function listJobs(): BackupJob[] {
       .prepare(
         `SELECT j.*, r.name AS repo_name
          FROM backup_jobs j JOIN backup_repos r ON r.id = j.repo_id
+         WHERE j.host_id = ?
          ORDER BY j.name COLLATE NOCASE`,
       )
-      .all() as Record<string, string | number | null>[]
+      .all(currentHostId()) as Record<string, string | number | null>[]
   ).map(toJob);
 }
 
@@ -207,9 +218,9 @@ export function getJob(id: number): BackupJob | null {
     .prepare(
       `SELECT j.*, r.name AS repo_name
        FROM backup_jobs j JOIN backup_repos r ON r.id = j.repo_id
-       WHERE j.id = ?`,
+       WHERE j.id = ? AND j.host_id = ?`,
     )
-    .get(id) as Record<string, string | number | null> | undefined;
+    .get(id, currentHostId()) as Record<string, string | number | null> | undefined;
   return row ? toJob(row) : null;
 }
 
@@ -268,7 +279,11 @@ export function validateJob(input: JobInput): string | null {
   ) {
     return serverT("backupStore.retention");
   }
-  if (!getDb().prepare("SELECT id FROM backup_repos WHERE id = ?").get(input.repoId)) {
+  if (
+    !getDb()
+      .prepare("SELECT id FROM backup_repos WHERE id = ? AND host_id = ?")
+      .get(input.repoId, currentHostId())
+  ) {
     return serverT("backupStore.repoMissing");
   }
   return null;
@@ -278,11 +293,12 @@ export function createJob(input: JobInput): number {
   const info = getDb()
     .prepare(
       `INSERT INTO backup_jobs
-         (name, repo_id, source_kind, source, schedule_cron, quiesce, excludes,
+         (host_id, name, repo_id, source_kind, source, schedule_cron, quiesce, excludes,
           keep_daily, keep_weekly, keep_monthly, enabled)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
+      currentHostId(),
       input.name.trim(),
       input.repoId,
       input.sourceKind,
@@ -307,7 +323,7 @@ export function updateJob(id: number, input: JobInput): boolean {
            SET name = ?, repo_id = ?, source_kind = ?, source = ?, schedule_cron = ?,
                quiesce = ?, excludes = ?, keep_daily = ?, keep_weekly = ?,
                keep_monthly = ?, enabled = ?
-           WHERE id = ?`,
+           WHERE id = ? AND host_id = ?`,
         )
         .run(
           input.name.trim(),
@@ -322,21 +338,28 @@ export function updateJob(id: number, input: JobInput): boolean {
           input.keepMonthly,
           input.enabled ? 1 : 0,
           id,
+          currentHostId(),
         ).changes,
     ) > 0
   );
 }
 
 export function deleteJob(id: number): boolean {
-  return Number(getDb().prepare("DELETE FROM backup_jobs WHERE id = ?").run(id).changes) > 0;
+  return (
+    Number(
+      getDb()
+        .prepare("DELETE FROM backup_jobs WHERE id = ? AND host_id = ?")
+        .run(id, currentHostId()).changes,
+    ) > 0
+  );
 }
 
 /* --- Çalışma geçmişi --- */
 
 export function startRun(jobId: number, actor: string): number {
   const info = getDb()
-    .prepare("INSERT INTO backup_runs (job_id, actor) VALUES (?, ?)")
-    .run(jobId, actor);
+    .prepare("INSERT INTO backup_runs (host_id, job_id, actor) VALUES (?, ?, ?)")
+    .run(currentHostId(), jobId, actor);
   return Number(info.lastInsertRowid);
 }
 
@@ -379,8 +402,8 @@ export function finishRun(
 }
 
 export function listRuns(limit = 50, jobId?: number): BackupRun[] {
-  const clause = jobId === undefined ? "" : "WHERE r.job_id = ?";
-  const params: number[] = jobId === undefined ? [] : [jobId];
+  const clause = jobId === undefined ? "WHERE r.host_id = ?" : "WHERE r.host_id = ? AND r.job_id = ?";
+  const params: number[] = jobId === undefined ? [currentHostId()] : [currentHostId(), jobId];
 
   return (
     getDb()

@@ -5,6 +5,7 @@ import { AlertTriangle, Copy, KeyRound, Plus, Trash2 } from "lucide-react";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import { useFormat, useT } from "@/lib/i18n/client";
 import type { MessageKey } from "@/lib/i18n/translate";
+import { copyText } from "@/lib/client/clipboard";
 
 /**
  * T12 — kendi API anahtarların.
@@ -172,7 +173,7 @@ export function ApiTokenSection({ apiEnabled, initial }: { apiEnabled: boolean; 
           <div className="mt-3 flex gap-2">
             <button
               type="button"
-              onClick={() => void navigator.clipboard?.writeText(fresh)}
+              onClick={() => void copyText(fresh)}
               className="flex items-center gap-1.5 rounded-md border border-line bg-surface px-3 py-1.5 text-sm transition-colors hover:border-brand"
             >
               <Copy className="size-4" /> {t("common.actions.copy")}

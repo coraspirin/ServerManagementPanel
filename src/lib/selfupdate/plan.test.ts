@@ -9,6 +9,7 @@ import {
   isRepoName,
   parseStateLine,
   pickLatestTag,
+  releaseImageRef,
 } from "./plan.ts";
 
 test("yalnızca vX.Y.Z yayın etiketi kabul edilir", () => {
@@ -72,4 +73,12 @@ test("sunucuya özel dosyalar betikte korunuyor", () => {
   for (const name of [".env|", "docker-compose*.yml", "Caddyfile", ".panel-backups)"]) {
     assert.ok(UPDATER_SCRIPT.includes(name), name);
   }
+});
+
+test("imajla kurulumda yeni sürümün imaj referansı", () => {
+  assert.equal(releaseImageRef("ghcr.io/sahip/panel:1.11.1", "v1.12.0"), "ghcr.io/sahip/panel:1.12.0");
+  assert.equal(releaseImageRef("ghcr.io/sahip/panel:latest", "v1.12.0"), "ghcr.io/sahip/panel:1.12.0");
+  assert.equal(releaseImageRef("localhost:5000/panel", "v2.0.0"), "localhost:5000/panel:2.0.0");
+  assert.equal(releaseImageRef("ghcr.io/sahip/panel@sha256:abc", "v1.0.1"), "ghcr.io/sahip/panel:1.0.1");
+  assert.equal(releaseImageRef("server-panel:local", "v1.12.0"), null);
 });

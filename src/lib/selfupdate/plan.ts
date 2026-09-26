@@ -198,3 +198,136 @@ rm -rf "$T" "$D/$TAG.tar.gz"
 state done
 step done
 `;
+
+/**
+ * Hazır imajla kurulum (GHCR'den `image:` ile, proje dizininde Dockerfile
+ * yok): yeni sürümün imaj referansı. Etiket ve özet atılır, sürüm eklenir —
+ * yayın iş akışı imajları baştaki `v` olmadan etiketliyor (`1.11.1`).
+ *
+ *   ghcr.io/sahip/panel:1.11.1  →  ghcr.io/sahip/panel:1.12.0
+ *   localhost:5000/panel         →  localhost:5000/panel:1.12.0
+ *
+ * Kayıt defteri adı olmayan (`server-panel:local` gibi) yerel derleme adında
+ * null: o imaj hiçbir yerden çekilemez.
+ */
+export function releaseImageRef(current: string, tag: string): string | null {
+  let ref = current.trim().split("@")[0];
+  const slash = ref.lastIndexOf("/");
+  if (slash < 0) return null;
+  const colon = ref.lastIndexOf(":");
+  if (colon > slash) ref = ref.slice(0, colon);
+  if (!/^[a-z0-9][a-z0-9._\-/:]*$/.test(ref)) return null;
+  return `${ref}:${tag.replace(/^v/, "")}`;
+}
+
+/**
+ * İmajla kurulumun updater betiği. Girdiler: TAG, NEW_IMAGE, PANEL_IMAGE,
+ * OLD_VERSION, WORKDIR, PROJECT, SERVICE, PANEL_CONTAINER, STAMP, isteğe
+ * bağlı COMPOSE_FILE.
+ *
+ * Compose dosyasında imaj referansı aynen yazılıysa (`image: …:1.11.1`) o
+ * satır yeni sürüme çevrilir; elle `docker compose up` sonra da yeni sürümü
+ * açar. Referans değişkenle ya da kayan etiketle (`latest`) yazılmışsa dosya
+ * değişmez, yeni imaj eski referansın adıyla etiketlenir.
+ *
+ * Geri alma: compose dosyaları ve `.env` yedekten döner, eski imaj
+ * `panel-rollback:latest` üzerinden eski adına geri etiketlenir.
+ */
+export const IMAGE_UPDATER_SCRIPT = String.raw`set -u
+D=/panel-data/updates
+W="$WORKDIR"
+exec >>"$D/update.log" 2>&1
+state() { X=""; [ $# -gt 1 ] && X=$2; printf '%s %s %s %s\n' "$(date +%s)" "$1" "$TAG" "$X" > "$D/state.tmp" && mv "$D/state.tmp" "$D/state"; }
+fail() { echo "!! $1"; state failed "$1"; exit 1; }
+step() { echo "==> $1"; }
+
+step "$TAG ($NEW_IMAGE)"
+cd "$W" || fail workdir
+OWNER=$(stat -c %u:%g "$W") || fail workdir
+
+step pull
+state running pull
+docker pull "$NEW_IMAGE" || fail pull
+
+step backup
+B="$W/.panel-backups"
+BK="$B/panel-$STAMP.tgz"
+mkdir -p "$B" || fail backup
+ITEMS=$(ls -A | grep -E -x -e '\.env' -e 'docker-compose.*\.ya?ml' -e 'compose.*\.ya?ml')
+[ -n "$ITEMS" ] || fail "no compose file"
+tar -czf "$BK" $ITEMS || fail backup
+chown "$OWNER" "$B" "$BK"
+ls -1t "$B"/panel-*.tgz | tail -n +6 | xargs -r rm -f
+echo "$BK"
+
+ROLLBACK_IMAGE=panel-rollback:latest
+docker image inspect "$PANEL_IMAGE" >/dev/null 2>&1 && docker tag "$PANEL_IMAGE" "$ROLLBACK_IMAGE"
+
+step files
+V=$(echo "$TAG" | sed 's/^v//')
+# Düz metin karşılaştırması (awk index): imaj adındaki . / : regex'e kaçmaz.
+# image: satırı yalnızca değer TAM OLARAK eski referanssa değişir.
+IMAGE_AWK='{ t = $0; sub(/^[ \t-]*image:[ \t]*/, "", t); gsub(/["\047 \t\r]/, "", t)
+  if (t == o) { i = index($0, o); $0 = substr($0, 1, i - 1) n substr($0, i + length(o)); c++ }
+  print } END { exit c ? 0 : 1 }'
+# APP_VERSION geçen satırlarda eski sürüm yenisiyle değişir (1.11.1 → 1.11.10
+# gibi eskiyi içeren yeni sürümde döngüye girmesin diye ileri doğru taranır).
+VERSION_AWK='index($0, "APP_VERSION") { r = ""; s = $0
+  while ((i = index(s, o)) > 0) { r = r substr(s, 1, i - 1) n; s = substr(s, i + length(o)) }
+  $0 = r s } { print }'
+EDITED=0
+for F in $ITEMS; do
+  [ "$F" = .env ] && continue
+  if awk -v o="$PANEL_IMAGE" -v n="$NEW_IMAGE" "$IMAGE_AWK" "$F" > "$F.panel-tmp"; then
+    cat "$F.panel-tmp" > "$F" && EDITED=1 && echo "$F: image"
+  fi
+  if [ -n "$OLD_VERSION" ]; then
+    awk -v o="$OLD_VERSION" -v n="$V" "$VERSION_AWK" "$F" > "$F.panel-tmp" && cat "$F.panel-tmp" > "$F"
+  fi
+  rm -f "$F.panel-tmp"
+done
+if [ -f .env ] && grep -q '^APP_VERSION=' .env; then
+  sed "s/^APP_VERSION=.*/APP_VERSION=$V/" .env > .env.panel-tmp && cat .env.panel-tmp > .env && rm -f .env.panel-tmp
+fi
+if [ "$EDITED" = 0 ]; then
+  echo "image reference not literal; retagging $NEW_IMAGE as $PANEL_IMAGE"
+  docker tag "$NEW_IMAGE" "$PANEL_IMAGE" || fail retag
+fi
+
+rollback() {
+  echo "==> restore"
+  tar -xzf "$BK" -C "$W"
+  if docker image inspect "$ROLLBACK_IMAGE" >/dev/null 2>&1; then
+    docker tag "$ROLLBACK_IMAGE" "$PANEL_IMAGE"
+  fi
+  docker compose -p "$PROJECT" up -d --no-build --pull never --force-recreate "$SERVICE"
+}
+
+step recreate
+state running build
+if ! docker compose -p "$PROJECT" up -d --no-build --pull never --force-recreate "$SERVICE"; then
+  rollback
+  fail recreate
+fi
+
+step health
+state running health
+S=starting
+i=0
+while [ $i -lt 60 ]; do
+  S=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$PANEL_CONTAINER" 2>/dev/null || echo missing)
+  [ "$S" = healthy ] || [ "$S" = running ] || [ "$S" = unhealthy ] && break
+  i=$((i + 1))
+  sleep 5
+done
+
+if [ "$S" != healthy ] && [ "$S" != running ]; then
+  echo "!! $S"
+  rollback
+  state rolledBack "$S"
+  exit 1
+fi
+
+state done
+step done
+`;

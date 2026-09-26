@@ -10,6 +10,7 @@ import type { DockerNetwork } from "@/lib/providers/types";
 import type { ContainerView } from "@/lib/docker/types";
 import { useFormat, useT } from "@/lib/i18n/client";
 import { Rich } from "@/lib/i18n/rich";
+import { copyText } from "@/lib/client/clipboard";
 
 /**
  * Ağ sekmesi (M3.41).
@@ -256,7 +257,7 @@ export function NetworkPanel({
                       <Islem
                         title={t("docker.network.copyId")}
                         onClick={() => {
-                          void navigator.clipboard?.writeText(network.id);
+                          void copyText(network.id);
                           setSonuc({
                             ok: true,
                             text: t("docker.network.idCopied", { name: network.name }),

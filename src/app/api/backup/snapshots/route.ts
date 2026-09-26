@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
  * istediğini kendi taşır.
  */
 export async function GET(request: Request) {
-  const guard = await guardHostApi(request, "backup.manage");
+  const guard = await guardHostApi(request, "backup.manage", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
@@ -42,7 +42,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const guard = await guardHostApi(request, "backup.manage");
+  const guard = await guardHostApi(request, "backup.manage", { agent: true });
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 

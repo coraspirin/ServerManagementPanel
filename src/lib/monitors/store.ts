@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getDb } from "@/lib/db/client";
+import { currentHostId } from "@/lib/hosts/context";
 import { serverT } from "@/lib/i18n/runtime";
 import { getNumber } from "@/lib/settings";
 import { isInMaintenance } from "./maintenance";
@@ -18,6 +19,7 @@ import type {
 
 type Row = {
   id: number;
+  host_id: number;
   name: string;
   type: string;
   target: string;
@@ -42,6 +44,7 @@ type Row = {
 function toMonitor(row: Row): Monitor {
   return {
     id: row.id,
+    hostId: row.host_id,
     name: row.name,
     type: row.type as MonitorType,
     target: row.target,
@@ -64,12 +67,15 @@ function toMonitor(row: Row): Monitor {
   };
 }
 
-export function listMonitors(): Monitor[] {
-  return (
-    getDb()
-      .prepare("SELECT * FROM monitors ORDER BY sort_order, name")
-      .all() as Row[]
-  ).map(toMonitor);
+/** Tüm monitörler; `hostId` verilirse yalnızca o sunucununkiler. */
+export function listMonitors(options: { hostId?: number } = {}): Monitor[] {
+  const rows =
+    options.hostId === undefined
+      ? getDb().prepare("SELECT * FROM monitors ORDER BY sort_order, name").all()
+      : getDb()
+          .prepare("SELECT * FROM monitors WHERE host_id = ? ORDER BY sort_order, name")
+          .all(options.hostId);
+  return (rows as Row[]).map(toMonitor);
 }
 
 export function getMonitor(id: number): Monitor | null {
@@ -141,11 +147,13 @@ export function createMonitor(input: MonitorInput): number {
   const result = getDb()
     .prepare(
       `INSERT INTO monitors
-         (name, type, target, expected, enabled, ignore_tls,
+         (host_id, name, type, target, expected, enabled, ignore_tls,
           interval_seconds, timeout_seconds, retries, down_threshold, next_check_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())`,
     )
     .run(
+      // Seçili sunucunun monitörü olur (bkz. monitorViews).
+      currentHostId(),
       input.name.trim(),
       input.type,
       input.target.trim(),
@@ -280,8 +288,8 @@ export function recordCheck(
     if (result.ok) {
       db.prepare(
         `INSERT OR REPLACE INTO metrics_raw (host_id, metric, label, ts, value)
-         VALUES (1, 'monitor.latency', ?, ?, ?)`,
-      ).run(String(monitor.id), now, result.latencyMs);
+         VALUES (?, 'monitor.latency', ?, ?, ?)`,
+      ).run(monitor.hostId, String(monitor.id), now, result.latencyMs);
     }
 
     db.exec("COMMIT");
@@ -417,11 +425,15 @@ export function uptimeDays(monitorId: number, dayCount: number): UptimeDay[] {
   return days;
 }
 
-export function monitorViews(dayCount = 60): MonitorView[] {
+/**
+ * `hostId` verilirse yalnızca o sunucunun monitörleri (Servis Durumu ekranı
+ * seçili sunucuyu gösterir); verilmezse hepsi (v1 API, Prometheus, ana sayfa).
+ */
+export function monitorViews(dayCount = 60, options: { hostId?: number } = {}): MonitorView[] {
   const now = Math.floor(Date.now() / 1000);
   const at = new Date(now * 1000);
 
-  return listMonitors().map((monitor) => ({
+  return listMonitors(options).map((monitor) => ({
     ...monitor,
     effective: effectiveSettings(monitor),
     uptime24h: uptimeSummary(monitor.id, now - 86400, now).pct,

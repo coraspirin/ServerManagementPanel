@@ -7,6 +7,7 @@ import { CronExpressionParser } from "cron-parser";
 
 import { announce } from "@/lib/alerts/announce";
 import { dataDir, getDb } from "@/lib/db/client";
+import { currentHostId, LOCAL_HOST_ID } from "@/lib/hosts/context";
 import { panelDataVolume } from "@/lib/host/self";
 import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
@@ -122,6 +123,10 @@ export async function runBackupJob(jobId: number, actor: string): Promise<RunOut
     const excludes = job.excludes.split("\n").filter((entry) => entry.trim().length > 0);
 
     if (job.sourceKind === "panel_db") {
+      // Panel veritabanı merkezde: uzak sunucudaki restic ona erişemez.
+      if (currentHostId() !== LOCAL_HOST_ID) {
+        throw new Error(serverT("backupEngine.panelDbLocalOnly"));
+      }
       const volume = await panelDataVolume();
       if (!volume) {
         throw new Error(serverT("backupEngine.noPanelVolume"));
