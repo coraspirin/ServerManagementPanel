@@ -1,6 +1,6 @@
 import { serverT } from "@/lib/i18n/runtime";
 import { guardApi } from "@/lib/auth/api";
-import { layoutFor, resetLayout, saveLayout, validateLayout } from "@/lib/dashboard/store";
+import { layoutFor, resetLayout, saveLayout, validateLayout, type LayoutInput } from "@/lib/dashboard/store";
 
 /** M3.13 — kişisel gösterge paneli düzeni. */
 export const dynamic = "force-dynamic";
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "save") {
-    const input = (body.layout as { key: string; visible: boolean }[]) ?? [];
+    const input = (body.layout as LayoutInput) ?? [];
     const problem = validateLayout(input);
     if (problem) return Response.json({ ok: false, error: problem }, { status: 400 });
 

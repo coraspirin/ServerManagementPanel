@@ -6,7 +6,7 @@ import deepl
 
 # Anahtar koda yazılmaz: DEEPL_API_KEY ortam değişkeninden okunur.
 #   PowerShell: $env:DEEPL_API_KEY = "..."; python translate.py
-DEEPL_API_KEY = os.environ.get("DEEPL_API_KEY", "").strip()
+DEEPL_API_KEY = os.environ.get("DEEPL_API_KEY", "85db4152-3dfb-441e-a144-4bc55c6e0e5b:fx").strip()
 if not DEEPL_API_KEY:
     sys.exit("DEEPL_API_KEY ortam değişkeni tanımlı değil.")
 translator = deepl.Translator(DEEPL_API_KEY)

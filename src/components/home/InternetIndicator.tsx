@@ -44,10 +44,10 @@ export function InternetIndicator({
           tone: "text-ok",
           ring: "border-ok/40 bg-ok/5",
           title: t("home.internet.ok"),
-          detail:
-            status.servicesTotal > 0
-              ? t("home.internet.okDetail", { count: status.servicesTotal })
-              : t("home.internet.okSimple"),
+          // Ayakta olan servis sayısı bilerek yazılmıyor: sayılan şey uptime
+          // monitörleri, ama "7 servis" ev halkına container sayısı gibi
+          // okunuyor ve yanıltıyor. Düşen servis olursa üstteki dal söylüyor.
+          detail: t("home.internet.okSimple"),
         };
 
   return (

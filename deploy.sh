@@ -2,6 +2,21 @@
 # Paneli 192.168.61.114'e yükler: yedek → kopyala → derle → sağlık kontrolü.
 # Proje kökünden (git deposunun kökünden) çalıştır: bash deploy.sh
 set -euo pipefail
+cd "$(dirname "$0")"
+
+# PowerShell'de `bash` çoğu zaman WSL'dir: orada Node/npm (yerel kontroller)
+# ve Windows'taki SSH anahtarı yok. Git Bash varsa betik kendini onunla
+# yeniden başlatır; WSL, Windows programının çalışma dizinini kendisi çevirir.
+if ! command -v node >/dev/null 2>&1; then
+  for GIT_BASH in "/mnt/c/Program Files/Git/bin/bash.exe" "/c/Program Files/Git/bin/bash.exe"; do
+    if [ -x "$GIT_BASH" ]; then
+      echo "==> Node bu kabukta yok; Git Bash ile devam ediliyor"
+      exec "$GIT_BASH" "$(basename "$0")" "$@"
+    fi
+  done
+  echo "!! Node bulunamadı. Git Bash'ten çalıştır: \"C:\\Program Files\\Git\\bin\\bash.exe\" deploy.sh" >&2
+  exit 1
+fi
 
 HOST="192.168.61.114"
 DIR="/home/coraspirin/docker/server-panel"
@@ -19,7 +34,7 @@ if [ -z "$ROOT" ] || [ "$(cd "$ROOT" && pwd -P)" != "$(pwd -P)" ]; then
   exit 1
 fi
 
-VERSION="$(node -p "require('./package.json').version")"
+VERSION="$(awk -F'"' '/^  "version": "/ { print $4; exit }' package.json)"
 COMMIT="$(git rev-parse --short HEAD)"
 DIRTY=""
 [ -n "$(git status --porcelain -- src scripts package.json package-lock.json)" ] && DIRTY=" (+commitlenmemiş değişiklikler)"

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import {
   Check,
@@ -13,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
-import type { WidgetPlacement } from "@/lib/dashboard/catalog";
+import { WIDGET_SIZES, type WidgetPlacement, type WidgetSize } from "@/lib/dashboard/catalog";
 import { useT } from "@/lib/i18n/client";
 
 /**
@@ -36,6 +37,8 @@ import { useT } from "@/lib/i18n/client";
 type Props = {
   layout: WidgetPlacement[];
   widgets: Record<string, ReactNode>;
+  /** Kiosk: düzenleme düğmesi yok — oturumsuz ekranın yazabileceği bir şey yok. */
+  readOnly?: boolean;
 };
 
 function readCsrfToken(): string {
@@ -43,8 +46,9 @@ function readCsrfToken(): string {
   return match ? decodeURIComponent(match[1]) : "";
 }
 
-export function DashboardGrid({ layout, widgets }: Props) {
+export function DashboardGrid({ layout, widgets, readOnly = false }: Props) {
   const t = useT();
+  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [order, setOrder] = useState(layout);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -70,6 +74,9 @@ export function DashboardGrid({ layout, widgets }: Props) {
         return false;
       }
       if (payload.layout) setOrder(payload.layout);
+      // Gizli widget'ların verisi sunucuda hiç yüklenmiyor; yeni açılan bir
+      // widget'ın içeriği ancak sayfa sunucudan yeniden çizilince gelir.
+      router.refresh();
       return true;
     } catch {
       setError(t("common.errors.network"));
@@ -107,7 +114,12 @@ export function DashboardGrid({ layout, widgets }: Props) {
     setOrder(next);
   }
 
-  const shown = order.filter((entry) => entry.visible);
+  // Görünür ama gösterecek bir şeyi olmayan widget (null) ızgarada yer tutmasın.
+  const shown = order.filter((entry) => entry.visible && widgets[entry.key] != null);
+
+  if (readOnly) {
+    return shown.length === 0 ? null : <Rendered order={shown} widgets={widgets} />;
+  }
 
   if (!editing) {
     return (
@@ -180,7 +192,11 @@ export function DashboardGrid({ layout, widgets }: Props) {
               onClick={async () => {
                 const ok = await send({
                   action: "save",
-                  layout: order.map((entry) => ({ key: entry.key, visible: entry.visible })),
+                  layout: order.map((entry) => ({
+                    key: entry.key,
+                    visible: entry.visible,
+                    size: entry.size,
+                  })),
                 });
                 if (ok) setEditing(false);
               }}
@@ -217,6 +233,26 @@ export function DashboardGrid({ layout, widgets }: Props) {
                 <div className="text-sm font-medium">{entry.label}</div>
                 <div className="text-xs text-subtle">{entry.description}</div>
               </div>
+              <select
+                value={entry.size}
+                aria-label={t("home.dashboard.size", { name: entry.label })}
+                onChange={(event) =>
+                  setOrder(
+                    order.map((item) =>
+                      item.key === entry.key
+                        ? { ...item, size: event.target.value as WidgetSize }
+                        : item,
+                    ),
+                  )
+                }
+                className="shrink-0 rounded border border-line bg-surface px-1.5 py-1 text-xs text-subtle"
+              >
+                {WIDGET_SIZES.map((size) => (
+                  <option key={size} value={size}>
+                    {t(`home.dashboard.sizes.${size}`)}
+                  </option>
+                ))}
+              </select>
               <button
                 type="button"
                 aria-label={t("home.dashboard.moveUp", { name: entry.label })}
@@ -256,19 +292,27 @@ export function DashboardGrid({ layout, widgets }: Props) {
         </ul>
       </section>
 
-      {/* Önizleme: düzenleme sırasında sonucun ne olacağı görünür kalsın. */}
+      {/* Önizleme: düzenleme sırasında sonucun ne olacağı görünür kalsın.
+          Yeni açılan bir widget'ın içeriği kaydedince gelir (bkz. `send`). */}
       <Rendered order={shown} widgets={widgets} />
     </div>
   );
 }
 
 /**
- * Yan yana durabilen (dar) widget'lar ikili ızgaraya toplanıyor.
+ * 12 sütunlu ızgara. Boyut sınıfları sabit dizgeler: Tailwind sınıfları
+ * derlemede taradığı için `col-span-${n}` gibi üretilmiş adlar CSS'e girmez.
  *
- * Saat ve internet göstergesi tek başına satır kaplasaydı ekranın üstü boşa
- * giderdi; ama düzenleyici tek sütunlu kaldığı için bu tamamen sunum katmanında
- * hallediliyor — kullanıcı iki boyutlu bir ızgarayla uğraşmıyor.
+ * Dar ekranda her widget tam genişlik; orta ekranda küçük/orta olanlar ikişer
+ * yan yana; geniş ekranda 3/4/6/12 sütun.
  */
+const SIZE_CLASS: Record<WidgetSize, string> = {
+  sm: "md:col-span-6 xl:col-span-3",
+  md: "md:col-span-6 xl:col-span-4",
+  lg: "xl:col-span-6",
+  full: "",
+};
+
 function Rendered({
   order,
   widgets,
@@ -276,33 +320,14 @@ function Rendered({
   order: WidgetPlacement[];
   widgets: Record<string, ReactNode>;
 }) {
-  const blocks: ReactNode[] = [];
-  let narrow: WidgetPlacement[] = [];
-
-  const flush = () => {
-    if (narrow.length === 0) return;
-    blocks.push(
-      <div key={`dar-${narrow[0].key}`} className="grid gap-4 lg:grid-cols-2">
-        {narrow.map((entry) => (
-          <div key={entry.key} className="min-w-0">
-            {widgets[entry.key]}
-          </div>
-        ))}
-      </div>,
-    );
-    narrow = [];
-  };
-
-  for (const entry of order) {
-    if (entry.wide) {
-      flush();
-      blocks.push(<div key={entry.key}>{widgets[entry.key]}</div>);
-    } else {
-      narrow.push(entry);
-      if (narrow.length === 2) flush();
-    }
-  }
-  flush();
-
-  return <div className="space-y-6">{blocks}</div>;
+  return (
+    <div className="grid grid-cols-12 gap-4">
+      {order.map((entry) => (
+        // `*:h-full`: aynı satırdaki kartlar eşit yükseklikte dursun.
+        <div key={entry.key} className={`col-span-12 min-w-0 *:h-full ${SIZE_CLASS[entry.size]}`}>
+          {widgets[entry.key]}
+        </div>
+      ))}
+    </div>
+  );
 }

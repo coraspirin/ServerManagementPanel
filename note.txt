@@ -1,0 +1,9 @@
+#sürüm arttırmak için
+bash scripts/set-version.sh patch            # 1.11.x → 1.11.x
+bash scripts/set-version.sh minor            # 1.1x.4 → 1.1x.0
+bash scripts/set-version.sh 1.12.0           # belirli bir sürüm
+bash scripts/set-version.sh minor --commit   # ayrıca "chore: release X" commit'i ve vX etiketi
+
+
+#sunucuya yüklemek için
+bash deploy.sh

@@ -8,7 +8,7 @@ import { useHosts, type HostSummary } from "./HostContext";
 
 const COOKIE = "panel_host";
 
-function writeHostCookie(id: number) {
+export function writeHostCookie(id: number) {
   document.cookie = `${COOKIE}=${id}; path=/; max-age=31536000; samesite=lax`;
 }
 

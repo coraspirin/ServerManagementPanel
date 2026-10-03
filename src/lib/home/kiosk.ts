@@ -79,20 +79,24 @@ export function revokeKioskToken(fingerprint: string): boolean {
 }
 
 /**
- * Token geçerli mi. Geçerliyse "son görülme" güncellenir — kullanıcı hangi
- * bağlantının hâlâ kullanıldığını görüp gerisini iptal edebilsin.
+ * Token geçerliyse onu oluşturan kullanıcının adı, değilse null. Geçerliyse
+ * "son görülme" güncellenir — kullanıcı hangi bağlantının hâlâ kullanıldığını
+ * görüp gerisini iptal edebilsin.
+ *
+ * Sahip, kiosk ekranının HANGİ panoyu göstereceğini belirliyor; token yine de
+ * hiçbir oturum kurmuyor ve hiçbir yazan uç onu kabul etmiyor.
  */
-export function verifyKioskToken(token: string): boolean {
+export function kioskTokenOwner(token: string): string | null {
   const hash = hashToken(token);
   const row = getDb()
-    .prepare("SELECT expires_at FROM kiosk_tokens WHERE token_hash = ?")
-    .get(hash) as { expires_at: number | null } | undefined;
+    .prepare("SELECT expires_at, created_by FROM kiosk_tokens WHERE token_hash = ?")
+    .get(hash) as { expires_at: number | null; created_by: string } | undefined;
 
-  if (!row) return false;
+  if (!row) return null;
 
   const now = Math.floor(Date.now() / 1000);
-  if (row.expires_at !== null && row.expires_at < now) return false;
+  if (row.expires_at !== null && row.expires_at < now) return null;
 
   getDb().prepare("UPDATE kiosk_tokens SET last_seen_at = ? WHERE token_hash = ?").run(now, hash);
-  return true;
+  return row.created_by;
 }

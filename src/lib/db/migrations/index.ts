@@ -28,6 +28,7 @@ import { migration027 } from "./027_panel_update";
 import { migration028 } from "./028_apps_per_host";
 import { migration029 } from "./029_stacks_per_host";
 import { migration030 } from "./030_log_cursors_per_host";
+import { migration031 } from "./031_dashboard_size";
 import type { Migration } from "./types";
 
 /**
@@ -67,6 +68,7 @@ export const migrations: Migration[] = [
   migration028,
   migration029,
   migration030,
+  migration031,
 ];
 
 export type { Migration };

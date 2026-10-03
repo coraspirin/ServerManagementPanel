@@ -4,11 +4,11 @@ import { getDb } from "@/lib/db/client";
 import { currentDictionary, serverT } from "@/lib/i18n/runtime";
 import { translateLoose } from "@/lib/i18n/translate";
 import type { PermissionKey } from "@/lib/auth/types";
-import { findWidget, WIDGETS, type WidgetPlacement } from "./catalog";
+import { findWidget, isWidgetSize, WIDGETS, type WidgetPlacement, type WidgetSize } from "./catalog";
 
 /** M3.13 — kullanıcının gösterge paneli düzeni. */
 
-type Row = { widget_key: string; position: number; visible: number };
+type Row = { widget_key: string; position: number; visible: number; size: string | null };
 
 /**
  * Kullanıcının etkin düzeni.
@@ -20,7 +20,7 @@ type Row = { widget_key: string; position: number; visible: number };
  */
 export function layoutFor(userId: number, permissions: PermissionKey[]): WidgetPlacement[] {
   const rows = getDb()
-    .prepare("SELECT widget_key, position, visible FROM dashboard_widgets WHERE user_id = ?")
+    .prepare("SELECT widget_key, position, visible, size FROM dashboard_widgets WHERE user_id = ?")
     .all(userId) as Row[];
 
   const saved = new Map(rows.map((row) => [row.widget_key, row]));
@@ -37,7 +37,7 @@ export function layoutFor(userId: number, permissions: PermissionKey[]): WidgetP
         key: widget.key,
         label: translateLoose(dict, `dashboard.widget.${widget.key}.label`),
         description: translateLoose(dict, `dashboard.widget.${widget.key}.description`),
-        wide: widget.wide,
+        size: row && isWidgetSize(row.size) ? row.size : widget.size,
         visible: row ? row.visible === 1 : widget.visible,
         // Kaydı olmayan widget kataloğun sonuna değil, kataloğdaki kendi
         // sırasına göre büyük bir taban değerin üstüne yerleşiyor: sıralaması
@@ -50,12 +50,12 @@ export function layoutFor(userId: number, permissions: PermissionKey[]): WidgetP
       key: entry.key,
       label: entry.label,
       description: entry.description,
-      wide: entry.wide,
+      size: entry.size,
       visible: entry.visible,
     }));
 }
 
-export type LayoutInput = { key: string; visible: boolean }[];
+export type LayoutInput = { key: string; visible: boolean; size?: WidgetSize }[];
 
 export function validateLayout(input: LayoutInput): string | null {
   if (!Array.isArray(input)) return serverT("dashboard.layout.expectedList");
@@ -66,6 +66,9 @@ export function validateLayout(input: LayoutInput): string | null {
   for (const entry of input) {
     if (!findWidget(entry.key)) return serverT("dashboard.layout.unknown", { key: entry.key });
     if (seen.has(entry.key)) return serverT("dashboard.layout.duplicate", { key: entry.key });
+    if (entry.size !== undefined && !isWidgetSize(entry.size)) {
+      return serverT("dashboard.layout.badSize", { key: entry.key });
+    }
     seen.add(entry.key);
   }
   return null;
@@ -86,11 +89,14 @@ export function saveLayout(userId: number, input: LayoutInput, now: number): voi
   try {
     db.prepare("DELETE FROM dashboard_widgets WHERE user_id = ?").run(userId);
     const insert = db.prepare(
-      `INSERT INTO dashboard_widgets (user_id, widget_key, position, visible, updated_at)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO dashboard_widgets (user_id, widget_key, position, visible, size, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     );
     input.forEach((entry, index) => {
-      insert.run(userId, entry.key, index, entry.visible ? 1 : 0, now);
+      // Varsayılanla aynı boyut NULL yazılıyor: katalogda varsayılan
+      // değişirse, boyutu hiç seçmemiş kullanıcı yenisini görsün.
+      const size = entry.size && entry.size !== findWidget(entry.key)?.size ? entry.size : null;
+      insert.run(userId, entry.key, index, entry.visible ? 1 : 0, size, now);
     });
     db.exec("COMMIT");
   } catch (error) {

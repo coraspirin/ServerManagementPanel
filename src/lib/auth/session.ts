@@ -127,6 +127,25 @@ export function resolveSession(token: string): ActiveSession | null {
   };
 }
 
+/**
+ * Etkin bir kullanıcıyı adından çözer — oturum KURMADAN.
+ *
+ * Kiosk görünümü için: ekran, bağlantıyı oluşturan kullanıcının panosunu
+ * onun yetkileriyle gösteriyor. Kullanıcı pasifleştirildiyse ya da silindiyse
+ * null; kiosk o zaman sade görünüme düşer.
+ */
+export function activeUserByUsername(username: string): SessionUser | null {
+  const row = getDb()
+    .prepare(
+      `SELECT u.id, u.username, u.display_name, u.role_id, u.must_change_pw,
+              r.name AS role_name
+       FROM users u JOIN roles r ON r.id = u.role_id
+       WHERE u.username = ? AND u.is_active = 1`,
+    )
+    .get(username) as UserRow | undefined;
+  return row ? toSessionUser(row) : null;
+}
+
 /** Sunucu bileşenleri ve route handler'ları için geçerli oturum. */
 export async function currentSession(): Promise<ActiveSession | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;

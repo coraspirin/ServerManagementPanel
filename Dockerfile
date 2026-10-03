@@ -22,7 +22,7 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-ARG APP_VERSION=1.11.4
+ARG APP_VERSION=1.11.6
 ENV APP_VERSION=${APP_VERSION}
 RUN npm run build
 
