@@ -193,6 +193,37 @@ export function removeHost(id: number): boolean {
   }
 }
 
+/** İlk migration'ın yerel sunucuya verdiği yer tutucu ad. */
+const LOCAL_PLACEHOLDER_NAME = "local";
+
+/**
+ * Açılışta: yerel sunucunun kaydını gerçek sistem bilgisiyle eşitler.
+ *
+ * Uzak sunucuların adı ve hostname'i kayıt sırasında ajandan geliyor; yerel
+ * sunucu ise migration'ın tohumladığı "local" adıyla kalıyordu ve seçicide,
+ * filo kartında, bildirim başlıklarında öyle görünüyordu. Hostname ve işletim
+ * sistemi her açılışta tazeleniyor; AD yalnızca hâlâ yer tutucuysa değişiyor —
+ * kullanıcının Sunucular ekranında verdiği ad ezilmemeli.
+ */
+export function syncLocalHost(info: { hostname: string; osName: string | null }): string | null {
+  const db = getDb();
+  const row = db.prepare("SELECT id, name FROM hosts WHERE is_local = 1").get() as
+    | { id: number; name: string }
+    | undefined;
+  if (!row) return null;
+
+  const hostname = info.hostname.trim();
+  db.prepare("UPDATE hosts SET hostname = ?, os_name = COALESCE(?, os_name) WHERE id = ?").run(
+    hostname || null,
+    info.osName,
+    row.id,
+  );
+
+  if (row.name !== LOCAL_PLACEHOLDER_NAME || !hostname || hostNameTaken(hostname, row.id)) return null;
+  db.prepare("UPDATE hosts SET name = ? WHERE id = ?").run(hostname, row.id);
+  return hostname;
+}
+
 export function hostNameTaken(name: string, exceptId?: number): boolean {
   const row = getDb()
     .prepare("SELECT id FROM hosts WHERE name = ? COLLATE NOCASE AND id != ?")

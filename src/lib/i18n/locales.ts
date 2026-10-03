@@ -16,6 +16,12 @@ export type Dictionary = Readonly<Record<string, string>>;
 export const SOURCE_LOCALE: Locale = "tr";
 
 /**
+ * Kişisel dil tercihi — tarayıcı başına çerez. Yoksa ya da geçersizse
+ * ayarlardaki genel dil (`general.language`) geçerli.
+ */
+export const LOCALE_COOKIE = "panel_lang";
+
+/**
  * Intl API'lerinin beklediği BCP-47 etiketi — dil dosyasının `_meta.intl` alanı.
  *
  * Bölge kodu BİLEREK dosyada ("tr-TR", "en-US"): yalnızca "tr" verildiğinde

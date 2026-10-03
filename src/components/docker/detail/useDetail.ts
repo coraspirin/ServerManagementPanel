@@ -37,6 +37,8 @@ export function useContainerDetail(containerId: string | null) {
     data: DetailPayload | null;
     error: string | null;
   } | null>(null);
+  // Ağ bağlama gibi bir değişiklikten sonra detayı yeniden çekmek için.
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     if (!containerId) return;
@@ -62,10 +64,14 @@ export function useContainerDetail(containerId: string | null) {
     })();
 
     return () => controller.abort();
-  }, [containerId, t]);
+  }, [containerId, t, version]);
 
   const taze = result !== null && result.id === containerId;
-  return { data: taze ? result.data : null, error: taze ? result.error : null };
+  return {
+    data: taze ? result.data : null,
+    error: taze ? result.error : null,
+    reload: () => setVersion((value) => value + 1),
+  };
 }
 
 /**

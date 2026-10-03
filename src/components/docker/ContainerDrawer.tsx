@@ -7,6 +7,7 @@ import {
   Braces,
   Boxes,
   FileCode2,
+  FileText,
   FolderTree,
   Info,
   Network,
@@ -25,6 +26,7 @@ import { GeneralTab } from "./detail/GeneralTab";
 import { InspectTab } from "./detail/InspectTab";
 import { NetworkTab } from "./detail/NetworkTab";
 import { ResourcesTab } from "./detail/ResourcesTab";
+import { YamlTab } from "./detail/YamlTab";
 import { useContainerDetail } from "./detail/useDetail";
 import { useT } from "@/lib/i18n/client";
 
@@ -64,6 +66,7 @@ function TerminalLoading() {
 export type DrawerTab =
   | "genel"
   | "compose"
+  | "yaml"
   | "uret"
   | "ag"
   | "ortam"
@@ -76,6 +79,7 @@ export type DrawerTab =
 const TABS = [
   { id: "genel", label: "docker.drawer.tab.genel", icon: Info },
   { id: "compose", label: "docker.drawer.tab.compose", icon: SlidersHorizontal },
+  { id: "yaml", label: "docker.drawer.tab.yaml", icon: FileText },
   { id: "uret", label: "docker.drawer.tab.uret", icon: FileCode2 },
   { id: "ag", label: "docker.drawer.tab.ag", icon: Network },
   { id: "ortam", label: "docker.drawer.tab.ortam", icon: Boxes },
@@ -116,7 +120,7 @@ export function ContainerDrawer({
 
   // Detay tek yerden okunuyor ve sekmelere dağıtılıyor; sekme değiştirmek ağ
   // trafiği üretmiyor ve iki sekme birbirini tutmayan veri gösteremiyor.
-  const { data, error } = useContainerDetail(container?.id ?? null);
+  const { data, error, reload } = useContainerDetail(container?.id ?? null);
 
   // Terminal yalnızca ÇALIŞAN bir container'da anlamlı; durmuş bir container'da
   // exec başarısız olur. Sekmeyi göstermek yerine gizlemek, tıklandığında hata
@@ -131,6 +135,7 @@ export function ContainerDrawer({
   const visible = TABS.filter((entry) => {
     if (entry.id === "terminal") return canShowTerminal;
     if (entry.id === "compose") return canShowCompose;
+    if (entry.id === "yaml") return canShowCompose;
     // "Compose üret" tam olarak "Compose"un OLMADIĞI yerde çıkıyor (M3.31):
     // yığına ait bir container'da düzenlenecek gerçek dosya varken, ondan
     // türetilmiş ikinci bir dosya üretmeyi önermek kafa karıştırırdı.
@@ -142,7 +147,9 @@ export function ContainerDrawer({
     <Modal open={container !== null} title={container ? container.name : ""} onClose={onClose} wide>
       {container && (
         <div className="space-y-3">
-          <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line">
+          {/* Sekmeler pencereye sığmayınca görünür ince çubukla kayar: gizli
+              çubukta sağda kalan sekmelerin (Terminal, Inspect) varlığı fark edilmiyordu. */}
+          <div className="thin-scrollbar flex gap-1 overflow-x-auto overflow-y-hidden border-b border-line">
             {visible.map((entry) => (
               <button
                 key={entry.id}
@@ -198,7 +205,12 @@ export function ContainerDrawer({
               containerId={container.id}
               containerName={container.name}
               canInstall={canInstall}
+              canReplace={canInstall && canAct}
             />
+          )}
+
+          {tab === "yaml" && canShowCompose && (
+            <YamlTab key={`${container.id}-yaml`} containerId={container.id} canAct={canAct} />
           )}
 
           {tab === "dosyalar" && (
@@ -228,8 +240,30 @@ export function ContainerDrawer({
                 />
               )}
 
-              {data && tab === "ag" && <NetworkTab detail={data.detail} />}
-              {data && tab === "ortam" && <EnvTab env={data.detail.env} />}
+              {data && tab === "ag" && (
+                <NetworkTab
+                  detail={data.detail}
+                  edit={{
+                    containerId: container.id,
+                    composeProject: container.composeProject,
+                    canAct,
+                    onChanged: reload,
+                  }}
+                />
+              )}
+              {data && tab === "ortam" && (
+                <EnvTab
+                  env={data.detail.env}
+                  edit={{
+                    containerId: container.id,
+                    composeProject: container.composeProject,
+                    canAct,
+                    // Compose dışı container'da ortam yalnızca yeniden oluşturarak
+                    // değişir; o da "Compose üret" sekmesinde.
+                    onEditYaml: canInstall && canAct ? () => setTab("uret") : undefined,
+                  }}
+                />
+              )}
               {data && tab === "inspect" && <InspectTab raw={data.raw} />}
             </>
           )}

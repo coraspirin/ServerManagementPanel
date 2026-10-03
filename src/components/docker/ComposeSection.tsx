@@ -65,7 +65,7 @@ type Payload = {
 };
 
 /** Bulgu seviyesinin rengi. Adı dil dosyasında: `docker.compose.severity.<seviye>`. */
-const SEVERITY_CLASS: Record<Finding["severity"], string> = {
+export const SEVERITY_CLASS: Record<Finding["severity"], string> = {
   engel: "border-danger/40 bg-danger/10 text-danger",
   uyari: "border-warn/40 bg-warn/10 text-warn",
   oneri: "border-line bg-canvas text-subtle",
@@ -75,7 +75,7 @@ const SEVERITY_CLASS: Record<Finding["severity"], string> = {
 const code = (text: string) => <code className="font-mono">{text}</code>;
 
 /** Basit satır karşılaştırması — kaydedilecek değişikliği göstermeye yeter. */
-function diffLines(before: string, after: string): { sign: " " | "-" | "+"; text: string }[] {
+export function diffLines(before: string, after: string): { sign: " " | "-" | "+"; text: string }[] {
   const a = before.split("\n");
   const b = after.split("\n");
   const out: { sign: " " | "-" | "+"; text: string }[] = [];
@@ -122,12 +122,27 @@ export function ComposeSection({
   containerId,
   composeProject,
   canAct,
+  only,
 }: {
   containerId: string;
   composeProject: string | null;
   canAct: boolean;
+  /**
+   * Yalnızca bir bölüm (Ortam / Ağ sekmeleri). Kaydetme, önizleme, yedek ve
+   * `compose up` akışı aynen geçerli; gönderilen gövde yalnızca o alanı
+   * taşıyor. Düzenlemenin tek doğru yolu burada kalsın diye ayrı bir
+   * düzenleyici yazılmadı.
+   */
+  only?: "environment" | "networks";
 }) {
   const t = useT();
+  const title = t(
+    only === "environment"
+      ? "docker.compose.onlyEnvTitle"
+      : only === "networks"
+        ? "docker.compose.onlyNetTitle"
+        : "docker.compose.title",
+  );
   const [data, setData] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -228,7 +243,7 @@ export function ComposeSection({
 
   if (!composeProject) {
     return (
-      <Wrapper title={t("docker.compose.title")}>
+      <Wrapper title={title}>
         <p className="text-sm text-subtle">{t("docker.compose.notCompose")}</p>
       </Wrapper>
     );
@@ -236,7 +251,7 @@ export function ComposeSection({
 
   if (error && !data) {
     return (
-      <Wrapper title={t("docker.compose.title")}>
+      <Wrapper title={title}>
         <p className="text-sm text-warn">{error}</p>
       </Wrapper>
     );
@@ -244,21 +259,32 @@ export function ComposeSection({
 
   if (!data) {
     return (
-      <Wrapper title={t("docker.compose.title")}>
+      <Wrapper title={title}>
         <p className="text-sm text-subtle">{t("common.states.loadingInline")}</p>
       </Wrapper>
     );
   }
 
-  const degisti =
-    JSON.stringify(ports) !== JSON.stringify(data.service.ports) ||
-    JSON.stringify(networks) !== JSON.stringify(data.service.networks) ||
-    JSON.stringify(environment) !== JSON.stringify(data.service.environment) ||
-    restart !== data.service.restart;
+  const changed = {
+    ports: JSON.stringify(ports) !== JSON.stringify(data.service.ports),
+    networks: JSON.stringify(networks) !== JSON.stringify(data.service.networks),
+    environment: JSON.stringify(environment) !== JSON.stringify(data.service.environment),
+    restart: restart !== data.service.restart,
+  };
+  const degisti = only
+    ? changed[only]
+    : changed.ports || changed.networks || changed.environment || changed.restart;
 
   // Önizleme ve kaydetme AYNI alanları göndermeli; ikisinin ayrışması,
   // kullanıcının onayladığı diff'ten başka bir şeyin yazılması demek olurdu.
-  const govde = { ports, networks, environment, restart };
+  // Tek bölüm modunda yalnızca o alan: diğer sekmede yarım kalmış bir
+  // düzenleme buradan yanlışlıkla yazılmasın.
+  const govde =
+    only === "environment"
+      ? { environment }
+      : only === "networks"
+        ? { networks }
+        : { ports, networks, environment, restart };
 
   // `blocked()` ile aynı ölçüt; modülü değer olarak içe aktarmak denetim
   // kodunu (ve sunucu çeviri katmanını) istemci paketine taşırdı.
@@ -272,7 +298,7 @@ export function ComposeSection({
 
   return (
     <Wrapper
-      title={t("docker.compose.title")}
+      title={title}
       action={
         <button
           type="button"
@@ -375,6 +401,7 @@ export function ComposeSection({
         </ul>
       )}
 
+      {!only && (
       <div className="space-y-2">
         <p className="text-xs font-medium text-subtle">{t("docker.compose.ports")}</p>
         {ports.length === 0 && (
@@ -410,8 +437,10 @@ export function ComposeSection({
           </button>
         )}
       </div>
+      )}
 
-      <div className="mt-4 space-y-2">
+      {only !== "environment" && (
+      <div className={`${only ? "" : "mt-4 "}space-y-2`}>
         <p className="flex items-center gap-1.5 text-xs font-medium text-subtle">
           <Network className="size-3.5" aria-hidden /> {t("docker.compose.networks")}
         </p>
@@ -508,9 +537,13 @@ export function ComposeSection({
           </>
         )}
       </div>
+      )}
 
-      <EnvEditor entries={environment} disabled={!canAct || busy} onChange={setEnvironment} />
+      {only !== "networks" && (
+        <EnvEditor entries={environment} disabled={!canAct || busy} onChange={setEnvironment} />
+      )}
 
+      {!only && (
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <label className="text-xs text-subtle">{t("docker.compose.restartPolicy")}</label>
         <select
@@ -526,6 +559,7 @@ export function ComposeSection({
           <option value="on-failure">on-failure</option>
         </select>
       </div>
+      )}
 
       {canAct && degisti && !preview && (
         <div className="mt-3 space-y-2">
@@ -635,6 +669,7 @@ export function ComposeSection({
         </div>
       )}
 
+      {!only && (
       <p className="mt-3 text-xs text-subtle">
         <Rich
           text={t("docker.compose.firewallNote")}
@@ -652,6 +687,7 @@ export function ComposeSection({
           }}
         />
       </p>
+      )}
     </Wrapper>
   );
 }

@@ -66,14 +66,17 @@ export async function buildDashboard({
   user,
   hostId,
   readOnly = false,
+  layout: given,
 }: {
   user: SessionUser;
   hostId: number;
   readOnly?: boolean;
+  /** Hazır düzen (kiosk bağlantısının kendi düzeni); verilmezse kullanıcınınki. */
+  layout?: WidgetPlacement[];
 }): Promise<{ layout: WidgetPlacement[]; widgets: Record<string, React.ReactNode> }> {
   const t = getT();
   const dict = getActiveDictionary();
-  const layout = layoutFor(user.id, user.permissions);
+  const layout = given ?? layoutFor(user.id, user.permissions);
   /*
     Yalnızca GÖRÜNÜR widget'ların verisi yükleniyor: gizlenmiş bir container
     özeti için uzak ajana istek atmanın anlamı yok. Durum şeridi diğer

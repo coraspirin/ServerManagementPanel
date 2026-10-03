@@ -12,6 +12,7 @@ import { DESKTOP_QUERY, useMediaQuery } from "@/lib/useMediaQuery";
 import { CommandPalette } from "./CommandPalette";
 import { useHosts } from "./HostContext";
 import { HostSelector } from "./HostSelector";
+import { LanguageSelect, type LanguageOption } from "./LanguageSelect";
 import { LinkPending } from "./LinkPending";
 import { PageHelp } from "./PageHelp";
 import { ThemeToggle } from "./ThemeToggle";
@@ -21,9 +22,10 @@ type Props = {
   mode: "mock" | "live";
   version: string;
   user: { displayName: string; roleName: string; permissions: PermissionKey[] };
+  languages: { options: LanguageOption[]; defaultCode: string; personal: string | null };
 };
 
-export function AppShell({ children, mode, version, user }: Props) {
+export function AppShell({ children, mode, version, user, languages }: Props) {
   const t = useT();
   // Menü maddelerinin anahtarı şemadan türeyebiliyor (ayar kategorileri), bu
   // yüzden sabit anahtar bekleyen `t` yerine dinamik olanı.
@@ -134,8 +136,15 @@ export function AppShell({ children, mode, version, user }: Props) {
         }`}
       >
         <div className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-4">
-          <Server className="size-5 shrink-0 text-brand" aria-hidden />
-          <span className="truncate font-semibold tracking-tight">{t("shell.brand")}</span>
+          {/* Marka karşılama sayfasına götürür — ev halkının uygulama kartları orada. */}
+          <Link
+            href="/"
+            onClick={() => setMenuOpen(false)}
+            className="flex min-w-0 items-center gap-2 transition-colors hover:text-brand"
+          >
+            <Server className="size-5 shrink-0 text-brand" aria-hidden />
+            <span className="truncate font-semibold tracking-tight">{t("shell.brand")}</span>
+          </Link>
           <button
             type="button"
             aria-label={t("shell.menu.close")}
@@ -310,6 +319,8 @@ export function AppShell({ children, mode, version, user }: Props) {
               Yardım başlığın hemen yanında: "bu ekran ne işe yarıyor" sorusu
               ekranın içinde değil, ekranı tanımadan sorulur.
             */}
+            {/* Dil, yardımın solunda: ikisi de "bu ekranı anlamak" için. */}
+            <LanguageSelect {...languages} />
             <PageHelp />
 
             {/*

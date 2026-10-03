@@ -7,6 +7,8 @@ import type { ContainerDetail } from "@/lib/providers/types";
 import { useT } from "@/lib/i18n/client";
 import { Rich } from "@/lib/i18n/rich";
 
+import { ComposeSection } from "../ComposeSection";
+import { NetworkConnector } from "./NetworkConnector";
 import { Row, Section } from "./shared";
 import { useListeningPorts } from "./useDetail";
 
@@ -18,7 +20,17 @@ import { useListeningPorts } from "./useDetail";
  * buradaydı — container hiçbir ağa bağlı değildi — ama bilgi üç satır aşağıda,
  * fark edilmeyecek bir yerde duruyordu.
  */
-export function NetworkTab({ detail }: { detail: ContainerDetail }) {
+export function NetworkTab({
+  detail,
+  edit,
+}: {
+  detail: ContainerDetail;
+  /**
+   * Düzenleme: compose container'ında compose dosyasının ağ bölümü (önizleme +
+   * `compose up`), compose dışında Docker'dan anında bağla/çıkar.
+   */
+  edit: { containerId: string; composeProject: string | null; canAct: boolean; onChanged: () => void };
+}) {
   const t = useT();
   const listening = useListeningPorts(true);
 
@@ -81,6 +93,24 @@ export function NetworkTab({ detail }: { detail: ContainerDetail }) {
           )}
         </dl>
       </Section>
+
+      {/* host / paylaşılan ağ modunda ağ bağlanamaz: ağ yığını container'ın kendisine ait değil. */}
+      {edit.canAct && !host && !paylasilan &&
+        (edit.composeProject ? (
+          <ComposeSection
+            containerId={edit.containerId}
+            composeProject={edit.composeProject}
+            canAct={edit.canAct}
+            only="networks"
+          />
+        ) : (
+          <NetworkConnector
+            containerId={edit.containerId}
+            containerName={detail.name.replace(/^\//, "")}
+            attached={detail.networks}
+            onChanged={edit.onChanged}
+          />
+        ))}
 
       <Section title={t("docker.networkTab.ports")}>
         {detail.ports.length === 0 ? (

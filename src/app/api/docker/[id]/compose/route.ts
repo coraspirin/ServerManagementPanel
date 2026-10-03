@@ -168,6 +168,12 @@ type EditBody = {
   /** "restore" ise düzenleme değil, `backup` adlı yedeğe dönüş yapılır. */
   action?: string;
   backup?: string;
+  /**
+   * Dosyanın TAMAMI, ham metin (YAML sekmesi). Verilirse alan alan düzenleme
+   * yapılmıyor; metin ayrıştırılıp denetleniyor ve olduğu gibi yazılıyor —
+   * yorumlar ve biçim kullanıcının yazdığı gibi kalsın.
+   */
+  text?: string;
 };
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -201,39 +207,60 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!doc) return Response.json({ error: `${location.file}: ${error}` }, { status: 422 });
 
   let updated: ServiceConfig | null;
-  try {
-    if (Array.isArray(body.ports)) {
-      setServicePorts(doc, location.service, body.ports.map(normalizePort));
+  let text: string;
+  let checked = doc;
+
+  if (typeof body.text === "string") {
+    text = body.text.replace(/\r\n/g, "\n");
+    const parsed = parseCompose(text);
+    if (!parsed.doc) {
+      return Response.json({ error: `${location.file}: ${parsed.error}` }, { status: 422 });
     }
-    if (Array.isArray(body.networks)) {
-      setServiceNetworks(doc, location.service, body.networks.map(String));
-    }
-    if (Array.isArray(body.environment)) {
-      setServiceEnvironment(
-        doc,
-        location.service,
-        body.environment.map((entry) => ({
-          key: String(entry?.key ?? ""),
-          value: String(entry?.value ?? ""),
-        })),
+    // Container'ın ait olduğu servis dosyadan çıkarılmışsa panel bu
+    // container'ı bir daha bulamaz; bu, YAML sekmesinden yapılacak bir iş değil.
+    updated = readService(parsed.doc, location.service);
+    if (!updated) {
+      return Response.json(
+        { error: serverT("api.docker.serviceMissing", { service: location.service }) },
+        { status: 400 },
       );
     }
-    if (typeof body.restart === "string") {
-      setServiceRestart(doc, location.service, body.restart);
+    checked = parsed.doc;
+  } else {
+    try {
+      if (Array.isArray(body.ports)) {
+        setServicePorts(doc, location.service, body.ports.map(normalizePort));
+      }
+      if (Array.isArray(body.networks)) {
+        setServiceNetworks(doc, location.service, body.networks.map(String));
+      }
+      if (Array.isArray(body.environment)) {
+        setServiceEnvironment(
+          doc,
+          location.service,
+          body.environment.map((entry) => ({
+            key: String(entry?.key ?? ""),
+            value: String(entry?.value ?? ""),
+          })),
+        );
+      }
+      if (typeof body.restart === "string") {
+        setServiceRestart(doc, location.service, body.restart);
+      }
+      for (const fix of body.fixes ?? []) {
+        applyFix(doc, String(fix.service), fix.kind === "logging" ? "logging" : "restart");
+      }
+      updated = readService(doc, location.service);
+      text = stringifyCompose(doc);
+    } catch (mutationError) {
+      return Response.json(
+        { error: mutationError instanceof Error ? mutationError.message : serverT("api.docker.editFailed") },
+        { status: 400 },
+      );
     }
-    for (const fix of body.fixes ?? []) {
-      applyFix(doc, String(fix.service), fix.kind === "logging" ? "logging" : "restart");
-    }
-    updated = readService(doc, location.service);
-  } catch (mutationError) {
-    return Response.json(
-      { error: mutationError instanceof Error ? mutationError.message : serverT("api.docker.editFailed") },
-      { status: 400 },
-    );
   }
 
-  const text = stringifyCompose(doc);
-  const findings: Finding[] = checkCompose(doc, {
+  const findings: Finding[] = checkCompose(checked, {
     ...(await checkContext(location, id)),
     // Satır numaraları DÜZENLENMİŞ metne göre: kullanıcı önizlemede
     // gördüğü dosyada o satırı arayacak, eski dosyada değil.

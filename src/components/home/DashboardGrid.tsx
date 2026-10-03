@@ -2,20 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import {
-  Check,
-  ChevronDown,
-  ChevronUp,
-  Eye,
-  EyeOff,
-  GripVertical,
-  LayoutGrid,
-  RotateCcw,
-  X,
-} from "lucide-react";
+import { Check, LayoutGrid, RotateCcw, X } from "lucide-react";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
-import { WIDGET_SIZES, type WidgetPlacement, type WidgetSize } from "@/lib/dashboard/catalog";
+import type { WidgetPlacement, WidgetSize } from "@/lib/dashboard/catalog";
 import { useT } from "@/lib/i18n/client";
+import { LayoutEditor } from "./LayoutEditor";
 
 /**
  * M3.13 — gösterge paneli düzeni.
@@ -51,7 +42,6 @@ export function DashboardGrid({ layout, widgets, readOnly = false }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [order, setOrder] = useState(layout);
-  const [dragging, setDragging] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,34 +74,6 @@ export function DashboardGrid({ layout, widgets, readOnly = false }: Props) {
     } finally {
       setBusy(false);
     }
-  }
-
-  function move(from: string, to: string) {
-    if (from === to) return;
-    const next = [...order];
-    const fromIndex = next.findIndex((entry) => entry.key === from);
-    const toIndex = next.findIndex((entry) => entry.key === to);
-    if (fromIndex < 0 || toIndex < 0) return;
-    const [moved] = next.splice(fromIndex, 1);
-    next.splice(toIndex, 0, moved);
-    setOrder(next);
-  }
-
-  /**
-   * Bir adım yukarı/aşağı taşı.
-   *
-   * HTML5 sürükle-bırak dokunmatikte HİÇ çalışmaz — `dragstart` parmakla
-   * tetiklenmez. Telefonda düzenleyici bu yüzden tamamen ölüydü; iki düğme,
-   * bir sürükleme kütüphanesi eklemeden aynı işi görüyor ve klavyeyle de
-   * kullanılabiliyor.
-   */
-  function nudge(key: string, direction: -1 | 1) {
-    const index = order.findIndex((entry) => entry.key === key);
-    const target = index + direction;
-    if (index < 0 || target < 0 || target >= order.length) return;
-    const next = [...order];
-    [next[index], next[target]] = [next[target], next[index]];
-    setOrder(next);
   }
 
   // Görünür ama gösterecek bir şeyi olmayan widget (null) ızgarada yer tutmasın.
@@ -208,88 +170,9 @@ export function DashboardGrid({ layout, widgets, readOnly = false }: Props) {
           </div>
         </div>
 
-        <ul className="mt-3 space-y-1.5">
-          {order.map((entry, index) => (
-            <li
-              key={entry.key}
-              draggable
-              onDragStart={() => setDragging(entry.key)}
-              onDragEnd={() => setDragging(null)}
-              onDragOver={(event) => {
-                // Varsayılanı engellemek ZORUNLU: engellenmezse tarayıcı
-                // bırakmayı hiç kabul etmez ve sürükleme sessizce çalışmaz.
-                event.preventDefault();
-                if (dragging) move(dragging, entry.key);
-              }}
-              className={`flex items-center gap-3 rounded-md border px-3 py-2 transition-colors ${
-                dragging === entry.key ? "border-brand bg-brand/5" : "border-line bg-canvas"
-              } ${entry.visible ? "" : "opacity-60"}`}
-            >
-              <GripVertical
-                className="hidden size-4 shrink-0 cursor-grab text-subtle sm:block"
-                aria-hidden
-              />
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium">{entry.label}</div>
-                <div className="text-xs text-subtle">{entry.description}</div>
-              </div>
-              <select
-                value={entry.size}
-                aria-label={t("home.dashboard.size", { name: entry.label })}
-                onChange={(event) =>
-                  setOrder(
-                    order.map((item) =>
-                      item.key === entry.key
-                        ? { ...item, size: event.target.value as WidgetSize }
-                        : item,
-                    ),
-                  )
-                }
-                className="shrink-0 rounded border border-line bg-surface px-1.5 py-1 text-xs text-subtle"
-              >
-                {WIDGET_SIZES.map((size) => (
-                  <option key={size} value={size}>
-                    {t(`home.dashboard.sizes.${size}`)}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                aria-label={t("home.dashboard.moveUp", { name: entry.label })}
-                disabled={index === 0}
-                onClick={() => nudge(entry.key, -1)}
-                className="flex shrink-0 items-center justify-center rounded border border-line p-1.5 text-subtle transition-colors hover:text-ink disabled:opacity-30"
-              >
-                <ChevronUp className="size-3.5" />
-              </button>
-              <button
-                type="button"
-                aria-label={t("home.dashboard.moveDown", { name: entry.label })}
-                disabled={index === order.length - 1}
-                onClick={() => nudge(entry.key, 1)}
-                className="flex shrink-0 items-center justify-center rounded border border-line p-1.5 text-subtle transition-colors hover:text-ink disabled:opacity-30"
-              >
-                <ChevronDown className="size-3.5" />
-              </button>
-              <button
-                type="button"
-                aria-label={t(entry.visible ? "home.dashboard.hide" : "home.dashboard.show", {
-                  name: entry.label,
-                })}
-                onClick={() =>
-                  setOrder(
-                    order.map((item) =>
-                      item.key === entry.key ? { ...item, visible: !item.visible } : item,
-                    ),
-                  )
-                }
-                className="flex shrink-0 items-center justify-center rounded border border-line p-1.5 text-subtle transition-colors hover:text-ink"
-              >
-                {entry.visible ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-3">
+          <LayoutEditor order={order} onChange={setOrder} />
+        </div>
       </section>
 
       {/* Önizleme: düzenleme sırasında sonucun ne olacağı görünür kalsın.

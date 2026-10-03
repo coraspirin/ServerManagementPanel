@@ -2,6 +2,7 @@ import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { serverT } from "@/lib/i18n/runtime";
 import { audit } from "@/lib/auth/audit";
 import { installComposeStack } from "@/lib/appstore/install";
+import { replaceWithStack } from "@/lib/compose/replace";
 import { generateCompose, type EnvMode } from "@/lib/compose/generate";
 import { checkCompose, EMPTY_CONTEXT } from "@/lib/compose/checks";
 import { parseCompose } from "@/lib/compose/service";
@@ -80,18 +81,32 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   enterHost(guard.hostId);
 
   const id = (await params).id;
-  const body = (await request.json().catch(() => ({}))) as { name?: unknown; compose?: unknown };
+  const body = (await request.json().catch(() => ({}))) as {
+    name?: unknown;
+    compose?: unknown;
+    replace?: unknown;
+  };
 
   const actor = { username: guard.session.user.username, userId: guard.session.user.id };
-  const outcome = await installComposeStack(
-    { name: String(body.name ?? ""), compose: String(body.compose ?? "") },
-    actor,
-  );
+  const input = { name: String(body.name ?? ""), compose: String(body.compose ?? "") };
+  /*
+    `replace: true` (YAML sekmesi): container bu dosyayla YENİDEN oluşturulur.
+    Eski container durdurulup yeniden adlandırılarak saklanıyor; kurulum
+    başarısız olursa geri getiriliyor (bkz. lib/compose/replace.ts).
+    Docker'a yazan bir işlem olduğu için `docker.action` da gerekiyor.
+  */
+  if (body.replace === true && !guard.session.user.permissions.includes("docker.action")) {
+    return Response.json({ ok: false, error: serverT("apiv1.forbidden") }, { status: 403 });
+  }
+  const outcome =
+    body.replace === true
+      ? await replaceWithStack(id, input, actor)
+      : await installComposeStack(input, actor);
 
   audit({
     userId: actor.userId,
     username: actor.username,
-    action: "docker.compose_generate",
+    action: body.replace === true ? "docker.compose_replace" : "docker.compose_generate",
     targetType: "container",
     targetId: id,
     detail: serverT("api.docker.stackDetail", { name: String(body.name ?? ""), message: outcome.message }),

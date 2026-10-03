@@ -5,6 +5,8 @@ import { appVersion, isMockMode } from "@/lib/env";
 import { HostProvider, type HostSummary } from "@/components/shell/HostContext";
 import { resolvePageHost } from "@/lib/hosts/request";
 import { listHosts } from "@/lib/hosts/store";
+import { defaultLocale, personalLocale } from "@/lib/i18n/server";
+import { availableLocales } from "@/locales";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +47,11 @@ export default async function PanelLayout({
           displayName: session.user.displayName,
           roleName: session.user.roleName,
           permissions: session.user.permissions,
+        }}
+        languages={{
+          options: availableLocales().map(({ code, name, draft }) => ({ code, name, draft })),
+          defaultCode: defaultLocale(),
+          personal: personalLocale(),
         }}
       >
         {children}

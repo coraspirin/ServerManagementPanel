@@ -72,10 +72,41 @@ export function createKioskToken(
 }
 
 export function revokeKioskToken(fingerprint: string): boolean {
-  const changes = getDb()
+  const db = getDb();
+  // Düzen satırları açıkça siliniyor: ON DELETE CASCADE yalnızca bağlantıda
+  // `foreign_keys` açıksa çalışır; ona güvenmek yerine iz bırakmamak yeğ.
+  db.prepare("DELETE FROM kiosk_widgets WHERE substr(token_hash, 1, 8) = ?").run(fingerprint);
+  const changes = db
     .prepare("DELETE FROM kiosk_tokens WHERE substr(token_hash, 1, 8) = ?")
     .run(fingerprint).changes;
   return Number(changes) > 0;
+}
+
+/**
+ * Yönetim ekranı için: özetin ilk karakterlerinden kaydın kendisi.
+ * Arayüz düz token'ı hiç görmediği için bağlantıları bununla tanıyor
+ * (iptal ile aynı eşleşme).
+ */
+export function kioskByFingerprint(fingerprint: string): (KioskTokenView & { tokenHash: string }) | null {
+  if (!/^[0-9a-f]{8}$/.test(fingerprint)) return null;
+  const row = getDb()
+    .prepare("SELECT * FROM kiosk_tokens WHERE substr(token_hash, 1, 8) = ?")
+    .get(fingerprint) as Row | undefined;
+  return row ? { ...toView(row), tokenHash: row.token_hash } : null;
+}
+
+/** Ad ve geçerlilik süresi. `expiresAt: null` = süresiz. */
+export function updateKioskToken(
+  tokenHash: string,
+  patch: { name?: string; expiresAt?: number | null },
+): void {
+  const db = getDb();
+  if (patch.name !== undefined) {
+    db.prepare("UPDATE kiosk_tokens SET name = ? WHERE token_hash = ?").run(patch.name.trim(), tokenHash);
+  }
+  if (patch.expiresAt !== undefined) {
+    db.prepare("UPDATE kiosk_tokens SET expires_at = ? WHERE token_hash = ?").run(patch.expiresAt, tokenHash);
+  }
 }
 
 /**
@@ -86,7 +117,7 @@ export function revokeKioskToken(fingerprint: string): boolean {
  * Sahip, kiosk ekranının HANGİ panoyu göstereceğini belirliyor; token yine de
  * hiçbir oturum kurmuyor ve hiçbir yazan uç onu kabul etmiyor.
  */
-export function kioskTokenOwner(token: string): string | null {
+export function kioskTokenOwner(token: string): { owner: string; tokenHash: string } | null {
   const hash = hashToken(token);
   const row = getDb()
     .prepare("SELECT expires_at, created_by FROM kiosk_tokens WHERE token_hash = ?")
@@ -98,5 +129,5 @@ export function kioskTokenOwner(token: string): string | null {
   if (row.expires_at !== null && row.expires_at < now) return null;
 
   getDb().prepare("UPDATE kiosk_tokens SET last_seen_at = ? WHERE token_hash = ?").run(now, hash);
-  return row.created_by;
+  return { owner: row.created_by, tokenHash: hash };
 }

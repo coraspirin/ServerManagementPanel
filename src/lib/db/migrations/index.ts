@@ -29,6 +29,7 @@ import { migration028 } from "./028_apps_per_host";
 import { migration029 } from "./029_stacks_per_host";
 import { migration030 } from "./030_log_cursors_per_host";
 import { migration031 } from "./031_dashboard_size";
+import { migration032 } from "./032_kiosk_layout";
 import type { Migration } from "./types";
 
 /**
@@ -69,6 +70,7 @@ export const migrations: Migration[] = [
   migration029,
   migration030,
   migration031,
+  migration032,
 ];
 
 export type { Migration };

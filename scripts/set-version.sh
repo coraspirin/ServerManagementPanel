@@ -17,6 +17,21 @@ set -euo pipefail
 # Proje kökü betiğin kendi konumundan: git yalnızca --commit için gerekli.
 cd "$(dirname "$0")/.."
 
+# PowerShell'de `bash` çoğu zaman WSL'dir: oradaki git Windows'taki kimliği
+# (user.name/email) ve SSH anahtarını görmez, `--commit` "Author identity
+# unknown" ile düşer. WSL'deysek Git Bash ile yeniden başla; WSL, Windows
+# programının çalışma dizinini kendisi çevirir (deploy.sh ile aynı yol).
+# Node'a değil /proc/version'a bakılıyor: bu betik bilerek Node'suz çalışır.
+if grep -qi microsoft /proc/version 2>/dev/null; then
+  for GIT_BASH in "/mnt/c/Program Files/Git/bin/bash.exe" "/c/Program Files/Git/bin/bash.exe"; do
+    if [ -x "$GIT_BASH" ]; then
+      echo "==> WSL algılandı; Git Bash ile devam ediliyor"
+      exec "$GIT_BASH" scripts/set-version.sh "$@"
+    fi
+  done
+  echo "!! WSL'de çalışıyor ve Git Bash bulunamadı; --commit Windows git kimliğini görmeyebilir." >&2
+fi
+
 ARG="${1:-}"
 COMMIT=0
 [ "${2:-}" = "--commit" ] && COMMIT=1

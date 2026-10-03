@@ -22,7 +22,29 @@ export function layoutFor(userId: number, permissions: PermissionKey[]): WidgetP
   const rows = getDb()
     .prepare("SELECT widget_key, position, visible, size FROM dashboard_widgets WHERE user_id = ?")
     .all(userId) as Row[];
+  return resolveLayout(rows, permissions);
+}
 
+/**
+ * Kiosk bağlantısının düzeni.
+ *
+ * Bağlantıya özel kayıt yoksa sahibin kendi düzeni — `custom: false` bunu
+ * söylüyor ki düzenleyici "sahibin düzenini izliyor" diyebilsin. Görünen
+ * widget'lar her iki durumda da SAHİBİN yetkileriyle sınırlı.
+ */
+export function kioskLayoutFor(
+  tokenHash: string,
+  owner: { id: number; permissions: PermissionKey[] },
+): { layout: WidgetPlacement[]; custom: boolean } {
+  const rows = getDb()
+    .prepare("SELECT widget_key, position, visible, size FROM kiosk_widgets WHERE token_hash = ?")
+    .all(tokenHash) as Row[];
+  return rows.length > 0
+    ? { layout: resolveLayout(rows, owner.permissions), custom: true }
+    : { layout: layoutFor(owner.id, owner.permissions), custom: false };
+}
+
+function resolveLayout(rows: Row[], permissions: PermissionKey[]): WidgetPlacement[] {
   const saved = new Map(rows.map((row) => [row.widget_key, row]));
 
   const allowed = WIDGETS.filter(
@@ -82,21 +104,41 @@ export function validateLayout(input: LayoutInput): string | null {
  * geride kalmasına ve sıralamanın sessizce bozulmasına yol açardı.
  */
 export function saveLayout(userId: number, input: LayoutInput, now: number): void {
+  writeRows("dashboard_widgets", "user_id", userId, input, now);
+}
+
+export function saveKioskLayout(tokenHash: string, input: LayoutInput, now: number): void {
+  writeRows("kiosk_widgets", "token_hash", tokenHash, input, now);
+}
+
+/** Bağlantıya özel düzeni siler: kiosk yeniden sahibinin düzenini izler. */
+export function resetKioskLayout(tokenHash: string): void {
+  getDb().prepare("DELETE FROM kiosk_widgets WHERE token_hash = ?").run(tokenHash);
+}
+
+/** Tablo ve sütun adları sabit — çağıranlar yalnızca yukarıdaki iki işlev. */
+function writeRows(
+  table: "dashboard_widgets" | "kiosk_widgets",
+  owner: "user_id" | "token_hash",
+  ownerValue: number | string,
+  input: LayoutInput,
+  now: number,
+): void {
   const db = getDb();
   // `node:sqlite` DatabaseSync'te `.transaction()` yardımcısı yok; işlem
   // sınırları elle yönetiliyor (projedeki diğer çok adımlı yazmalarla aynı).
   db.exec("BEGIN IMMEDIATE");
   try {
-    db.prepare("DELETE FROM dashboard_widgets WHERE user_id = ?").run(userId);
+    db.prepare(`DELETE FROM ${table} WHERE ${owner} = ?`).run(ownerValue);
     const insert = db.prepare(
-      `INSERT INTO dashboard_widgets (user_id, widget_key, position, visible, size, updated_at)
+      `INSERT INTO ${table} (${owner}, widget_key, position, visible, size, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
     );
     input.forEach((entry, index) => {
       // Varsayılanla aynı boyut NULL yazılıyor: katalogda varsayılan
       // değişirse, boyutu hiç seçmemiş kullanıcı yenisini görsün.
       const size = entry.size && entry.size !== findWidget(entry.key)?.size ? entry.size : null;
-      insert.run(userId, entry.key, index, entry.visible ? 1 : 0, size, now);
+      insert.run(ownerValue, entry.key, index, entry.visible ? 1 : 0, size, now);
     });
     db.exec("COMMIT");
   } catch (error) {

@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { MonitorSmartphone, Plus, Trash2 } from "lucide-react";
+import { MonitorSmartphone, Pencil, Plus, Trash2 } from "lucide-react";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import type { KioskTokenView } from "@/lib/home/kiosk";
 import { useFormat, useT } from "@/lib/i18n/client";
+import { KioskEditDialog } from "./KioskEditDialog";
 
 /**
  * M2.7 — kiosk bağlantıları.
@@ -36,6 +37,7 @@ export function KioskManager({ initialTokens }: { initialTokens: KioskTokenView[
   const [fresh, setFresh] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<KioskTokenView | null>(null);
 
   async function create() {
     setBusy(true);
@@ -154,6 +156,16 @@ export function KioskManager({ initialTokens }: { initialTokens: KioskTokenView[
               </span>
               <button
                 type="button"
+                onClick={() => setEditing(token)}
+                disabled={busy}
+                aria-label={t("home.kiosk.editAria", { name: token.name || token.fingerprint })}
+                title={t("common.actions.edit")}
+                className="rounded p-1 text-subtle transition-colors hover:text-brand disabled:opacity-50"
+              >
+                <Pencil className="size-3.5" />
+              </button>
+              <button
+                type="button"
                 onClick={() => void revoke(token)}
                 disabled={busy}
                 aria-label={t("home.kiosk.revokeAria", { name: token.name || token.fingerprint })}
@@ -164,6 +176,10 @@ export function KioskManager({ initialTokens }: { initialTokens: KioskTokenView[
             </li>
           ))}
         </ul>
+      )}
+
+      {editing && (
+        <KioskEditDialog token={editing} onClose={() => setEditing(null)} onSaved={setTokens} />
       )}
     </section>
   );

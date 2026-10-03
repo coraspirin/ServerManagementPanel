@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Copy, Download, Save } from "lucide-react";
+import { AlertTriangle, Copy, Download, RefreshCcw, Save } from "lucide-react";
 
 import { readCsrfToken, Section } from "./shared";
 import { CSRF_HEADER } from "@/lib/auth/types";
@@ -18,6 +18,12 @@ import { copyText } from "@/lib/client/clipboard";
  * Bu sekme özrün yerine bir çıkış yolu koyuyor — dosyayı üretip yığın olarak
  * kaydeden kullanıcı, container'ı panelin geri kalanının yönetebildiği bir
  * şeye çeviriyor.
+ *
+ * Dosya DÜZENLENEBİLİR: Docker çalışan bir container'ın ortamını ya da
+ * bağlamalarını değiştirmeye izin vermediği için compose dışı bir container'ı
+ * değiştirmenin yolu, dosyayı düzenleyip container'ı onunla yeniden
+ * oluşturmak ("Bu dosyayla yeniden oluştur"). Eski container silinmiyor,
+ * yeniden adlandırılıp durduruluyor; kurulum başarısız olursa geri geliyor.
  */
 
 type Payload = {
@@ -37,17 +43,21 @@ export function GenerateTab({
   containerId,
   containerName,
   canInstall,
+  canReplace,
 }: {
   containerId: string;
   containerName: string;
   /** `apps.install` izni — yoksa yalnızca kopyalama ve indirme sunuluyor. */
   canInstall: boolean;
+  /** `apps.install` + `docker.action`: container'ı dosyayla yeniden oluşturma. */
+  canReplace: boolean;
 }) {
   const t = useT();
   const [env, setEnv] = useState<"user" | "all">("user");
   const [data, setData] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [yaml, setYaml] = useState("");
   const [saveResult, setSaveResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   /*
@@ -58,6 +68,7 @@ export function GenerateTab({
   const apply = useCallback((payload: Payload & { error?: string }, ok: boolean) => {
     if (ok) {
       setData(payload);
+      setYaml(payload.yaml);
       setError(null);
     } else {
       setError(payload.error ?? t("docker.generate.failed"));
@@ -83,8 +94,9 @@ export function GenerateTab({
     return () => controller.abort();
   }, [containerId, env, apply, t]);
 
-  async function save() {
+  async function save(replace = false) {
     if (!data) return;
+    if (replace && !confirm(t("docker.generate.replaceConfirm", { name: containerName }))) return;
 
     // Yığın adı servis adından öneriliyor ama kullanıcıya SORULUYOR: dizin adı
     // /opt/stacks altında kalıcı ve sonradan değiştirmek yığını taşımak demek.
@@ -99,7 +111,7 @@ export function GenerateTab({
         {
           method: "POST",
           headers: { "content-type": "application/json", [CSRF_HEADER]: readCsrfToken() },
-          body: JSON.stringify({ name, compose: data.yaml }),
+          body: JSON.stringify({ name, compose: yaml, replace }),
         },
       );
       const payload = (await response.json()) as {
@@ -121,7 +133,7 @@ export function GenerateTab({
 
   function download() {
     if (!data) return;
-    const blob = new Blob([data.yaml], { type: "text/yaml;charset=utf-8" });
+    const blob = new Blob([yaml], { type: "text/yaml;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -206,7 +218,7 @@ export function GenerateTab({
           action={
             <div className="flex flex-wrap items-center gap-1.5">
               <SmallButton
-                onClick={() => void copyText(data.yaml)}
+                onClick={() => void copyText(yaml)}
                 icon={<Copy className="size-3" />}
                 label={t("common.actions.copy")}
               />
@@ -223,12 +235,34 @@ export function GenerateTab({
                   label={saving ? t("docker.generate.installing") : t("docker.generate.saveAsStack")}
                 />
               )}
+              {canReplace && (
+                <SmallButton
+                  onClick={() => void save(true)}
+                  disabled={saving}
+                  icon={<RefreshCcw className="size-3" />}
+                  label={t("docker.generate.replace")}
+                />
+              )}
             </div>
           }
         >
-          <pre className="max-h-96 overflow-auto rounded-md border border-line bg-canvas p-3 font-mono text-[11px] leading-relaxed">
-            {data.yaml}
-          </pre>
+          <textarea
+            value={yaml}
+            onChange={(event) => setYaml(event.target.value)}
+            spellCheck={false}
+            rows={18}
+            aria-label="docker-compose.yml"
+            className="block max-h-[60vh] min-h-48 w-full resize-y rounded-md border border-line bg-canvas p-3 font-mono text-[11px] leading-relaxed outline-none focus:border-brand"
+          />
+          {yaml !== data.yaml && (
+            <button
+              type="button"
+              onClick={() => setYaml(data.yaml)}
+              className="mt-1 text-[11px] text-subtle underline underline-offset-2 hover:text-ink"
+            >
+              {t("docker.generate.revert")}
+            </button>
+          )}
 
           {saveResult && (
             <p className={`mt-2 text-xs ${saveResult.ok ? "text-ok" : "text-danger"}`}>

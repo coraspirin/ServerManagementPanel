@@ -70,6 +70,17 @@ export async function register() {
   const { bootstrapAdmin } = await import("@/lib/auth/bootstrap");
   bootstrapAdmin();
 
+  // Yerel sunucunun adı/hostname'i — migration "local" adıyla tohumluyor.
+  // Başarısızlık açılışı durdurmaz: ad yalnızca görünüm.
+  try {
+    const { syncLocalHost } = await import("@/lib/hosts/store");
+    const { getSystemProvider } = await import("@/lib/providers");
+    const renamed = syncLocalHost(await getSystemProvider().info());
+    if (renamed) console.log(`[hosts] yerel sunucu adı: ${renamed}`); // i18n-ignore — operatör logu
+  } catch (error) {
+    console.warn("[hosts] yerel sunucu bilgisi okunamadı:", error); // i18n-ignore — operatör logu
+  }
+
   const { pruneExpiredSessions } = await import("@/lib/auth/session");
   const pruned = pruneExpiredSessions();
   if (pruned > 0) console.log(`[auth] ${pruned} süresi dolmuş oturum temizlendi`);

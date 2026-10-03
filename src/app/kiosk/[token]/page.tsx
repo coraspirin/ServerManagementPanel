@@ -8,6 +8,7 @@ import { KioskRefresh } from "@/components/home/KioskRefresh";
 import { WeatherCard } from "@/components/home/WeatherCard";
 import { appGroups } from "@/lib/apps/store";
 import { activeUserByUsername, hasPermission } from "@/lib/auth/session";
+import { kioskLayoutFor } from "@/lib/dashboard/store";
 import { enterHost, LOCAL_HOST_ID } from "@/lib/hosts/context";
 import { kioskTokenOwner } from "@/lib/home/kiosk";
 import { internetStatus } from "@/lib/home/internet";
@@ -21,7 +22,9 @@ export const dynamic = "force-dynamic";
  * M2.7 — kiosk görünümü.
  *
  * Oturum YOK: yetkiyi adresteki token veriyor. Ekran, bağlantıyı OLUŞTURAN
- * kullanıcının gösterge panelini — onun düzeni ve yetkileriyle — gösteriyor.
+ * kullanıcının yetkileriyle bir gösterge paneli gösteriyor: bağlantıya özel
+ * bir düzen kaydedildiyse o (Uygulamalar → Kiosk → Düzenle), yoksa sahibin
+ * kendi düzeni.
  * Sayfa yalnızca OKUR: düzenleme düğmesi, eylem düğmesi, yönetim bağlantısı
  * hiç çizilmiyor ve canlı kartlar oturum isteyen API'leri yoklamıyor. Token
  * ele geçse bile yapabileceği tek şey sahibinin panosunu görmek.
@@ -40,17 +43,19 @@ export default async function KioskPage({ params }: { params: Promise<{ token: s
 
   // Geçersiz token'da 404: "yanlış token" demek, doğru token'ın var olduğunu
   // ve denemeye değdiğini söylemek olurdu.
-  const owner = kioskTokenOwner(token);
-  if (owner === null) notFound();
+  const kiosk = kioskTokenOwner(token);
+  if (kiosk === null) notFound();
 
   enterHost(LOCAL_HOST_ID);
-  const user = activeUserByUsername(owner);
+  const user = activeUserByUsername(kiosk.owner);
 
   if (user && hasPermission(user, "panel.dashboard")) {
     const { layout, widgets } = await buildDashboard({
       user,
       hostId: LOCAL_HOST_ID,
       readOnly: true,
+      // Bağlantıya özel düzen varsa o, yoksa sahibinin kendi düzeni.
+      layout: kioskLayoutFor(kiosk.tokenHash, user).layout,
     });
     return (
       <main className="min-h-dvh bg-canvas p-4 text-ink sm:p-6">

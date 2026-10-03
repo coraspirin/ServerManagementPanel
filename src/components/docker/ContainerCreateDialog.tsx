@@ -100,14 +100,14 @@ export function ContainerCreateDialog({
         />
       ) : (
         <div className="space-y-4">
-          <div className="flex gap-1 border-b border-line">
+          <div className="thin-scrollbar flex gap-1 overflow-x-auto overflow-y-hidden border-b border-line">
             {SEKMELER.map((sekme) => (
               <button
                 key={sekme.id}
                 type="button"
                 onClick={() => setKaynak(sekme.id)}
                 aria-current={kaynak === sekme.id ? "page" : undefined}
-                className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
+                className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors ${
                   kaynak === sekme.id
                     ? "border-brand font-medium text-brand"
                     : "border-transparent text-subtle hover:text-ink"
@@ -126,7 +126,7 @@ export function ContainerCreateDialog({
             <button
               type="button"
               onClick={() => hazir(emptySpec())}
-              className="ml-auto self-center text-xs text-subtle underline transition-colors hover:text-brand"
+              className="ml-auto shrink-0 self-center whitespace-nowrap text-xs text-subtle underline transition-colors hover:text-brand"
             >
               {t("docker.createDialog.blank")}
             </button>
