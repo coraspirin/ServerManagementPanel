@@ -10,7 +10,7 @@
 # panel-agent) mümkün oluyor: Node 24'ün linux/arm/v7 imajı yok.
 # Sürüm hem derlemeye hem çalışma ortamına giriyor: yayın imajını compose'suz
 # (ör. panel-agent) çalıştıran da `APP_VERSION`'ı görebilsin.
-ARG APP_VERSION=1.12.7
+ARG APP_VERSION=1.13.0
 
 FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS base
 ENV NEXT_TELEMETRY_DISABLED=1
