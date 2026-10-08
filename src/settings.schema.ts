@@ -1057,6 +1057,15 @@ export const settingDefs: SettingDef[] = [
     default: false,
   },
   {
+    // Merkez panel yeni sürüme geçince geride kalan uzak ajanlar heartbeat
+    // sırasında kendiliğinden aynı sürüme güncellenir.
+    key: "agents.auto_update",
+    group: "updates",
+    section: "agents",
+    type: "bool",
+    default: true,
+  },
+  {
     key: "backup.watch_dir",
     hostScoped: true,
     group: "updates",

@@ -4,7 +4,7 @@ A self-hosted management panel written for a single Linux + Docker server. It br
 
 Designed at home-server (homelab) scale: a single container, embedded SQLite, no external database or queue. The interface and all text are in Turkish.
 
-> **Version:** 1.12.6 · **Stack:** Next.js 16, React 19, TypeScript, Tailwind CSS 4, Node 24 (`node:sqlite`)
+> **Version:** 1.12.7 · **Stack:** Next.js 16, React 19, TypeScript, Tailwind CSS 4, Node 24 (`node:sqlite`)
 
 ---
 
@@ -394,7 +394,7 @@ These are **deployment parameters**. Anything that can be changed from within th
 | `PANEL_REPORTS_DIR` | | `./reports` | The directory where host cron scripts drop JSON output. |
 | `TZ` | | `Europe/Istanbul` | Time zone. |
 | `MOCK_MODE` | | `0` | If set to `1`, all providers that touch the outside world return fake data from `fixtures/`. For development and debugging. |
-| `APP_VERSION` | | `1.12.6` | Version baked into the image. Visible in the `/api/health` response and the UI. |
+| `APP_VERSION` | | `1.12.7` | Version baked into the image. Visible in the `/api/health` response and the UI. |
 
 ---
 
@@ -408,6 +408,16 @@ docker compose up -d --build
 If a new version brings a schema change, the panel takes a copy of the database **before** the migration, as `data/backups/pre-migration-<n>.db`. If a migration fails, the panel refuses to start and prints the rollback command to the console. Rolling back is done by restoring from that copy — there is no "down" migration.
 
 The panel's persistent data lives in the `panel-data` volume. The panel's own SQLite backup can be taken consistently from the Backup screen via `VACUUM INTO`.
+
+**Remote agents** follow the central panel: when the panel moves to a newer version, agents on an older version update themselves to the same version (Settings → Updates → Remote agents; on by default). They can also be updated from the Servers screen. The panel only tells the agent the target version; the agent gets it from GitHub according to its own install: a published-image install pulls the GHCR image for its own architecture (amd64, arm64 and arm/v7 are published), a source install downloads the release archive and builds it. It backs up its compose files and `.env`, rewrites `AGENT_IMAGE` and restarts; if the health check fails it rolls back. The version must be published on GitHub first (`git push origin vX.Y.Z`).
+
+To update an agent directly from your machine over ssh — also for agents older than this feature:
+
+```bash
+python agent-deploy.py 192.168.1.20            # version from package.json
+python agent-deploy.py 192.168.1.20 --dry-run  # show only
+python agent-deploy.py pi@192.168.1.21 --version 1.12.7 --sudo
+```
 
 ---
 

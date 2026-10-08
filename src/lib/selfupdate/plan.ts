@@ -221,6 +221,17 @@ export function releaseImageRef(current: string, tag: string): string | null {
 }
 
 /**
+ * `.env`'de değeri TAM OLARAK eski imaj referansı olan `ANAHTAR=değer`
+ * satırlarını yeni referansa çevirir (awk; `o` eski, `n` yeni). Ajan kiti
+ * compose'da `image: ${AGENT_IMAGE}` kullanıyor — sürüm `.env`'de yaşıyor.
+ * Değişiklik yoksa 1 ile çıkar. Yorum satırlarına dokunulmaz.
+ */
+export const ENV_IMAGE_AWK = String.raw`{ i = index($0, "="); s = $0; sub(/^[ \t]+/, "", s)
+  if (i > 1 && substr(s, 1, 1) != "#") { k = substr($0, 1, i); v = substr($0, i + 1); t = v; gsub(/["\047 \t\r]/, "", t)
+    if (t == o) { j = index(v, o); $0 = k substr(v, 1, j - 1) n substr(v, j + length(o)); c++ } }
+  print } END { exit c ? 0 : 1 }`;
+
+/**
  * İmajla kurulumun updater betiği. Girdiler: TAG, NEW_IMAGE, PANEL_IMAGE,
  * OLD_VERSION, WORKDIR, PROJECT, SERVICE, PANEL_CONTAINER, STAMP, isteğe
  * bağlı COMPOSE_FILE.
@@ -286,6 +297,11 @@ for F in $ITEMS; do
   fi
   rm -f "$F.panel-tmp"
 done
+ENV_AWK='${ENV_IMAGE_AWK}'
+if [ -f .env ] && awk -v o="$PANEL_IMAGE" -v n="$NEW_IMAGE" "$ENV_AWK" .env > .env.panel-tmp; then
+  cat .env.panel-tmp > .env && EDITED=1 && echo ".env: image"
+fi
+rm -f .env.panel-tmp
 if [ -f .env ] && grep -q '^APP_VERSION=' .env; then
   sed "s/^APP_VERSION=.*/APP_VERSION=$V/" .env > .env.panel-tmp && cat .env.panel-tmp > .env && rm -f .env.panel-tmp
 fi

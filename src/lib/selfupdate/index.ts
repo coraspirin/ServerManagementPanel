@@ -2,9 +2,10 @@ import "server-only";
 
 import { existsSync, statSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { hostname } from "node:os";
 import path from "node:path";
 import { dataDir } from "@/lib/db/client";
-import { appVersion, isMockMode } from "@/lib/env";
+import { appVersion, isAgent, isMockMode } from "@/lib/env";
 import { panelContainerName } from "@/lib/host/self";
 import { LOCAL_HOST_ID } from "@/lib/hosts/context";
 import { serverT } from "@/lib/i18n/runtime";
@@ -35,7 +36,8 @@ import {
  * kullanmıyor, onun izin listesini de genişletmiyor.
  *
  * Her zaman YEREL sunucu: üst barda uzak sunucu seçili olsa da güncellenen,
- * bu isteği karşılayan paneldir.
+ * bu isteği karşılayan paneldir. Ajan rolünde aynı kod ajanın kendisini
+ * günceller (merkez `agent.update` ile tetikler).
  */
 
 const DEFAULT_REPO = "coraspirin/ServerManagementPanel";
@@ -174,6 +176,7 @@ async function updaterRunning(): Promise<boolean> {
 // --- başlatma ----------------------------------------------------------------
 
 type PanelContainer = {
+  Name?: string;
   Config?: { Image?: string; Labels?: Record<string, string> };
   Mounts?: { Type?: string; Name?: string; Source?: string; Destination?: string }[];
 };
@@ -234,6 +237,22 @@ function stamp(): string {
   return new Date().toISOString().replace(/[-:]/g, "").replace("T", "-").slice(0, 13);
 }
 
+/**
+ * Bu sürecin container'ı. Ajanın container adı kuruluma göre değişir; bilinen
+ * ad bulunamazsa container'ın kendi hostname'i (kısa kimliği) denenir.
+ */
+async function ownContainer(): Promise<PanelContainer | null> {
+  for (const candidate of [panelContainerName(), hostname()]) {
+    try {
+      const raw = (await docker().inspectRaw(candidate)) as PanelContainer | null;
+      if (raw) return raw;
+    } catch {
+      // Sıradaki aday.
+    }
+  }
+  return null;
+}
+
 /** Güncellemeyi başlatır; hata kullanıcıya gösterilecek metinle fırlar. */
 export async function startUpdate(tag: string): Promise<void> {
   if (!isReleaseTag(tag)) throw new Error(serverT("selfUpdate.errors.badTag", { tag }));
@@ -254,7 +273,8 @@ export async function startUpdate(tag: string): Promise<void> {
   }
 
   const provider = docker();
-  const self = (await provider.inspectRaw(panelContainerName())) as PanelContainer | null;
+  const self = await ownContainer();
+  const containerName = self?.Name?.replace(/^\//, "") || panelContainerName();
   const labels = self?.Config?.Labels ?? {};
   const project = labels["com.docker.compose.project"];
   const workdir = labels["com.docker.compose.project.working_dir"];
@@ -270,10 +290,16 @@ export async function startUpdate(tag: string): Promise<void> {
   //    imajı çekilir ve container onunla yeniden yaratılır.
   // Host kökü bağlıysa Dockerfile'a bakılır; bağlı değilse imaj adından
   // karar verilir (kayıt defteri adı olmayan imaj yerel derlemedir).
+  // Ajan, imaj adı kayıt defteri taşımıyorsa (elle verilmiş yerel bir
+  // etiket) yayınlanan GHCR imajına geçer: yayın iş akışı ajanın
+  // mimarisini (amd64/arm64/arm/v7) de yayınlıyor.
   const panelImageRef = self?.Config?.Image ?? "";
   const hasDockerfile =
     dockerfilePresent(workdir) ?? !panelImageRef.includes("/");
-  const newImage = hasDockerfile ? null : releaseImageRef(panelImageRef, tag);
+  const newImage = hasDockerfile
+    ? null
+    : (releaseImageRef(panelImageRef, tag) ??
+      (isAgent() ? releaseImageRef(`ghcr.io/${repo().toLowerCase()}`, tag) : null));
   if (!hasDockerfile && !newImage) {
     throw new Error(serverT("selfUpdate.errors.notSource", { dir: workdir }));
   }
@@ -310,10 +336,12 @@ export async function startUpdate(tag: string): Promise<void> {
     WORKDIR: workdir,
     PROJECT: project,
     SERVICE: service,
-    PANEL_CONTAINER: panelContainerName(),
+    PANEL_CONTAINER: containerName,
     PANEL_IMAGE: panelImageRef,
     STAMP: stamp(),
-    ...(newImage ? { NEW_IMAGE: newImage, OLD_VERSION: current } : {}),
+    ...(newImage
+      ? { NEW_IMAGE: newImage, OLD_VERSION: current }
+      : {}),
     ...(configFiles ? { COMPOSE_FILE: configFiles.split(",").join(":") } : {}),
   };
 

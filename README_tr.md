@@ -4,7 +4,7 @@ Tek bir Linux + Docker sunucusu için yazılmış, kendi sunucunda barındırdı
 
 Ev sunucusu (homelab) ölçeği düşünülerek tasarlandı: tek container, gömülü SQLite, harici veritabanı ya da kuyruk yok. Arayüz ve tüm metinler Türkçedir.
 
-> **Sürüm:** 1.12.6 · **Yığın:** Next.js 16, React 19, TypeScript, Tailwind CSS 4, Node 24 (`node:sqlite`)
+> **Sürüm:** 1.12.7 · **Yığın:** Next.js 16, React 19, TypeScript, Tailwind CSS 4, Node 24 (`node:sqlite`)
 
 ---
 
@@ -310,7 +310,7 @@ Buradakiler **dağıtım parametreleridir**. Panelden değiştirilebilen her şe
 | `PANEL_REPORTS_DIR` | | `./reports` | Host cron betiklerinin JSON bıraktığı dizin. |
 | `TZ` | | `Europe/Istanbul` | Saat dilimi. |
 | `MOCK_MODE` | | `0` | `1` yapılırsa dış dünyaya dokunan tüm sağlayıcılar `fixtures/` altındaki sahte veriyi döndürür. Geliştirme ve sorun ayıklama içindir. |
-| `APP_VERSION` | | `1.12.6` | İmaja gömülen sürüm. `/api/health` yanıtında ve arayüzde görünür. |
+| `APP_VERSION` | | `1.12.7` | İmaja gömülen sürüm. `/api/health` yanıtında ve arayüzde görünür. |
 
 ---
 
@@ -324,6 +324,16 @@ docker compose up -d --build
 Yeni bir sürüm şema değişikliği getiriyorsa panel, migration'dan **önce** veritabanının kopyasını `data/backups/pre-migration-<n>.db` olarak alır. Migration başarısız olursa panel açılmayı reddeder ve konsola geri dönüş komutunu yazar. Geri alma bu kopyadan geri yükleyerek yapılır; "down" migration yoktur.
 
 Panelin kalıcı verisi `panel-data` volume'ünde durur. Panelin kendi SQLite yedeği Yedekleme ekranından `VACUUM INTO` ile tutarlı biçimde alınabilir.
+
+**Uzak ajanlar** merkez paneli izler: panel yeni bir sürüme geçince, daha eski sürümdeki ajanlar kendiliğinden aynı sürüme güncellenir (Ayarlar → Güncellemeler → Uzak ajanlar; varsayılan açık). Sunucular ekranından da güncellenebilirler. Panel ajana yalnızca hedef sürümü söyler; ajan sürümü GitHub'dan kendi kurulumuna göre alır: hazır imajla kurulduysa kendi mimarisine uygun GHCR imajını çeker (amd64, arm64 ve arm/v7 yayınlanıyor), kaynaktan kurulduysa sürüm arşivini indirip derler. Compose dosyalarını ve `.env`'yi yedekler, `AGENT_IMAGE` değerini günceller ve yeniden başlar; sağlık kontrolü geçmezse eski sürüme döner. Sürüm önce GitHub'da yayınlanmalıdır (`git push origin vX.Y.Z`).
+
+Bir ajanı doğrudan kendi bilgisayarınızdan ssh ile güncellemek için (bu özellikten eski ajanlarda da çalışır):
+
+```bash
+python agent-deploy.py 192.168.1.20            # sürüm package.json'dan
+python agent-deploy.py 192.168.1.20 --dry-run  # yalnızca göster
+python agent-deploy.py pi@192.168.1.21 --version 1.12.7 --sudo
+```
 
 ---
 

@@ -14,6 +14,7 @@ export default async function HostsPage() {
     <HostsScreen
       initial={listHosts().map(toHostView)}
       canManage={hasPermission(session.user, "hosts.manage")}
+      canUpdate={hasPermission(session.user, "panel.update")}
     />
   );
 }

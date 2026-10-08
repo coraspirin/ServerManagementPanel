@@ -38,6 +38,8 @@ const OP_TIMEOUTS: Record<string, number> = {
   "docker.exportImage": 30 * 60_000,
   "docker.prune": 10 * 60_000,
   "docker.createVolume": 10 * 60_000,
+  // Updater imajı (docker:27-cli) ilk seferde indirilebilir.
+  "agent.update": 10 * 60_000,
 };
 
 type Target = { hostname: string; port: number };

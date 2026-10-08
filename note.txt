@@ -12,5 +12,18 @@ bash deploy.sh
 
 #github versiyon yükleme
 git push
-git push origin v1.12.0
-gh release create v1.12.0 --title "v1.12.0" --generate-notes
+git push origin v1.12.6
+gh release create v1.12.6 --title "v1.12.6" --generate-notes
+
+
+
+
+#ajan güncelleme
+python agent-deploy.py 192.168.61.107 --version 1.12.6
+
+git add -A
+git commit -m "Ajan kendini güncelleme + agent-deploy.py"
+git push
+git tag v1.12.7
+git push origin v1.12.7
+gh release create v1.12.7 --title "v1.12.7" --generate-notes

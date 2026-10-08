@@ -1,14 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, HardDrive, KeyRound, Link2, MonitorSmartphone, Plus, Power, Server, Trash2 } from "lucide-react";
+import {
+  ArrowUpCircle,
+  Copy,
+  HardDrive,
+  KeyRound,
+  Link2,
+  Loader2,
+  MonitorSmartphone,
+  Plus,
+  Power,
+  Server,
+  Trash2,
+} from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import type { HostView } from "@/lib/hosts/view";
 import { formatDateTime } from "@/lib/i18n/format";
 import { useDict, useDynamicT, useT } from "@/lib/i18n/client";
 import { copyText } from "@/lib/client/clipboard";
+import type { UpdateStatus } from "@/lib/selfupdate";
 
 type InstallKit = { token: string; image: string; port: number; env: string; compose: string };
 
@@ -48,9 +61,18 @@ type Dialog =
   | { kind: "add" }
   | { kind: "kit"; host: HostView; kit: InstallKit }
   | { kind: "enroll"; host: HostView }
-  | { kind: "remove"; host: HostView };
+  | { kind: "remove"; host: HostView }
+  | { kind: "update"; host: HostView };
 
-export function HostsScreen({ initial, canManage }: { initial: HostView[]; canManage: boolean }) {
+export function HostsScreen({
+  initial,
+  canManage,
+  canUpdate,
+}: {
+  initial: HostView[];
+  canManage: boolean;
+  canUpdate: boolean;
+}) {
   const t = useT();
   const tk = useDynamicT();
   const dict = useDict();
@@ -59,6 +81,7 @@ export function HostsScreen({ initial, canManage }: { initial: HostView[]; canMa
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   const reload = useCallback(async () => {
     const response = await fetch("/api/hosts", { cache: "no-store" }).catch(() => null);
@@ -88,16 +111,41 @@ export function HostsScreen({ initial, canManage }: { initial: HostView[]; canMa
     else setError(result.error);
   }
 
+  const outdated = hosts.filter((host) => host.enabled && host.pinned && host.updateTarget !== null);
+
+  async function updateAll() {
+    if (!window.confirm(t("hosts.update.allConfirm", { count: outdated.length }))) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    const failures: string[] = [];
+    for (const host of outdated) {
+      const result = await call(`/api/hosts/${host.id}/update`, "POST");
+      if (!result.ok) failures.push(`${host.name}: ${result.error}`);
+    }
+    setBusy(false);
+    setError(failures.join("\n"));
+    if (failures.length < outdated.length) setNotice(t("hosts.update.allStarted"));
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <p className="max-w-3xl text-sm text-subtle">{t("hosts.screen.intro")}</p>
-        {canManage && (
-          <button type="button" className={`${BTN} flex items-center gap-1.5`} onClick={() => setDialog({ kind: "add" })}>
-            <Plus className="size-4" aria-hidden />
-            {t("hosts.screen.add")}
-          </button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {canUpdate && outdated.length > 0 && (
+            <button type="button" className={BTN_SECONDARY} disabled={busy} onClick={() => void updateAll()}>
+              <ArrowUpCircle className="size-4" aria-hidden />
+              {t("hosts.update.all", { count: outdated.length })}
+            </button>
+          )}
+          {canManage && (
+            <button type="button" className={`${BTN} flex items-center gap-1.5`} onClick={() => setDialog({ kind: "add" })}>
+              <Plus className="size-4" aria-hidden />
+              {t("hosts.screen.add")}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-line bg-surface">
@@ -109,7 +157,7 @@ export function HostsScreen({ initial, canManage }: { initial: HostView[]; canMa
               <th className="px-4 py-2.5 font-medium">{t("hosts.screen.colConnection")}</th>
               <th className="px-4 py-2.5 font-medium">{t("hosts.screen.colSystem")}</th>
               <th className="px-4 py-2.5 font-medium">{t("hosts.screen.colLastSeen")}</th>
-              {canManage && <th className="px-4 py-2.5" />}
+              {(canManage || canUpdate) && <th className="px-4 py-2.5" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -139,7 +187,16 @@ export function HostsScreen({ initial, canManage }: { initial: HostView[]; canMa
                   </td>
                   <td data-label={t("hosts.screen.colConnection")} className="px-4 py-3 font-mono text-xs text-subtle">
                     {host.agentUrl ?? "—"}
-                    {host.agentVersion && <div>v{host.agentVersion}</div>}
+                    {host.agentVersion && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        v{host.agentVersion}
+                        {host.updateTarget && (
+                          <span className="rounded bg-warn/15 px-1.5 py-0.5 font-sans font-medium text-warn">
+                            {t("hosts.update.badge", { version: host.updateTarget })}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td data-label={t("hosts.screen.colSystem")} className="px-4 py-3 text-xs text-subtle">
                     {host.hostname ?? "—"}
@@ -148,10 +205,23 @@ export function HostsScreen({ initial, canManage }: { initial: HostView[]; canMa
                   <td data-label={t("hosts.screen.colLastSeen")} className="px-4 py-3 text-xs text-subtle">
                     {remote && host.lastSeen ? formatDateTime(host.lastSeen * 1000, dict) : "—"}
                   </td>
-                  {canManage && (
+                  {(canManage || canUpdate) && (
                     <td data-label="" className="px-4 py-3">
                       {remote && (
                         <div className="flex justify-end gap-1.5">
+                          {canUpdate && host.pinned && (
+                            <button
+                              type="button"
+                              title={t("hosts.update.button")}
+                              aria-label={t("hosts.update.button")}
+                              className={`${ICON_BTN} ${host.updateTarget ? "border-warn text-warn" : ""}`}
+                              onClick={() => setDialog({ kind: "update", host })}
+                            >
+                              <ArrowUpCircle className="size-3.5" />
+                            </button>
+                          )}
+                          {canManage && (
+                            <>
                           <button
                             type="button"
                             title={t("hosts.screen.enroll")}
@@ -201,6 +271,8 @@ export function HostsScreen({ initial, canManage }: { initial: HostView[]; canMa
                           >
                             <Trash2 className="size-3.5" />
                           </button>
+                            </>
+                          )}
                         </div>
                       )}
                     </td>
@@ -212,7 +284,8 @@ export function HostsScreen({ initial, canManage }: { initial: HostView[]; canMa
         </table>
       </div>
 
-      {error && !dialog && <p className="text-sm text-danger">{error}</p>}
+      {error && !dialog && <p className="whitespace-pre-line text-sm text-danger">{error}</p>}
+      {notice && !dialog && <p className="text-sm text-ok">{notice}</p>}
 
       {dialog?.kind === "add" && (
         <AddDialog
@@ -256,6 +329,8 @@ export function HostsScreen({ initial, canManage }: { initial: HostView[]; canMa
           />
         </Modal>
       )}
+
+      {dialog?.kind === "update" && <UpdateDialog host={dialog.host} onClose={close} />}
 
       {dialog?.kind === "remove" && (
         <RemoveDialog
@@ -444,6 +519,156 @@ function RemoveDialog({
             {t("hosts.remove.confirm")}
           </button>
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+const PHASE_STYLE: Record<UpdateStatus["phase"], string> = {
+  idle: "bg-line text-subtle",
+  running: "bg-brand/15 text-brand",
+  done: "bg-ok/15 text-ok",
+  failed: "bg-danger/15 text-danger",
+  rolledBack: "bg-warn/15 text-warn",
+};
+
+type AgentUpdateInfo = {
+  current: string | null;
+  target: string | null;
+  status: UpdateStatus | null;
+  error: string | null;
+};
+
+const UPDATE_POLL_MS = 3_000;
+
+/**
+ * Ajan güncelleme penceresi: ajandaki updater'ın durumu ve günlüğü. Ajan
+ * kendini yeniden yaratırken birkaç saniye ulaşılamaz — o sırada gelen hata
+ * "yeniden başlıyor" olarak gösterilir, sorgu sürer.
+ */
+function UpdateDialog({ host, onClose }: { host: HostView; onClose: () => void }) {
+  const t = useT();
+  const tk = useDynamicT();
+  const [info, setInfo] = useState<AgentUpdateInfo | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState("");
+  const [manual, setManual] = useState("");
+  const [watching, setWatching] = useState(false);
+  const logRef = useRef<HTMLPreElement>(null);
+
+  const load = useCallback(async () => {
+    const result = await call<AgentUpdateInfo>(`/api/hosts/${host.id}/update`, "GET");
+    if (result.ok) setInfo(result.data);
+  }, [host.id]);
+
+  useEffect(() => {
+    void call<AgentUpdateInfo>(`/api/hosts/${host.id}/update`, "GET").then((result) => {
+      if (result.ok) setInfo(result.data);
+    });
+  }, [host.id]);
+
+  const phase = info?.status?.phase;
+  const running = phase === "running";
+
+  useEffect(() => {
+    if (!watching && !running) return;
+    const timer = setInterval(() => void load(), UPDATE_POLL_MS);
+    return () => clearInterval(timer);
+  }, [watching, running, load]);
+
+  // Updater bu sürüm için sonucu yazınca (ajan yeni sürümle açıldıysa yeni
+  // ajan okur) izleme biter. Önceki bir güncellemenin "tamamlandı" durumu sayılmaz.
+  const finished =
+    watching && phase !== undefined && phase !== "running" && phase !== "idle" && info?.status?.tag === info?.target;
+  if (finished) setWatching(false);
+
+  const logLength = info?.status?.log.length ?? 0;
+  useEffect(() => {
+    logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
+  }, [logLength]);
+
+  async function start() {
+    setStarting(true);
+    setStartError("");
+    setManual("");
+    const response = await fetch(`/api/hosts/${host.id}/update`, {
+      method: "POST",
+      headers: { [CSRF_HEADER]: readCsrfToken() },
+    }).catch(() => null);
+    setStarting(false);
+    if (!response) {
+      setStartError("network");
+      return;
+    }
+    if (!response.ok) {
+      const data = (await response.json().catch(() => ({}))) as { error?: string; manual?: string };
+      setStartError(data.error ?? `HTTP ${response.status}`);
+      setManual(data.manual ?? "");
+      return;
+    }
+    setWatching(true);
+    void load();
+  }
+
+  const status = info?.status ?? null;
+  const target = info ? info.target : host.updateTarget;
+  const current = `v${(info ? info.current : host.agentVersion) ?? "?"}`;
+
+  return (
+    <Modal open wide title={t("hosts.update.title", { host: host.name })} onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-sm">
+          {target ? t("hosts.update.available", { current, target }) : t("hosts.update.upToDate", { current })}
+        </p>
+        <p className="text-xs text-subtle">{t("hosts.update.intro")}</p>
+
+        {target && (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              className={`${BTN} flex items-center gap-1.5`}
+              disabled={starting || running || watching}
+              onClick={() => void start()}
+            >
+              {starting || running || watching ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+              ) : (
+                <ArrowUpCircle className="size-4" aria-hidden />
+              )}
+              {t("hosts.update.start", { target })}
+            </button>
+          </div>
+        )}
+
+        {startError && <p className="text-sm text-danger">{startError}</p>}
+        {manual && <CopyBlock label={t("hosts.update.manual")} text={manual} />}
+
+        {status && status.phase !== "idle" && (
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${PHASE_STYLE[status.phase]}`}>
+                {tk(`update.phase.${status.phase}`)}
+                {status.tag ? ` · ${status.tag}` : ""}
+              </span>
+              {status.detail && status.phase !== "done" && (
+                <span className="text-xs text-subtle">{t("update.detail", { detail: status.detail })}</span>
+              )}
+            </div>
+            {status.log.length > 0 && (
+              <pre
+                ref={logRef}
+                className="thin-scrollbar max-h-64 overflow-auto rounded-md border border-line bg-canvas p-3 font-mono text-xs leading-5"
+              >
+                {status.log.join("\n")}
+              </pre>
+            )}
+          </div>
+        )}
+        {info?.error && (watching || running ? (
+          <p className="text-sm text-warn">{t("hosts.update.restarting")}</p>
+        ) : (
+          <p className="text-sm text-subtle">{info.error}</p>
+        ))}
       </div>
     </Modal>
   );

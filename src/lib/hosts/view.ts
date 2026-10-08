@@ -1,3 +1,5 @@
+import { appVersion } from "@/lib/env";
+import { compareTags } from "@/lib/selfupdate/plan";
 import type { Host, HostAgentType, HostCapabilities, HostStatus } from "./types";
 
 /**
@@ -17,11 +19,23 @@ export type HostView = {
   latencyMs: number | null;
   lastError: string | null;
   agentVersion: string | null;
+  /** Ajan merkezden eskiyse çekileceği sürüm etiketi (`v1.12.6`), değilse null. */
+  updateTarget: string | null;
   capabilities: HostCapabilities;
   hostname: string | null;
   osName: string | null;
   color: string | null;
 };
+
+/**
+ * Ajanın çekileceği sürüm: her zaman merkezin kendi sürümü (GitHub'daki en
+ * yenisi değil) — ajan ile merkez aynı kodu çalıştırmalı. Ajan güncelse null.
+ */
+export function agentUpdateTarget(host: Pick<Host, "agentVersion">): string | null {
+  if (!host.agentVersion) return null;
+  const target = `v${appVersion()}`;
+  return compareTags(target, host.agentVersion) > 0 ? target : null;
+}
 
 export function toHostView(host: Host): HostView {
   return {
@@ -37,6 +51,7 @@ export function toHostView(host: Host): HostView {
     latencyMs: host.latencyMs,
     lastError: host.lastError,
     agentVersion: host.agentVersion,
+    updateTarget: host.agentType === "agent" ? agentUpdateTarget(host) : null,
     capabilities: host.capabilities,
     hostname: host.hostname,
     osName: host.osName,

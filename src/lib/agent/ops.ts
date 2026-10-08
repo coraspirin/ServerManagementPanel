@@ -37,6 +37,7 @@ import {
 } from "@/lib/files/write";
 import { localHostDirExists, localListHostDirs } from "@/lib/host/dirs";
 import { ownImage } from "@/lib/host/self";
+import { startUpdate, updateStatus } from "@/lib/selfupdate";
 import { localHostAccounts } from "@/lib/host/users";
 import { localOsUpdateReport } from "@/lib/updates/os";
 
@@ -109,6 +110,12 @@ void _dockerNames;
 export const AGENT_OPS: Record<string, AgentOp> = {
   "agent.hello": { kind: "call", run: () => agentHello() },
   "agent.image": { kind: "call", run: () => ownImage() },
+  // Kendini güncelleme. Adları ve biçimleri KALICI: AGENT_PROTOCOL artsa da
+  // değişmez — uyumsuz düşmüş bir ajanı yeni sürüme taşımanın tek yolu bunlar.
+  // Ajan sürümü GitHub'dan kendi kurulumuna göre alır (GHCR imajı ya da
+  // kaynak arşivi); merkez yalnızca hedef etiketi söyler.
+  "agent.update": { kind: "call", run: (args) => startUpdate(String(args[0] ?? "")) },
+  "agent.updateStatus": { kind: "call", run: () => updateStatus() },
   // Sunucunun kendi dosyaları (bkz. hosts/on-host.ts): merkez aynı işin
   // yerel sürümünü burada çağırtır.
   "host.accounts": { kind: "call", run: () => localHostAccounts() },

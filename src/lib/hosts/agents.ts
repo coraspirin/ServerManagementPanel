@@ -11,6 +11,11 @@ import {
 import { encryptSecret, generateToken, decryptSecret, type EncryptedValue } from "@/lib/crypto";
 import { appVersion } from "@/lib/env";
 import { serverT } from "@/lib/i18n/runtime";
+import { dispatch } from "@/lib/notify";
+import { compareTags } from "@/lib/selfupdate/plan";
+import type { UpdateStatus } from "@/lib/selfupdate";
+import { getBool } from "@/lib/settings";
+import { runWithHost } from "./context";
 import { isHostError } from "./errors";
 import {
   getHost,
@@ -23,6 +28,9 @@ import {
   updateHostStatus,
 } from "./store";
 import type { Host } from "./types";
+import { agentUpdateTarget } from "./view";
+
+export { agentUpdateTarget };
 
 /**
  * Uzak sunucu kaydı ve sağlık takibi (panel-agent).
@@ -32,7 +40,8 @@ import type { Host } from "./types";
  *  2. Kullanıcı ajanı uzak sunucuda başlatır.
  *  3. `enrollAgentHost` — merkez ajana bağlanır, sertifika parmak izini
  *     kanıtla doğrular ve sabitler.
- *  4. `heartbeatAgents` — 15 sn'de bir durum/sürüm/gecikme günceller.
+ *  4. `heartbeatAgents` — 15 sn'de bir durum/sürüm/gecikme günceller; ajan
+ *     merkezden eski sürümdeyse (ayar açıksa) onu güncellemeyi tetikler.
  */
 
 export const DEFAULT_AGENT_PORT = 7443;
@@ -202,6 +211,7 @@ export async function heartbeatAgents(): Promise<HeartbeatSummary> {
         const hello = await agentCall<AgentHello>({ ...host, status: "online" }, "agent.hello");
         const update = helloUpdate(hello, Date.now() - started);
         updateHostStatus(host.id, update);
+        autoUpdate(host, hello.version);
         if (update.status === "online") online++;
         if (update.status !== host.status) changed.push(`${host.name}: ${update.status}`);
       } catch (error) {
@@ -217,4 +227,94 @@ export async function heartbeatAgents(): Promise<HeartbeatSummary> {
   );
 
   return { checked: agents.length, online, changed };
+}
+
+// --- ajan güncelleme ---------------------------------------------------------
+
+/**
+ * Bu özellikten eski ajanda elle güncelleme komutu (ajanın kurulum
+ * dizininde). Bu bilgisayardan: `python agent-deploy.py <adres>`.
+ */
+export function manualAgentUpdateCommand(): string {
+  return `sed -i 's#^AGENT_IMAGE=.*#AGENT_IMAGE=${agentImage()}#' .env && docker compose pull && docker compose up -d`;
+}
+
+function agentHost(id: number): Host {
+  const host = getHost(id);
+  if (!host || host.isLocal || host.agentType !== "agent" || !host.certFingerprint) {
+    throw new Error(serverT("hosts.errors.unknown", { host: String(id) }));
+  }
+  // Durum bilerek "online" sayılıyor: güncellenmesi gereken ajan çoğu zaman
+  // tam da "uyumsuz" düşmüş olandır (heartbeat de böyle çağırıyor).
+  return { ...host, status: "online" };
+}
+
+/** Ajan `agent.update` bilmiyorsa (404) elle güncelleme gerektiğini anlatan hata. */
+function updateError(error: unknown): Error {
+  if (isHostError(error) && error.code === "incompatible") {
+    return new Error(serverT("hosts.update.errors.tooOld"));
+  }
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+/**
+ * Ajana hedef etiketi bildirir; ajan sürümü GitHub'dan kendi kurulumuna göre
+ * alır (GHCR imajı ya da kaynak arşivi) ve updater kendi sunucusunda sürer.
+ */
+export async function startAgentUpdate(id: number): Promise<string> {
+  const host = agentHost(id);
+  const tag = agentUpdateTarget(host);
+  if (!tag) throw new Error(serverT("hosts.update.errors.upToDate"));
+  try {
+    await agentCall(host, "agent.update", [tag]);
+  } catch (error) {
+    throw updateError(error);
+  }
+  return tag;
+}
+
+export async function agentUpdateStatus(id: number): Promise<UpdateStatus> {
+  try {
+    return await agentCall<UpdateStatus>(agentHost(id), "agent.updateStatus");
+  } catch (error) {
+    throw updateError(error);
+  }
+}
+
+/**
+ * Otomatik güncelleme: host başına en son denenen etiket. Aynı sürüm bir kez
+ * denenir — başarısız olursa her heartbeat'te yeniden denenmez (elle
+ * butondan tekrar başlatılabilir). Süreç yeniden başlarsa bir kez daha denenir.
+ */
+const autoAttempts = new Map<number, string>();
+
+function autoUpdate(host: Host, version: string) {
+  const attempted = autoAttempts.get(host.id);
+  if (attempted && compareTags(attempted, version) <= 0) {
+    autoAttempts.delete(host.id);
+    void runWithHost(host.id, () =>
+      dispatch({
+        severity: "info",
+        title: serverT("hosts.update.notify.doneTitle"),
+        detail: serverT("hosts.update.notify.doneDetail", { version }),
+      }),
+    ).catch(() => undefined);
+  }
+
+  const tag = agentUpdateTarget({ agentVersion: version });
+  if (!tag || autoAttempts.get(host.id) === tag || !getBool("agents.auto_update")) return;
+  autoAttempts.set(host.id, tag);
+
+  void startAgentUpdate(host.id).catch((error) => {
+    void runWithHost(host.id, () =>
+      dispatch({
+        severity: "warning",
+        title: serverT("hosts.update.notify.failedTitle"),
+        detail: serverT("hosts.update.notify.failedDetail", {
+          tag,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      }),
+    ).catch(() => undefined);
+  });
 }

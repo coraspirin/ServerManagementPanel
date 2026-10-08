@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 
 import {
+  ENV_IMAGE_AWK,
+  IMAGE_UPDATER_SCRIPT,
   UPDATER_SCRIPT,
   compareTags,
   formatStateLine,
@@ -81,4 +84,26 @@ test("imajla kurulumda yeni sürümün imaj referansı", () => {
   assert.equal(releaseImageRef("localhost:5000/panel", "v2.0.0"), "localhost:5000/panel:2.0.0");
   assert.equal(releaseImageRef("ghcr.io/sahip/panel@sha256:abc", "v1.0.1"), "ghcr.io/sahip/panel:1.0.1");
   assert.equal(releaseImageRef("server-panel:local", "v1.12.0"), null);
+});
+
+test("imaj betiği .env'deki imaj değişkenini de güncelliyor", () => {
+  assert.ok(IMAGE_UPDATER_SCRIPT.includes(ENV_IMAGE_AWK));
+  assert.equal(ENV_IMAGE_AWK.includes("'"), false);
+});
+
+const awk = spawnSync("awk", ["BEGIN { exit 0 }"]);
+test(".env imaj satırı yalnızca tam eşleşmede değişir", { skip: awk.status !== 0 && "awk yok" }, () => {
+  const run = (input: string) =>
+    spawnSync("awk", ["-v", "o=ghcr.io/a/p:1.0.0", "-v", "n=ghcr.io/a/p:1.1.0", ENV_IMAGE_AWK], {
+      input,
+      encoding: "utf8",
+    });
+
+  const changed = run('AGENT_TOKEN=x\nAGENT_IMAGE=ghcr.io/a/p:1.0.0\nQUOTED="ghcr.io/a/p:1.0.0"\n');
+  assert.equal(changed.status, 0);
+  assert.equal(changed.stdout, 'AGENT_TOKEN=x\nAGENT_IMAGE=ghcr.io/a/p:1.1.0\nQUOTED="ghcr.io/a/p:1.1.0"\n');
+
+  const same = run("AGENT_IMAGE=ghcr.io/a/p:1.0.0-rc\n# OLD=ghcr.io/a/p:1.0.0\nX=ghcr.io/a/p:1.0.0 y\n");
+  assert.equal(same.status, 1);
+  assert.equal(same.stdout, "AGENT_IMAGE=ghcr.io/a/p:1.0.0-rc\n# OLD=ghcr.io/a/p:1.0.0\nX=ghcr.io/a/p:1.0.0 y\n");
 });
