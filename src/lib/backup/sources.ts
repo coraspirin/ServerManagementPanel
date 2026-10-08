@@ -321,7 +321,7 @@ async function resolveCredentials(
   const fromEnv = credentialsFromEnv(engine, env);
   const defaultPort = engine === "postgres" ? Number(env.PGPORT ?? 5432) : Number(env.MYSQL_TCP_PORT ?? 3306);
   if (fromEnv) return { ...fromEnv, port: defaultPort };
-  const connection = listConnections().find((entry) => entry.container === container);
+  const connection = listConnections().find((entry) => entry.container === container && entry.username.length > 0);
   const secrets = connection ? connectionSecrets(connection.id) : null;
   if (!secrets) return null;
   return {

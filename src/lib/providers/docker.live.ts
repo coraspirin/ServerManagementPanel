@@ -494,12 +494,19 @@ export const liveDockerProvider: DockerProvider = {
     if (response.status !== 200) throw dockerError(response);
   },
 
-  async runOnce(nameOrId: string, command: string[]) {
+  async runOnce(nameOrId: string, command: string[], options = {}) {
     const created = await request(
       `/containers/${encodeURIComponent(nameOrId)}/exec`,
       10_000,
       "POST",
-      { AttachStdout: true, AttachStderr: true, Tty: false, Cmd: command },
+      {
+        AttachStdout: true,
+        AttachStderr: true,
+        Tty: false,
+        Cmd: command,
+        ...(options.env?.length ? { Env: options.env } : {}),
+        ...(options.user ? { User: options.user } : {}),
+      },
     );
     if (created.status !== 201) throw dockerError(created);
 
@@ -508,7 +515,7 @@ export const liveDockerProvider: DockerProvider = {
     // `Detach: false` + `Tty: false` → yanıt gövdesi ÇERÇEVELİ akış. Metin
     // olarak okunamaz: çerçeve başlığındaki uzunluk alanı geçerli UTF-8
     // olmayabilir ve decode edilirken bozulur. Bu yüzden ham bayt isteniyor.
-    const started = await requestBinary(`/exec/${execId}/start`, 30_000, {
+    const started = await requestBinary(`/exec/${execId}/start`, options.timeoutMs ?? 30_000, {
       Detach: false,
       Tty: false,
     });
@@ -519,7 +526,7 @@ export const liveDockerProvider: DockerProvider = {
         ? ((JSON.parse(inspected.body) as { ExitCode: number | null }).ExitCode ?? -1)
         : -1;
 
-    return { exitCode, output: stripFrames(started) };
+    return { exitCode, ...splitFrames(started) };
   },
 
   // --- M3.23 ---
@@ -974,17 +981,11 @@ function requestRawGet(path: string, timeoutMs: number): Promise<Buffer> {
  * Docker'ın çoklama (multiplexing) çerçevelerini söker.
  *
  * TTY'siz exec çıktısında her parça 8 baytlık bir başlıkla gelir:
- * [akış türü][0][0][0][uzunluk: 4 bayt big-endian]. stdout ve stderr aynı
- * dizede birleştiriliyor — bir hata mesajının hangisinden geldiği kullanıcıyı
+ * [akış türü][0][0][0][uzunluk: 4 bayt big-endian]. `output` ikisini
+ * birleştiriyor — bir hata mesajının hangisinden geldiği kullanıcıyı
  * ilgilendirmiyor, mesajın kendisi ilgilendiriyor.
- */
-function stripFrames(raw: Buffer): string {
-  return splitFrames(raw).output;
-}
-
-/**
- * Çerçeveleri sökerken akışları AYRI da tutar.
  *
+ * Akışlar AYRI da tutulur.
  * Çerçeve başlığının ilk baytı akış türü: 1 = stdout, 2 = stderr. JSON üreten
  * araçlarda bu ayrım şart — Trivy günlüğünü stderr'e, sonucu stdout'a yazıyor
  * ve ikisi birleşince çıktı ayrıştırılamıyor (sunucuda yaşandı).

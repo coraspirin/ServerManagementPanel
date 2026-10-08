@@ -376,7 +376,7 @@ export interface DockerProvider {
    * ve çıkış kodu tek parça döner. Caddy'yi yeniden yüklemek gibi işler için
    * terminal makinesini kurmak gereksiz ağırlık olurdu.
    */
-  runOnce(nameOrId: string, command: string[]): Promise<ExecResult>;
+  runOnce(nameOrId: string, command: string[], options?: RunOnceOptions): Promise<ExecResult>;
 
   // --- M3.4 ---
   /**
@@ -546,6 +546,18 @@ export type ThrowawaySpec = {
 export type ThrowawayEvent =
   | { type: "line"; stream: "stdout" | "stderr"; text: string }
   | { type: "exit"; exitCode: number; cancelled: boolean; timedOut: boolean };
+
+export type RunOnceOptions = {
+  /**
+   * "AD=değer" listesi. Parola gibi gizli değerler komut satırına değil buraya
+   * konur: argv container içindeki herkese `ps` ile görünür, ortam değil.
+   */
+  env?: string[];
+  /** Komutu çalıştıracak kullanıcı ("postgres", "0:0"); verilmezse container'ınki. */
+  user?: string;
+  /** Çıktı bekleme süresi; varsayılan 30 sn. */
+  timeoutMs?: number;
+};
 
 export type ExecResult = {
   exitCode: number;

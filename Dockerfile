@@ -53,8 +53,16 @@ RUN groupadd --system --gid 1001 panel \
 # komutla atılabiliyor. Debian'ın ping ikilisi `cap_net_raw+ep` dosya
 # yetkisiyle geliyor; Docker varsayılan yetki kümesi CAP_NET_RAW içerdiği için
 # root olmayan kullanıcıyla da çalışır.
+#
+# Veritabanı istemcileri: host'a kurulu (apt/systemd) MySQL/MariaDB,
+# PostgreSQL ve Redis'e panel bu imajdan açılan geçici bir container'la,
+# host soketi üzerinden erişiyor (veritabanı envanteri, döküm). Docker'daki
+# veritabanlarında container'ın kendi istemcisi kullanılıyor. Debian'ın
+# postgresql-client'ı 15: daha yeni bir native sunucunun dökümü pg_dump
+# sürüm uyuşmazlığıyla reddedilir (sorgu/yönetim etkilenmez).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends iputils-ping openssl \
+      mariadb-client postgresql-client redis-tools \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/public ./public

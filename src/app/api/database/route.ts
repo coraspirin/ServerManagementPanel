@@ -2,7 +2,7 @@ import { serverT } from "@/lib/i18n/runtime";
 import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { listTables, tableStructure, testConnection } from "@/lib/dbadmin";
-import { discoverDatabases, importDiscovered } from "@/lib/dbadmin/discovery";
+import { buildInventory } from "@/lib/dbadmin/exec/inventory";
 import {
   connectionSecrets,
   createConnection,
@@ -13,6 +13,8 @@ import {
   listSavedQueries,
   markConnection,
   saveQuery,
+  setInstanceCredentials,
+  setWritable,
   updateConnection,
   validateConnection,
   type ConnectionInput,
@@ -42,8 +44,15 @@ export async function GET(request: Request) {
   const mode = url.searchParams.get("mode");
   const id = Number(url.searchParams.get("id") ?? 0);
 
+  if (mode === "inventory") {
+    return Response.json(await buildInventory());
+  }
+
   if (mode === "tables" || mode === "structure") {
-    const connection = connectionSecrets(id);
+    const found = connectionSecrets(id);
+    // Envanterde seçilen veritabanı bağlantınınkinin yerine geçer.
+    const database = url.searchParams.get("database");
+    const connection = found && database !== null ? { ...found, database } : found;
     if (!connection) {
       return Response.json(
         { error: serverT("api.db.connectionOrPasswordMaster") },
@@ -68,10 +77,6 @@ export async function GET(request: Request) {
         { status: 400 },
       );
     }
-  }
-
-  if (mode === "discover") {
-    return Response.json({ discovered: await discoverDatabases() });
   }
 
   return Response.json({
@@ -117,19 +122,39 @@ export async function POST(request: Request) {
     return Response.json({ ...outcome, connections: listConnections() });
   }
 
-  if (action === "import") {
-    const outcome = await importDiscovered(String(body.container ?? ""));
-    if (!outcome.ok) return Response.json({ error: outcome.error }, { status: 400 });
-
+  if (action === "credentials") {
+    // Envanter sunucusunun kimliği; boş kullanıcı "kendiliğinden bul"a döner.
+    const id = Number(body.id ?? 0);
+    if (!setInstanceCredentials(id, String(body.username ?? ""), String(body.password ?? ""))) {
+      return Response.json({ error: serverT("api.notFound.connection") }, { status: 404 });
+    }
     audit({
       userId: guard.session.user.id,
       username: guard.session.user.username,
-      action: "db.import",
+      action: "db.connection.credentials",
       targetType: "db_connection",
-      targetId: String(body.container ?? ""),
+      targetId: String(id),
+      detail: String(body.username ?? "") || "auto",
       result: "ok",
     });
+    return Response.json({ ok: true, connections: listConnections() });
+  }
 
+  if (action === "writable") {
+    const id = Number(body.id ?? 0);
+    const writable = Boolean(body.writable);
+    if (!setWritable(id, writable)) {
+      return Response.json({ error: serverT("api.notFound.connection") }, { status: 404 });
+    }
+    audit({
+      userId: guard.session.user.id,
+      username: guard.session.user.username,
+      action: "db.connection.update",
+      targetType: "db_connection",
+      targetId: String(id),
+      detail: writable ? serverT("api.db.writable") : serverT("api.db.readOnly"),
+      result: "ok",
+    });
     return Response.json({ ok: true, connections: listConnections() });
   }
 
@@ -181,7 +206,7 @@ export async function PATCH(request: Request) {
 
   const id = Number(body.id ?? 0);
   const input = parseInput(body);
-  const problem = validateConnection(input);
+  const problem = validateConnection(input, id);
   if (problem) return Response.json({ error: problem }, { status: 400 });
 
   if (!updateConnection(id, input)) {

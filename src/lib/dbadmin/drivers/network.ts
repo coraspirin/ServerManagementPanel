@@ -26,7 +26,18 @@ export type NetConfig = {
   timeoutMs: number;
 };
 
-type Raw = { columns: string[]; rows: unknown[][]; affected: number | null };
+export type Raw = { columns: string[]; rows: unknown[][]; affected: number | null };
+
+/**
+ * Sorguyu çalıştıran taraf. Tablo/yapı sorguları hem doğrudan bağlantıyla
+ * (NetConfig) hem envanterin `docker exec`/geçici container yoluyla aynı
+ * SQL'i kullanıyor; değişen yalnızca SQL'i kimin çalıştırdığı.
+ */
+export type RawRunner = (sql: string) => Promise<Raw>;
+
+function via(config: NetConfig | RawRunner, query: (config: NetConfig, sql: string) => Promise<Raw>): RawRunner {
+  return typeof config === "function" ? config : (sql) => query(config, sql);
+}
 
 /* --- PostgreSQL --- */
 
@@ -62,9 +73,9 @@ export async function pgQuery(config: NetConfig, sql: string): Promise<Raw> {
   }
 }
 
-export async function pgTables(config: NetConfig): Promise<DbTable[]> {
-  const result = await pgQuery(
-    config,
+export async function pgTables(config: NetConfig | RawRunner): Promise<DbTable[]> {
+  const run = via(config, pgQuery);
+  const result = await run(
     `SELECT n.nspname, c.relname,
             CASE c.relkind WHEN 'v' THEN 'view' ELSE 'table' END AS kind,
             c.reltuples::bigint AS approx_rows,
@@ -87,20 +98,19 @@ export async function pgTables(config: NetConfig): Promise<DbTable[]> {
 }
 
 export async function pgStructure(
-  config: NetConfig,
+  config: NetConfig | RawRunner,
   schema: string,
   table: string,
 ): Promise<DbStructure> {
-  const columns = await pgQuery(
-    config,
+  const run = via(config, pgQuery);
+  const columns = await run(
     `SELECT column_name, data_type, is_nullable, column_default
      FROM information_schema.columns
      WHERE table_schema = ${literal(schema)} AND table_name = ${literal(table)}
      ORDER BY ordinal_position`,
   );
 
-  const keys = await pgQuery(
-    config,
+  const keys = await run(
     `SELECT kcu.column_name
      FROM information_schema.table_constraints tc
      JOIN information_schema.key_column_usage kcu
@@ -110,8 +120,7 @@ export async function pgStructure(
   );
   const primary = new Set(keys.rows.map((row) => String(row[0])));
 
-  const indexes = await pgQuery(
-    config,
+  const indexes = await run(
     `SELECT i.relname, ix.indisunique,
             array_to_string(array_agg(a.attname ORDER BY a.attnum), ',')
      FROM pg_class t
@@ -123,8 +132,7 @@ export async function pgStructure(
      GROUP BY i.relname, ix.indisunique`,
   );
 
-  const fks = await pgQuery(
-    config,
+  const fks = await run(
     `SELECT kcu.column_name, ccu.table_name, ccu.column_name
      FROM information_schema.table_constraints tc
      JOIN information_schema.key_column_usage kcu
@@ -145,7 +153,8 @@ export async function pgStructure(
     })),
     indexes: indexes.rows.map((row) => ({
       name: String(row[0]),
-      unique: Boolean(row[1]),
+      // psql CSV çıktısında boolean "t"/"f" metni.
+      unique: row[1] === true || row[1] === "t",
       columns: String(row[2]).split(","),
     })),
     foreignKeys: fks.rows.map((row) => ({
@@ -195,9 +204,9 @@ export async function mysqlQuery(config: NetConfig, sql: string): Promise<Raw> {
   }
 }
 
-export async function mysqlTables(config: NetConfig): Promise<DbTable[]> {
-  const result = await mysqlQuery(
-    config,
+export async function mysqlTables(config: NetConfig | RawRunner): Promise<DbTable[]> {
+  const run = via(config, mysqlQuery);
+  const result = await run(
     `SELECT table_schema, table_name, table_type, table_rows,
             COALESCE(data_length,0) + COALESCE(index_length,0)
      FROM information_schema.tables
@@ -215,28 +224,26 @@ export async function mysqlTables(config: NetConfig): Promise<DbTable[]> {
 }
 
 export async function mysqlStructure(
-  config: NetConfig,
+  config: NetConfig | RawRunner,
   schema: string,
   table: string,
 ): Promise<DbStructure> {
-  const columns = await mysqlQuery(
-    config,
+  const run = via(config, mysqlQuery);
+  const columns = await run(
     `SELECT column_name, column_type, is_nullable, column_default, column_key
      FROM information_schema.columns
      WHERE table_schema = ${literal(schema)} AND table_name = ${literal(table)}
      ORDER BY ordinal_position`,
   );
 
-  const indexes = await mysqlQuery(
-    config,
+  const indexes = await run(
     `SELECT index_name, NOT non_unique, GROUP_CONCAT(column_name ORDER BY seq_in_index)
      FROM information_schema.statistics
      WHERE table_schema = ${literal(schema)} AND table_name = ${literal(table)}
      GROUP BY index_name, non_unique`,
   );
 
-  const fks = await mysqlQuery(
-    config,
+  const fks = await run(
     `SELECT column_name, referenced_table_name, referenced_column_name
      FROM information_schema.key_column_usage
      WHERE table_schema = ${literal(schema)} AND table_name = ${literal(table)}
@@ -395,7 +402,11 @@ export async function redisQuery(config: NetConfig, command: string): Promise<Ra
 /** Redis'te tablo yok; anahtar alanları (keyspace) tablo gibi gösteriliyor. */
 export async function redisKeyspace(config: NetConfig): Promise<DbTable[]> {
   const [info] = await redisCommand(config, [["INFO", "keyspace"]]);
-  const text = typeof info === "string" ? info : "";
+  return parseKeyspace(typeof info === "string" ? info : "");
+}
+
+/** `INFO keyspace` metnindeki `dbN:keys=…` satırları. */
+export function parseKeyspace(text: string): DbTable[] {
   const tables: DbTable[] = [];
 
   for (const line of text.split("\n")) {

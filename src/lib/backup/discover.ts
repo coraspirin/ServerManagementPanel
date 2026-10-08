@@ -197,7 +197,11 @@ export function credentialsFromEnv(
 export async function discoverDatabases(): Promise<DbItem[]> {
   const job = getSystemJob("database");
   const saved = new Map((job?.sources ?? []).map((source) => [`${source.kind}:${source.ref}`, source]));
-  const connections = listConnections().filter((connection) => connection.container.length > 0);
+  // Veritabanı envanterinin kimliksiz satırları (kullanıcı adı boş) yedeğe
+  // kimlik sağlamaz.
+  const connections = listConnections().filter(
+    (connection) => connection.container.length > 0 && connection.username.length > 0,
+  );
   const items: DbItem[] = [];
 
   const containers = await getDockerProvider().list(true);

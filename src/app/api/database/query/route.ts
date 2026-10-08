@@ -28,7 +28,10 @@ export async function POST(request: Request) {
     return Response.json({ error: serverT("api.invalidRequest") }, { status: 400 });
   }
 
-  const connection = connectionSecrets(Number(body.connectionId ?? 0));
+  const found = connectionSecrets(Number(body.connectionId ?? 0));
+  // Envanterde seçilen veritabanı bağlantınınkinin yerine geçer.
+  const connection =
+    found && typeof body.database === "string" ? { ...found, database: body.database } : found;
   if (!connection) {
     return Response.json(
       { error: serverT("api.db.connectionOrPassword") },

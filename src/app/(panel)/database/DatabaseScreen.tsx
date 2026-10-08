@@ -1,9 +1,8 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
-  Database,
   Download,
   History,
   Lock,
@@ -16,7 +15,7 @@ import {
   Unlock,
 } from "lucide-react";
 import { Modal } from "@/components/Modal";
-import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
+import { withHostQuery } from "@/lib/client/host";
 import type { HistoryEntry, SavedQuery } from "@/lib/dbadmin/store";
 import {
   DEFAULT_PORT,
@@ -25,18 +24,27 @@ import {
   type DbEngine,
   type DbStructure,
   type DbTable,
+  type InventoryInstance,
   type QueryResult,
 } from "@/lib/dbadmin/types";
 import { useFormat, useT } from "@/lib/i18n/client";
 import { Rich } from "@/lib/i18n/rich";
+import { CreateDbModal, CredentialsModal, UsersModal } from "./AdminModals";
+import { call } from "./api";
+import { InventoryTree, type Selection } from "./InventoryTree";
 
 /**
  * M3.6 — veritabanı yöneticisi.
  *
- * Ekranın en görünür mesajı yazma korumasıdır: her bağlantının başında bir kilit
- * simgesi var ve salt-okunur olan bağlantıda SQL editörü yazma denemesini
- * sunucuya bile göndermeden değil — gönderip net bir cevap alarak reddediyor
- * (kural tek yerde, istemcide kopyası yok).
+ * Sol panel seçili sunucunun ENVANTERİ: Docker container'larındaki ve host'a
+ * kurulu DB sunucuları kendiliğinden bulunur, içlerindeki veritabanları
+ * boyutlarıyla listelenir. Elle eklenen bağlantılar (uzak sunucu, SQLite
+ * dosyası) altta ayrıca durur.
+ *
+ * Ekranın en görünür mesajı yine yazma korumasıdır: her bağlantının başında
+ * bir kilit simgesi var ve salt-okunur olan bağlantıda SQL editörü yazma
+ * denemesini sunucuya gönderip net bir cevap alarak reddediyor (kural tek
+ * yerde, istemcide kopyası yok).
  */
 
 type Payload = {
@@ -45,13 +53,11 @@ type Payload = {
   saved: SavedQuery[];
 };
 
-function readCsrfToken(): string {
-  const match = document.cookie.match(new RegExp(`(?:^|; )${CSRF_COOKIE}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : "";
-}
-
 const inputClass =
   "mt-1 w-full rounded-md border border-line bg-canvas px-3 py-1.5 text-sm outline-none focus:border-brand";
+
+const smallButton =
+  "rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand disabled:opacity-50";
 
 export function DatabaseScreen({
   initial,
@@ -63,7 +69,10 @@ export function DatabaseScreen({
   const t = useT();
   const f = useFormat();
   const [data, setData] = useState(initial);
-  const [active, setActive] = useState<DbConnection | null>(initial.connections[0] ?? null);
+  const [inventory, setInventory] = useState<InventoryInstance[] | null>(null);
+  const [inventoryErrors, setInventoryErrors] = useState<string[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [selection, setSelection] = useState<Selection | null>(null);
   const [tables, setTables] = useState<DbTable[]>([]);
   const [table, setTable] = useState<DbTable | null>(null);
   const [structure, setStructure] = useState<DbStructure | null>(null);
@@ -76,58 +85,132 @@ export function DatabaseScreen({
   const [notice, setNotice] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<{ dangers: string[] } | null>(null);
   const [draft, setDraft] = useState<Partial<DbConnection> & { password?: string } | null>(null);
-  const [discovery, setDiscovery] = useState<
-    { container: string; engine: DbEngine; alreadyKnown: boolean }[] | null
-  >(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [credentialsFor, setCredentialsFor] = useState<InventoryInstance | null>(null);
+  const [usersFor, setUsersFor] = useState<InventoryInstance | null>(null);
+  const [createFor, setCreateFor] = useState<InventoryInstance | null>(null);
+  const dumpFrame = useRef<HTMLIFrameElement | null>(null);
 
   const PAGE = 100;
 
-  async function call(path: string, method: string, body?: unknown) {
-    const response = await fetch(path, {
-      method,
-      headers: { "content-type": "application/json", [CSRF_HEADER]: readCsrfToken() },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    return { response, payload: (await response.json()) as Record<string, unknown> };
-  }
+  const active = selection ? (data.connections.find((entry) => entry.id === selection.connectionId) ?? null) : null;
+  const activeInstance = selection
+    ? (inventory?.find(
+        (entry) =>
+          entry.connectionId === selection.connectionId ||
+          entry.databases.some((database) => database.connectionId === selection.connectionId),
+      ) ?? null)
+    : null;
+  const activeDbInfo =
+    activeInstance?.databases.find((entry) =>
+      entry.connectionId ? entry.connectionId === selection?.connectionId : entry.name === selection?.database,
+    ) ?? null;
+  const activeDatabase = selection?.database ?? null;
+  const manual = data.connections.filter((entry) => !entry.instanceKey);
+  const title = activeInstance
+    ? `${activeInstance.label}${activeDbInfo ? ` / ${activeDbInfo.name}` : ""}`
+    : (active?.name ?? "");
 
-  const loadTables = useCallback(async (connection: DbConnection) => {
-    setBusy(true);
-    setError(null);
-    setTables([]);
-    setTable(null);
-    setResult(null);
+  /** Envanterde seçilen veritabanı isteklere eklenir; elle bağlantıda yok. */
+  const databaseParam = (current: Selection | null) =>
+    current?.database !== null && current?.database !== undefined
+      ? `&database=${encodeURIComponent(current.database)}`
+      : "";
+  const databaseBody = (current: Selection | null) =>
+    current?.database !== null && current?.database !== undefined ? { database: current.database } : {};
+
+  const loadInventory = useCallback(async () => {
+    setScanning(true);
     try {
-      const { response, payload } = await call(
-        `/api/database?mode=tables&id=${connection.id}`,
-        "GET",
-      );
+      const { response, payload } = await call("/api/database?mode=inventory", "GET");
       if (!response.ok) {
-        setError(String(payload.error ?? t("database.tablesFailed")));
-        return;
+        setInventoryErrors([String(payload.error ?? t("database.inventory.failed"))]);
+        setInventory((previous) => previous ?? []);
+        return null;
       }
-      setTables((payload.tables as DbTable[]) ?? []);
+      const instances = (payload.instances as InventoryInstance[]) ?? [];
+      setInventory(instances);
+      setInventoryErrors((payload.errors as string[]) ?? []);
+      // Envanter yeni bağlantı satırları açmış olabilir (kimlik, yetki bayrağı).
+      const list = await call("/api/database", "GET");
+      if (list.response.ok && list.payload.connections) {
+        setData((previous) => ({ ...previous, connections: list.payload.connections as DbConnection[] }));
+      }
+      return instances;
     } finally {
-      setBusy(false);
+      setScanning(false);
     }
   }, [t]);
 
-  async function selectConnection(connection: DbConnection) {
-    setActive(connection);
+  const loadTables = useCallback(
+    async (current: Selection) => {
+      setBusy(true);
+      setError(null);
+      setTables([]);
+      setTable(null);
+      setResult(null);
+      setStructure(null);
+      try {
+        const { response, payload } = await call(
+          `/api/database?mode=tables&id=${current.connectionId}${databaseParam(current)}`,
+          "GET",
+        );
+        if (!response.ok) {
+          setError(String(payload.error ?? t("database.tablesFailed")));
+          return;
+        }
+        setTables((payload.tables as DbTable[]) ?? []);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [t],
+  );
+
+  function select(next: Selection) {
+    setSelection(next);
     setTab("data");
-    await loadTables(connection);
+    void loadTables(next);
   }
 
+  // İlk açılış: envanter taranır, ilk çalışan sunucunun ilk kullanıcı
+  // veritabanı (yoksa ilk kayıtlı bağlantı) seçilir.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const instances = await loadInventory();
+      if (cancelled || selection) return;
+      for (const instance of instances ?? []) {
+        const first = instance.databases.find((entry) => !entry.system);
+        if (instance.state === "running" && first) {
+          select(
+            first.connectionId
+              ? { connectionId: first.connectionId, database: null }
+              : { connectionId: instance.connectionId, database: first.name },
+          );
+          return;
+        }
+      }
+      const fallback = initial.connections.find((entry) => !entry.instanceKey);
+      if (fallback) select({ connectionId: fallback.id, database: null });
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Yalnız ilk açılışta.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function openTable(entry: DbTable, nextOffset = 0) {
-    if (!active) return;
+    if (!selection) return;
     setBusy(true);
     setError(null);
     setTable(entry);
     setTab("data");
     try {
       const { response, payload } = await call("/api/database/query", "POST", {
-        connectionId: active.id,
+        connectionId: selection.connectionId,
+        ...databaseBody(selection),
         mode: "table",
         schema: entry.schema,
         table: entry.name,
@@ -146,13 +229,13 @@ export function DatabaseScreen({
   }
 
   async function loadStructure(entry: DbTable) {
-    if (!active) return;
+    if (!selection) return;
     setBusy(true);
     setTab("structure");
     setTable(entry);
     try {
       const { response, payload } = await call(
-        `/api/database?mode=structure&id=${active.id}&schema=${encodeURIComponent(
+        `/api/database?mode=structure&id=${selection.connectionId}${databaseParam(selection)}&schema=${encodeURIComponent(
           entry.schema,
         )}&table=${encodeURIComponent(entry.name)}`,
         "GET",
@@ -168,14 +251,15 @@ export function DatabaseScreen({
   }
 
   async function execute(confirmed = false) {
-    if (!active) return;
+    if (!selection) return;
     setBusy(true);
     setError(null);
     setNotice(null);
     setPendingConfirm(null);
     try {
       const { response, payload } = await call("/api/database/query", "POST", {
-        connectionId: active.id,
+        connectionId: selection.connectionId,
+        ...databaseBody(selection),
         sql,
         confirmed,
       });
@@ -198,7 +282,7 @@ export function DatabaseScreen({
           : t("database.rows", { count: outcome.rowCount, ms: outcome.durationMs }) +
               (outcome.truncated ? t("database.truncated") : ""),
       );
-      if (payload.history) setData({ ...data, history: payload.history as HistoryEntry[] });
+      if (payload.history) setData((previous) => ({ ...previous, history: payload.history as HistoryEntry[] }));
     } finally {
       setBusy(false);
     }
@@ -211,10 +295,10 @@ export function DatabaseScreen({
     try {
       const { response, payload } = await call("/api/database", method, body);
       if (payload.connections) {
-        setData((prev) => ({ ...prev, connections: payload.connections as DbConnection[] }));
+        setData((previous) => ({ ...previous, connections: payload.connections as DbConnection[] }));
       }
       if (payload.saved) {
-        setData((prev) => ({ ...prev, saved: payload.saved as SavedQuery[] }));
+        setData((previous) => ({ ...previous, saved: payload.saved as SavedQuery[] }));
       }
       if (!response.ok) {
         setError(String(payload.error ?? t("common.errors.actionFailed")));
@@ -225,6 +309,60 @@ export function DatabaseScreen({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function dropDatabase() {
+    if (!activeInstance || !activeDatabase) return;
+    const typed = prompt(t("database.dropDb.confirm", { name: activeDatabase }));
+    if (typed === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { response, payload } = await call("/api/database/admin", "POST", {
+        connectionId: activeInstance.connectionId,
+        action: "drop-db",
+        database: activeDatabase,
+        confirm: typed.trim(),
+      });
+      if (!response.ok) {
+        setError(String(payload.error ?? t("common.errors.actionFailed")));
+        return;
+      }
+      setNotice(t("database.dropDb.done", { name: activeDatabase }));
+      setSelection(null);
+      setTables([]);
+      setTable(null);
+      setResult(null);
+      await loadInventory();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Döküm gizli bir iframe'e indirilir: büyük dosya tarayıcı belleğine
+   * alınmaz. Uç hata verirse (JSON) iframe sayfa olarak yüklenir ve içerik
+   * okunup gösterilir — aynı köken olduğu için okunabiliyor.
+   */
+  function downloadDump() {
+    if (!activeInstance || !activeDatabase) return;
+    dumpFrame.current?.remove();
+    const frame = document.createElement("iframe");
+    frame.style.display = "none";
+    frame.addEventListener("load", () => {
+      try {
+        const text = frame.contentDocument?.body?.textContent ?? "";
+        if (text) setError(String((JSON.parse(text) as { error?: string }).error ?? text));
+      } catch {
+        // İndirme başladıysa belge boş ya da erişilemez.
+      }
+    });
+    frame.src = withHostQuery(
+      `/api/database/dump?id=${activeInstance.connectionId}&database=${encodeURIComponent(activeDatabase)}`,
+    );
+    document.body.appendChild(frame);
+    dumpFrame.current = frame;
+    setNotice(t("database.dump.started", { name: activeDatabase }));
   }
 
   function exportResult(format: "csv" | "json") {
@@ -256,148 +394,60 @@ export function DatabaseScreen({
     URL.revokeObjectURL(url);
   }
 
+  const canDump = Boolean(
+    activeInstance && activeDatabase && activeInstance.engine !== "redis" && activeInstance.engine !== "sqlite",
+  );
+  const canDrop = Boolean(canWrite && canDump && activeDbInfo && !activeDbInfo.system);
+
   return (
     <div className="space-y-4">
       <section className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surface p-3">
-        <Database className="size-4 text-subtle" aria-hidden />
-        <select
-          value={active?.id ?? 0}
-          onChange={(e) => {
-            const found = data.connections.find((entry) => entry.id === Number(e.target.value));
-            if (found) void selectConnection(found);
-          }}
-          className="rounded-md border border-line bg-canvas px-2 py-1.5 text-sm outline-none focus:border-brand"
+        <button
+          type="button"
+          disabled={scanning}
+          onClick={() => void loadInventory()}
+          className={`flex items-center gap-1.5 ${smallButton}`}
         >
-          {data.connections.length === 0 && <option value={0}>{t("database.noConnection")}</option>}
-          {data.connections.map((connection) => (
-            <option key={connection.id} value={connection.id}>
-              {connection.name} — {ENGINE_LABEL[connection.engine]}
-            </option>
-          ))}
-        </select>
-
-        {active && (
-          <span
-            className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${
-              active.writable ? "bg-warn/15 text-warn" : "bg-ok/10 text-ok"
-            }`}
-            title={
-              active.writable
-                ? t("database.writableTitle")
-                : t("database.readonlyTitle")
-            }
-          >
-            {active.writable ? <Unlock className="size-3" /> : <Lock className="size-3" />}
-            {active.writable ? t("database.writable") : t("database.readonly")}
-          </span>
-        )}
-
-        {active && !active.passwordReadable && (
-          <span className="flex items-center gap-1 rounded bg-danger/10 px-2 py-1 text-xs text-danger">
-            <AlertTriangle className="size-3" /> {t("database.passwordUnreadable")}
-          </span>
-        )}
-
+          <RefreshCw className={`size-3.5 ${scanning ? "animate-spin" : ""}`} /> {t("database.inventory.rescan")}
+        </button>
+        <span className="text-xs text-subtle">
+          {inventory === null
+            ? t("database.inventory.scanning")
+            : t("database.inventory.summary", {
+                servers: inventory.length,
+                databases: inventory.reduce(
+                  (sum, instance) => sum + instance.databases.filter((entry) => !entry.system).length,
+                  0,
+                ),
+              })}
+        </span>
         <div className="ml-auto flex flex-wrap gap-2">
-          {active && (
-            <>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void manage({ action: "test", id: active.id })}
-                className="rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand disabled:opacity-50"
-              >
-                {t("database.testConnection")}
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void loadTables(active)}
-                title={t("database.refreshTables")}
-                className="rounded-md border border-line p-1.5 text-subtle transition-colors hover:text-ink disabled:opacity-50"
-              >
-                <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />
-              </button>
-              {canWrite && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setDraft({ ...active, password: "" })}
-                    className="rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand"
-                  >
-                    {t("common.actions.edit")}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    title={t("database.deleteConnection")}
-                    onClick={async () => {
-                      if (
-                        confirm(t("database.confirmDelete", { name: active.name }))
-                      ) {
-                        const { response, payload } = await call(
-                          `/api/database?id=${active.id}`,
-                          "DELETE",
-                        );
-                        if (response.ok) {
-                          const next = (payload.connections as DbConnection[]) ?? [];
-                          setData((prev) => ({ ...prev, connections: next }));
-                          setActive(next[0] ?? null);
-                          setTables([]);
-                          setTable(null);
-                          setResult(null);
-                        } else {
-                          setError(String(payload.error ?? t("docker.resources.removeFailed")));
-                        }
-                      }
-                    }}
-                    className="rounded border border-line p-1.5 text-subtle transition-colors hover:text-danger disabled:opacity-50"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
-                </>
-              )}
-            </>
-          )}
           <button
             type="button"
             onClick={() => setShowHistory(true)}
-            className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand"
+            className={`flex items-center gap-1.5 ${smallButton}`}
           >
             <History className="size-3.5" /> {t("database.history")}
           </button>
           {canWrite && (
-            <>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={async () => {
-                  const { payload } = await call("/api/database?mode=discover", "GET");
-                  setDiscovery(
-                    (payload.discovered as { container: string; engine: DbEngine; alreadyKnown: boolean }[]) ??
-                      [],
-                  );
-                }}
-                className="rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand disabled:opacity-50"
-              >
-                {t("database.discover")}
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setDraft({ engine: "sqlite", name: "", host: "", port: 0, writable: false })
-                }
-                className="flex items-center gap-1.5 rounded-md bg-brand px-2.5 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90"
-              >
-                <Plus className="size-3.5" /> {t("database.connection")}
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => setDraft({ engine: "sqlite", name: "", host: "", port: 0, writable: false })}
+              className="flex items-center gap-1.5 rounded-md bg-brand px-2.5 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90"
+            >
+              <Plus className="size-3.5" /> {t("database.connection")}
+            </button>
           )}
         </div>
       </section>
 
+      {inventoryErrors.map((message) => (
+        <p key={message} role="alert" className="flex gap-2 rounded-lg bg-warn/10 px-4 py-2.5 text-sm text-warn">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden /> {message}
+        </p>
+      ))}
       {error && (
-        <p role="alert" className="rounded-lg bg-danger/10 px-4 py-2.5 text-sm text-danger">
+        <p role="alert" className="whitespace-pre-wrap rounded-lg bg-danger/10 px-4 py-2.5 text-sm text-danger">
           {error}
         </p>
       )}
@@ -433,259 +483,377 @@ export function DatabaseScreen({
         </div>
       )}
 
-      {data.connections.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-line bg-surface px-5 py-12 text-center">
-          <Database className="mx-auto size-8 text-subtle" aria-hidden />
-          <p className="mt-3 text-sm">{t("database.emptyTitle")}</p>
-          <p className="mt-1 text-xs text-subtle">
-            {t("database.emptyHelp")}
-          </p>
-        </div>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
-          <aside className="rounded-lg border border-line bg-surface">
-            <div className="border-b border-line px-3 py-2 text-xs font-semibold text-subtle">
-              {t("database.tables")} {tables.length > 0 && `(${tables.length})`}
-            </div>
-            <ul className="max-h-[32rem] divide-y divide-line overflow-y-auto">
-              {tables.length === 0 && (
-                <li className="px-3 py-6 text-center text-xs text-subtle">
-                  {busy ? t("database.reading") : t("database.noTables")}
-                </li>
-              )}
-              {tables.map((entry) => (
-                <li key={`${entry.schema}.${entry.name}`}>
-                  <button
-                    type="button"
-                    onClick={() => void openTable(entry)}
-                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-line/40 ${
-                      table?.name === entry.name && table?.schema === entry.schema
-                        ? "bg-brand/10 text-brand"
-                        : ""
-                    }`}
-                  >
-                    <Table2 className="size-3.5 shrink-0 text-subtle" aria-hidden />
-                    <span className="min-w-0 flex-1 truncate">
-                      {entry.schema !== "main" && entry.schema !== "keyspace" && (
-                        <span className="text-subtle">{entry.schema}.</span>
-                      )}
-                      {entry.name}
-                    </span>
-                    <span className="shrink-0 tabular-nums text-subtle">
-                      {entry.rowCount === null ? "?" : f.number(entry.rowCount)}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </aside>
+      <div className="grid gap-4 lg:grid-cols-[17rem_1fr]">
+        <InventoryTree
+          instances={inventory}
+          loading={scanning}
+          manual={manual}
+          selection={selection}
+          canWrite={canWrite}
+          onSelect={select}
+          onCredentials={setCredentialsFor}
+          onUsers={setUsersFor}
+          onCreateDb={setCreateFor}
+        />
 
+        {!active ? (
+          <div className="rounded-lg border border-dashed border-line bg-surface px-5 py-12 text-center">
+            <Table2 className="mx-auto size-8 text-subtle" aria-hidden />
+            <p className="mt-3 text-sm">{t("database.pickDatabase")}</p>
+            <p className="mt-1 text-xs text-subtle">{t("database.emptyHelp")}</p>
+          </div>
+        ) : (
           <div className="min-w-0 space-y-3">
-            <div className="flex flex-wrap gap-1 border-b border-line">
-              {(
-                [
-                  ["data", t("database.tab.data")],
-                  ["structure", t("database.tab.structure")],
-                  ["query", t("database.tab.query")],
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => {
-                    setTab(key);
-                    if (key === "structure" && table) void loadStructure(table);
-                  }}
-                  className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
-                    tab === key
-                      ? "border-brand font-medium text-brand"
-                      : "border-transparent text-subtle hover:text-ink"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+            <section className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surface p-3">
+              <span className="min-w-0 truncate text-sm font-medium">{title}</span>
+              <span className="text-xs text-subtle">{ENGINE_LABEL[active.engine]}</span>
 
-              {result && (
-                <div className="ml-auto flex items-center gap-2 pb-1 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => exportResult("csv")}
-                    className="flex items-center gap-1 text-brand hover:underline"
-                  >
-                    <Download className="size-3.5" /> CSV
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => exportResult("json")}
-                    className="flex items-center gap-1 text-brand hover:underline"
-                  >
-                    <Download className="size-3.5" /> JSON
-                  </button>
-                </div>
+              <button
+                type="button"
+                disabled={!canWrite || busy}
+                onClick={() =>
+                  activeInstance
+                    ? void manage({ action: "writable", id: active.id, writable: !active.writable })
+                    : setDraft({ ...active, password: "" })
+                }
+                className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium disabled:cursor-default ${
+                  active.writable ? "bg-warn/15 text-warn" : "bg-ok/10 text-ok"
+                }`}
+                title={active.writable ? t("database.writableTitle") : t("database.readonlyTitle")}
+              >
+                {active.writable ? <Unlock className="size-3" /> : <Lock className="size-3" />}
+                {active.writable ? t("database.writable") : t("database.readonly")}
+              </button>
+
+              {!active.passwordReadable && (
+                <span className="flex items-center gap-1 rounded bg-danger/10 px-2 py-1 text-xs text-danger">
+                  <AlertTriangle className="size-3" /> {t("database.passwordUnreadable")}
+                </span>
               )}
-            </div>
 
-            {tab === "query" && (
-              <div className="space-y-2">
-                <textarea
-                  value={sql}
-                  onChange={(e) => setSql(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void execute();
-                  }}
-                  spellCheck={false}
-                  rows={8}
-                  placeholder="SELECT * FROM ..."
-                  className="w-full rounded-md border border-line bg-canvas p-3 font-mono text-xs outline-none focus:border-brand"
-                />
-                <div className="flex flex-wrap items-center gap-2">
+              <div className="ml-auto flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void manage({ action: "test", id: active.id })}
+                  className={smallButton}
+                >
+                  {t("database.testConnection")}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => selection && void loadTables(selection)}
+                  title={t("database.refreshTables")}
+                  className="rounded-md border border-line p-1.5 text-subtle transition-colors hover:text-ink disabled:opacity-50"
+                >
+                  <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />
+                </button>
+                {canDump && (
                   <button
                     type="button"
-                    disabled={busy || !active}
-                    onClick={() => void execute()}
-                    className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                    onClick={downloadDump}
+                    className={`flex items-center gap-1.5 ${smallButton}`}
+                    title={t("database.dump.title")}
                   >
-                    <Play className="size-4" /> {t("database.run")}
+                    <Download className="size-3.5" /> {t("database.dump.button")}
                   </button>
-                  <span className="text-xs text-subtle">Ctrl+Enter</span>
+                )}
+                {canDrop && (
                   <button
                     type="button"
-                    disabled={!sql.trim()}
-                    onClick={() => {
-                      const name = prompt(t("database.queryName"));
-                      if (name?.trim()) {
-                        void manage({
-                          action: "save-query",
-                          connectionId: active?.id ?? null,
-                          name: name.trim(),
-                          sql,
-                        });
-                      }
-                    }}
-                    className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
+                    disabled={busy}
+                    onClick={() => void dropDatabase()}
+                    title={t("database.dropDb.title")}
+                    className="rounded border border-line p-1.5 text-subtle transition-colors hover:text-danger disabled:opacity-50"
                   >
-                    <Star className="size-4" /> {t("common.actions.save")}
+                    <Trash2 className="size-3.5" />
                   </button>
-
-                  {data.saved.length > 0 && (
-                    <select
-                      value=""
-                      onChange={(e) => {
-                        const found = data.saved.find(
-                          (entry) => entry.id === Number(e.target.value),
-                        );
-                        if (found) setSql(found.sql);
-                      }}
-                      className="rounded-md border border-line bg-canvas px-2 py-1.5 text-sm outline-none focus:border-brand"
+                )}
+                {canWrite && !activeInstance && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setDraft({ ...active, password: "" })}
+                      className={smallButton}
                     >
-                      <option value="">{t("database.savedQueries")}</option>
-                      {data.saved.map((entry) => (
-                        <option key={entry.id} value={entry.id}>
-                          {entry.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
+                      {t("common.actions.edit")}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      title={t("database.deleteConnection")}
+                      onClick={async () => {
+                        if (confirm(t("database.confirmDelete", { name: active.name }))) {
+                          const { response, payload } = await call(`/api/database?id=${active.id}`, "DELETE");
+                          if (response.ok) {
+                            setData((previous) => ({
+                              ...previous,
+                              connections: (payload.connections as DbConnection[]) ?? [],
+                            }));
+                            setSelection(null);
+                            setTables([]);
+                            setTable(null);
+                            setResult(null);
+                          } else {
+                            setError(String(payload.error ?? t("docker.resources.removeFailed")));
+                          }
+                        }
+                      }}
+                      className="rounded border border-line p-1.5 text-subtle transition-colors hover:text-danger disabled:opacity-50"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
+            </section>
+
+            <div className="grid gap-3 xl:grid-cols-[15rem_1fr]">
+              <aside className="rounded-lg border border-line bg-surface">
+                <div className="border-b border-line px-3 py-2 text-xs font-semibold text-subtle">
+                  {t("database.tables")} {tables.length > 0 && `(${tables.length})`}
                 </div>
-              </div>
-            )}
-
-            {tab === "structure" && structure && (
-              <div className="space-y-3">
-                <ResultTable
-                  columns={[
-                    t("database.col.column"),
-                    t("database.col.type"),
-                    t("database.col.nullable"),
-                    t("database.col.default"),
-                    t("database.col.primaryKey"),
-                  ]}
-                  rows={structure.columns.map((column) => [
-                    column.name,
-                    column.type,
-                    column.nullable ? t("database.yes") : t("database.no"),
-                    column.defaultValue,
-                    column.primaryKey ? "✓" : "",
-                  ])}
-                />
-                {structure.indexes.length > 0 && (
-                  <>
-                    <h3 className="px-1 text-xs font-semibold text-subtle">{t("database.indexes")}</h3>
-                    <ResultTable
-                      columns={[t("users.roles.name"), t("database.col.columns"), t("database.col.unique")]}
-                      rows={structure.indexes.map((index) => [
-                        index.name,
-                        index.columns.join(", "),
-                        index.unique ? t("database.yes") : t("database.no"),
-                      ])}
-                    />
-                  </>
-                )}
-                {structure.foreignKeys.length > 0 && (
-                  <>
-                    <h3 className="px-1 text-xs font-semibold text-subtle">{t("database.foreignKeys")}</h3>
-                    <ResultTable
-                      columns={[t("database.col.column"), t("database.col.targetTable"), t("database.col.targetColumn")]}
-                      rows={structure.foreignKeys.map((fk) => [
-                        fk.column,
-                        fk.referencesTable,
-                        fk.referencesColumn,
-                      ])}
-                    />
-                  </>
-                )}
-                {structure.createSql && (
-                  <pre className="overflow-x-auto rounded-md border border-line bg-canvas p-3 font-mono text-[11px]">
-                    {structure.createSql}
-                  </pre>
-                )}
-              </div>
-            )}
-
-            {(tab === "data" || tab === "query") && result && (
-              <>
-                <ResultTable columns={result.columns} rows={result.rows} />
-                <div className="flex items-center justify-between text-xs text-subtle">
-                  <span>
-                    {t("database.rows", { count: result.rowCount, ms: result.durationMs })}
-                    {result.truncated && t("database.resultTruncated")}
-                    {table?.rowCount !== null &&
-                      table !== null &&
-                      t("database.tableRows", { count: f.number(table.rowCount ?? 0) })}
-                  </span>
-                  {table && (
-                    <div className="flex gap-2">
+                <ul className="max-h-[32rem] divide-y divide-line overflow-y-auto">
+                  {tables.length === 0 && (
+                    <li className="px-3 py-6 text-center text-xs text-subtle">
+                      {busy ? t("database.reading") : t("database.noTables")}
+                    </li>
+                  )}
+                  {tables.map((entry) => (
+                    <li key={`${entry.schema}.${entry.name}`}>
                       <button
                         type="button"
-                        disabled={busy || offset === 0}
-                        onClick={() => void openTable(table, Math.max(0, offset - PAGE))}
-                        className="rounded-md border border-line px-3 py-1.5 disabled:opacity-40"
+                        onClick={() => void openTable(entry)}
+                        className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-line/40 ${
+                          table?.name === entry.name && table?.schema === entry.schema
+                            ? "bg-brand/10 text-brand"
+                            : ""
+                        }`}
                       >
-                        {t("database.previous")}
+                        <Table2 className="size-3.5 shrink-0 text-subtle" aria-hidden />
+                        <span className="min-w-0 flex-1 truncate">
+                          {entry.schema !== "main" &&
+                            entry.schema !== "keyspace" &&
+                            entry.schema !== "public" &&
+                            entry.schema !== activeDatabase && <span className="text-subtle">{entry.schema}.</span>}
+                          {entry.name}
+                        </span>
+                        <span className="shrink-0 tabular-nums text-subtle">
+                          {entry.rowCount === null ? "?" : f.number(entry.rowCount)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </aside>
+
+              <div className="min-w-0 space-y-3">
+                <div className="flex flex-wrap gap-1 border-b border-line">
+                  {(
+                    [
+                      ["data", t("database.tab.data")],
+                      ["structure", t("database.tab.structure")],
+                      ["query", t("database.tab.query")],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => {
+                        setTab(key);
+                        if (key === "structure" && table) void loadStructure(table);
+                      }}
+                      className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
+                        tab === key
+                          ? "border-brand font-medium text-brand"
+                          : "border-transparent text-subtle hover:text-ink"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+
+                  {result && (
+                    <div className="ml-auto flex items-center gap-2 pb-1 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => exportResult("csv")}
+                        className="flex items-center gap-1 text-brand hover:underline"
+                      >
+                        <Download className="size-3.5" /> CSV
                       </button>
                       <button
                         type="button"
-                        disabled={busy || result.rowCount < PAGE}
-                        onClick={() => void openTable(table, offset + PAGE)}
-                        className="rounded-md border border-line px-3 py-1.5 disabled:opacity-40"
+                        onClick={() => exportResult("json")}
+                        className="flex items-center gap-1 text-brand hover:underline"
                       >
-                        {t("database.next")}
+                        <Download className="size-3.5" /> JSON
                       </button>
                     </div>
                   )}
                 </div>
-              </>
-            )}
 
-            {tab === "data" && !result && (
-              <p className="rounded-lg border border-dashed border-line bg-surface px-5 py-10 text-center text-sm text-subtle">
-                {t("database.pickTable")}
-              </p>
-            )}
+                {tab === "query" && (
+                  <div className="space-y-2">
+                    <textarea
+                      value={sql}
+                      onChange={(e) => setSql(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void execute();
+                      }}
+                      spellCheck={false}
+                      rows={8}
+                      placeholder={active.engine === "redis" ? t("database.redisPlaceholder") : "SELECT * FROM ..."}
+                      className="w-full rounded-md border border-line bg-canvas p-3 font-mono text-xs outline-none focus:border-brand"
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void execute()}
+                        className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                      >
+                        <Play className="size-4" /> {t("database.run")}
+                      </button>
+                      <span className="text-xs text-subtle">Ctrl+Enter</span>
+                      <button
+                        type="button"
+                        disabled={!sql.trim()}
+                        onClick={() => {
+                          const name = prompt(t("database.queryName"));
+                          if (name?.trim()) {
+                            void manage({
+                              action: "save-query",
+                              connectionId: active.id,
+                              name: name.trim(),
+                              sql,
+                            });
+                          }
+                        }}
+                        className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50"
+                      >
+                        <Star className="size-4" /> {t("common.actions.save")}
+                      </button>
+
+                      {data.saved.length > 0 && (
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            const found = data.saved.find((entry) => entry.id === Number(e.target.value));
+                            if (found) setSql(found.sql);
+                          }}
+                          className="rounded-md border border-line bg-canvas px-2 py-1.5 text-sm outline-none focus:border-brand"
+                        >
+                          <option value="">{t("database.savedQueries")}</option>
+                          {data.saved.map((entry) => (
+                            <option key={entry.id} value={entry.id}>
+                              {entry.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {tab === "structure" && structure && (
+                  <div className="space-y-3">
+                    <ResultTable
+                      columns={[
+                        t("database.col.column"),
+                        t("database.col.type"),
+                        t("database.col.nullable"),
+                        t("database.col.default"),
+                        t("database.col.primaryKey"),
+                      ]}
+                      rows={structure.columns.map((column) => [
+                        column.name,
+                        column.type,
+                        column.nullable ? t("database.yes") : t("database.no"),
+                        column.defaultValue,
+                        column.primaryKey ? "✓" : "",
+                      ])}
+                    />
+                    {structure.indexes.length > 0 && (
+                      <>
+                        <h3 className="px-1 text-xs font-semibold text-subtle">{t("database.indexes")}</h3>
+                        <ResultTable
+                          columns={[t("users.roles.name"), t("database.col.columns"), t("database.col.unique")]}
+                          rows={structure.indexes.map((index) => [
+                            index.name,
+                            index.columns.join(", "),
+                            index.unique ? t("database.yes") : t("database.no"),
+                          ])}
+                        />
+                      </>
+                    )}
+                    {structure.foreignKeys.length > 0 && (
+                      <>
+                        <h3 className="px-1 text-xs font-semibold text-subtle">{t("database.foreignKeys")}</h3>
+                        <ResultTable
+                          columns={[
+                            t("database.col.column"),
+                            t("database.col.targetTable"),
+                            t("database.col.targetColumn"),
+                          ]}
+                          rows={structure.foreignKeys.map((fk) => [fk.column, fk.referencesTable, fk.referencesColumn])}
+                        />
+                      </>
+                    )}
+                    {structure.createSql && (
+                      <pre className="overflow-x-auto rounded-md border border-line bg-canvas p-3 font-mono text-[11px]">
+                        {structure.createSql}
+                      </pre>
+                    )}
+                  </div>
+                )}
+
+                {(tab === "data" || tab === "query") && result && (
+                  <>
+                    <ResultTable columns={result.columns} rows={result.rows} />
+                    <div className="flex items-center justify-between text-xs text-subtle">
+                      <span>
+                        {t("database.rows", { count: result.rowCount, ms: result.durationMs })}
+                        {result.truncated && t("database.resultTruncated")}
+                        {table?.rowCount !== null &&
+                          table !== null &&
+                          t("database.tableRows", { count: f.number(table.rowCount ?? 0) })}
+                      </span>
+                      {table && (
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={busy || offset === 0}
+                            onClick={() => void openTable(table, Math.max(0, offset - PAGE))}
+                            className="rounded-md border border-line px-3 py-1.5 disabled:opacity-40"
+                          >
+                            {t("database.previous")}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy || result.rowCount < PAGE}
+                            onClick={() => void openTable(table, offset + PAGE)}
+                            className="rounded-md border border-line px-3 py-1.5 disabled:opacity-40"
+                          >
+                            {t("database.next")}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {tab === "data" && !result && (
+                  <p className="rounded-lg border border-dashed border-line bg-surface px-5 py-10 text-center text-sm text-subtle">
+                    {t("database.pickTable")}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <ConnectionModal
         key={`conn-${draft?.id ?? (draft ? "yeni" : "yok")}`}
@@ -697,54 +865,33 @@ export function DatabaseScreen({
         }}
       />
 
-      <Modal
-        open={discovery !== null}
-        title={t("database.discoverTitle")}
-        onClose={() => setDiscovery(null)}
-      >
-        <p className="text-xs text-subtle">
-          <Rich
-            text={t("database.discoverIntro")}
-            values={{ strong: <strong>{t("database.readonly")}</strong> }}
-          />
-        </p>
-        <ul className="mt-3 divide-y divide-line rounded-md border border-line">
-          {(discovery ?? []).length === 0 && (
-            <li className="px-3 py-6 text-center text-sm text-subtle">
-              {t("database.discoverNone")}
-            </li>
-          )}
-          {(discovery ?? []).map((entry) => (
-            <li key={entry.container} className="flex items-center gap-3 px-3 py-2 text-sm">
-              <span className="flex-1">
-                {entry.container}
-                <span className="ml-2 text-xs text-subtle">{ENGINE_LABEL[entry.engine]}</span>
-              </span>
-              {entry.alreadyKnown ? (
-                <span className="text-xs text-subtle">{t("database.alreadyAdded")}</span>
-              ) : (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={async () => {
-                    if (await manage({ action: "import", container: entry.container })) {
-                      setDiscovery(null);
-                    }
-                  }}
-                  className="rounded-md border border-line px-2.5 py-1 text-xs transition-colors hover:border-brand disabled:opacity-50"
-                >
-                  {t("common.actions.add")}
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      </Modal>
+      <CredentialsModal
+        key={`cred-${credentialsFor?.key ?? ""}`}
+        instance={credentialsFor}
+        onClose={() => setCredentialsFor(null)}
+        onSaved={() => {
+          setCredentialsFor(null);
+          void loadInventory();
+        }}
+      />
+
+      <CreateDbModal
+        key={`create-${createFor?.key ?? ""}`}
+        instance={createFor}
+        onClose={() => setCreateFor(null)}
+        onCreated={async (name) => {
+          const instance = createFor;
+          setCreateFor(null);
+          setNotice(t("database.createDb.done", { name }));
+          await loadInventory();
+          if (instance) select({ connectionId: instance.connectionId, database: name });
+        }}
+      />
+
+      <UsersModal key={`users-${usersFor?.key ?? ""}`} instance={usersFor} onClose={() => setUsersFor(null)} />
 
       <Modal open={showHistory} title={t("database.historyTitle")} onClose={() => setShowHistory(false)} wide>
-        <p className="text-xs text-subtle">
-          {t("database.historyIntro")}
-        </p>
+        <p className="text-xs text-subtle">{t("database.historyIntro")}</p>
         <ul className="mt-3 divide-y divide-line rounded-md border border-line">
           {data.history.length === 0 && (
             <li className="px-3 py-6 text-center text-sm text-subtle">{t("database.historyEmpty")}</li>

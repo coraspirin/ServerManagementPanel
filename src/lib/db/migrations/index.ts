@@ -31,6 +31,7 @@ import { migration030 } from "./030_log_cursors_per_host";
 import { migration031 } from "./031_dashboard_size";
 import { migration032 } from "./032_kiosk_layout";
 import { migration033 } from "./033_backup_v2";
+import { migration034 } from "./034_dbadmin_inventory";
 import type { Migration } from "./types";
 
 /**
@@ -73,6 +74,7 @@ export const migrations: Migration[] = [
   migration031,
   migration032,
   migration033,
+  migration034,
 ];
 
 export type { Migration };

@@ -7,6 +7,7 @@ import {
   mysqlQuery,
   mysqlStructure,
   mysqlTables,
+  parseKeyspace,
   pgQuery,
   pgStructure,
   pgTables,
@@ -14,7 +15,9 @@ import {
   redisQuery,
   toQueryResult,
   type NetConfig,
+  type RawRunner,
 } from "./drivers/network";
+import { execQuery, execRaw } from "./exec/runner";
 import { sqliteRun, sqliteStructure, sqliteTables, toResult } from "./drivers/sqlite";
 import { analyzeSql, applyLimit } from "./sql-guard";
 import type { ConnectionSecrets } from "./store";
@@ -94,6 +97,10 @@ export async function localRunQuery(
   const started = Date.now();
 
   try {
+    if (viaExec(connection)) {
+      const raw = await execQuery(connection, finalSql, writes);
+      return { ok: true, result: toQueryResult(raw, Date.now() - started, limit) };
+    }
     switch (connection.engine) {
       case "sqlite": {
         const raw = await sqliteRun(connection.host, finalSql, writes);
@@ -119,7 +126,39 @@ export async function localRunQuery(
   }
 }
 
+/**
+ * Envanterdeki sunucular (docker/native) sürücüyle değil istemci CLI'ıyla
+ * okunur (bkz. `exec/runner.ts`). Bu iş MERKEZDE yapılır: Docker sağlayıcısı
+ * seçili sunucuya kendisi yönlendiriyor, ajana ayrıca op gerekmiyor.
+ */
+function viaExec(connection: ConnectionSecrets): boolean {
+  return connection.transport === "docker" || connection.transport === "native";
+}
+
+function execRunner(connection: ConnectionSecrets): RawRunner {
+  return (sql) => execQuery(connection, sql, false);
+}
+
+async function execListTables(connection: ConnectionSecrets): Promise<DbTable[]> {
+  switch (connection.engine) {
+    case "postgres":
+      return pgTables(execRunner(connection));
+    case "mysql": {
+      const tables = await mysqlTables(execRunner(connection));
+      // Envanterde bir veritabanı seçiliyse yalnız onun tabloları.
+      return connection.database ? tables.filter((table) => table.schema === connection.database) : tables;
+    }
+    case "redis": {
+      const { stdout } = await execRaw(connection, "INFO keyspace");
+      return parseKeyspace(stdout);
+    }
+    default:
+      return [];
+  }
+}
+
 export async function localListTables(connection: ConnectionSecrets): Promise<DbTable[]> {
+  if (viaExec(connection)) return execListTables(connection);
   switch (connection.engine) {
     case "sqlite":
       return sqliteTables(connection.host);
@@ -139,6 +178,12 @@ export async function localTableStructure(
   schema: string,
   table: string,
 ): Promise<DbStructure> {
+  if (viaExec(connection) && connection.engine === "postgres") {
+    return pgStructure(execRunner(connection), schema, table);
+  }
+  if (viaExec(connection) && connection.engine === "mysql") {
+    return mysqlStructure(execRunner(connection), schema, table);
+  }
   switch (connection.engine) {
     case "sqlite":
       return sqliteStructure(connection.host, table);
@@ -239,10 +284,12 @@ export function runQuery(
   sql: string,
   options: RunOptions = {},
 ): Promise<RunOutcome> {
+  if (viaExec(connection)) return localRunQuery(connection, sql, options);
   return onHost("db.query", [connection, sql, options], () => localRunQuery(connection, sql, options));
 }
 
 export function listTables(connection: ConnectionSecrets): Promise<DbTable[]> {
+  if (viaExec(connection)) return execListTables(connection);
   return onHost("db.tables", [connection], () => localListTables(connection));
 }
 
@@ -251,12 +298,14 @@ export function tableStructure(
   schema: string,
   table: string,
 ): Promise<DbStructure> {
+  if (viaExec(connection)) return localTableStructure(connection, schema, table);
   return onHost("db.structure", [connection, schema, table], () =>
     localTableStructure(connection, schema, table),
   );
 }
 
 export function testConnection(connection: ConnectionSecrets): Promise<{ ok: boolean; message: string }> {
+  if (viaExec(connection)) return localTestConnection(connection);
   return onHost("db.test", [connection], () => localTestConnection(connection));
 }
 
@@ -266,6 +315,7 @@ export function readTable(
   table: string,
   options: Parameters<typeof localReadTable>[3],
 ): ReturnType<typeof localReadTable> {
+  if (viaExec(connection)) return localReadTable(connection, schema, table, options);
   return onHost("db.read", [connection, schema, table, options], () =>
     localReadTable(connection, schema, table, options),
   );

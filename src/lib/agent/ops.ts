@@ -28,6 +28,7 @@ import {
   localTestConnection,
 } from "@/lib/dbadmin";
 import type { ConnectionSecrets } from "@/lib/dbadmin/store";
+import { localDiscoverNative } from "@/lib/dbadmin/exec/native";
 import {
   localChangeMode,
   localCreateDirectory,
@@ -179,6 +180,8 @@ export const AGENT_OPS: Record<string, AgentOp> = {
         (args[3] ?? { limit: 50, offset: 0 }) as Parameters<typeof localReadTable>[3],
       ),
   },
+  // Host'a kurulu DB servisleri (soket/systemd) — `/host/root`'a bakıyor.
+  "db.native": { kind: "call", run: () => localDiscoverNative() },
   "system.info": { kind: "call", run: () => getSystemProvider().info() },
   "metrics.sample": { kind: "call", run: () => getMetricsProvider().sample() },
   "hardware.report": { kind: "call", run: () => getHardwareProvider().report() },

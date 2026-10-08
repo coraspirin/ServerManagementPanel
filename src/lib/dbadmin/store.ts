@@ -4,7 +4,7 @@ import { serverT } from "@/lib/i18n/runtime";
 import { getDb } from "@/lib/db/client";
 import { currentHostId } from "@/lib/hosts/context";
 import { decryptSecret, encryptSecret, type EncryptedValue } from "@/lib/crypto";
-import { DEFAULT_PORT, type DbConnection, type DbEngine } from "./types";
+import { DEFAULT_PORT, type DbConnection, type DbEngine, type DbTransport, type NativeMeta } from "./types";
 
 /** M3.6 — bağlantılar, sorgu geçmişi ve kayıtlı sorgular. */
 
@@ -24,7 +24,8 @@ export function listConnections(): DbConnection[] {
     getDb()
       .prepare(
         `SELECT id, name, engine, host, port, username, password_enc, database,
-                writable, source, container, last_ok_at, last_error
+                writable, source, container, transport, instance_key, meta_json,
+                last_ok_at, last_error
          FROM db_connections WHERE host_id = ? ORDER BY name COLLATE NOCASE`,
       )
       // Bağlantılar sunucuya bağlı: veritabanına o sunucunun ajanı bağlanır.
@@ -42,12 +43,32 @@ export function listConnections(): DbConnection[] {
       hasPassword: enc.length > 0,
       passwordReadable: enc.length === 0 || readSecret(enc) !== null,
       writable: Number(row.writable) === 1,
-      source: String(row.source) === "docker" ? "docker" : "manual",
+      source: sourceOf(String(row.source)),
       container: String(row.container),
+      transport: transportOf(String(row.transport)),
+      instanceKey: String(row.instance_key ?? ""),
+      meta: parseMeta(String(row.meta_json ?? "{}")),
       lastOkAt: row.last_ok_at === null ? null : Number(row.last_ok_at),
       lastError: String(row.last_error ?? ""),
     };
   });
+}
+
+function sourceOf(raw: string): DbConnection["source"] {
+  return raw === "docker" || raw === "auto" ? raw : "manual";
+}
+
+function transportOf(raw: string): DbTransport {
+  return raw === "docker" || raw === "native" ? raw : "tcp";
+}
+
+function parseMeta(raw: string): NativeMeta {
+  try {
+    const value = JSON.parse(raw) as unknown;
+    return value && typeof value === "object" ? (value as NativeMeta) : {};
+  } catch {
+    return {};
+  }
 }
 
 export type ConnectionSecrets = DbConnection & { password: string };
@@ -77,8 +98,14 @@ export type ConnectionInput = {
   writable: boolean;
 };
 
-export function validateConnection(input: ConnectionInput): string | null {
+export function validateConnection(input: ConnectionInput, id = 0): string | null {
   if (input.name.trim().length < 2) return serverT("dbStore.name");
+  // Ad tablo genelinde UNIQUE (bkz. 034) — çakışma SQLite hatası olarak
+  // 500'e dönmesin, açıklamalı reddedilsin.
+  const taken = getDb()
+    .prepare("SELECT 1 FROM db_connections WHERE name = ? AND id <> ?")
+    .get(input.name.trim(), id);
+  if (taken) return serverT("dbStore.nameTaken");
   if (!ENGINES.has(input.engine as DbEngine)) return serverT("dbStore.engine");
 
   if (input.engine === "sqlite") {
@@ -217,10 +244,11 @@ export function listHistory(userId: number, limit = 50): HistoryEntry[] {
   return (
     getDb()
       .prepare(
-        `SELECT id, connection_id, username, sql, ts, duration_ms, row_count, ok, error
-         FROM db_query_history WHERE user_id = ? ORDER BY ts DESC, id DESC LIMIT ?`,
+        `SELECT h.id, h.connection_id, h.username, h.sql, h.ts, h.duration_ms, h.row_count, h.ok, h.error
+         FROM db_query_history h JOIN db_connections c ON c.id = h.connection_id
+         WHERE h.user_id = ? AND c.host_id = ? ORDER BY h.ts DESC, h.id DESC LIMIT ?`,
       )
-      .all(userId, limit) as Record<string, string | number>[]
+      .all(userId, currentHostId(), limit) as Record<string, string | number>[]
   ).map((row) => ({
     id: Number(row.id),
     connectionId: Number(row.connection_id),
@@ -248,9 +276,12 @@ export function listSavedQueries(): SavedQuery[] {
   return (
     getDb()
       .prepare(
-        "SELECT id, connection_id, name, sql, username FROM db_saved_queries ORDER BY name COLLATE NOCASE",
+        `SELECT id, connection_id, name, sql, username FROM db_saved_queries
+         WHERE connection_id IS NULL
+            OR connection_id IN (SELECT id FROM db_connections WHERE host_id = ?)
+         ORDER BY name COLLATE NOCASE`,
       )
-      .all() as Record<string, string | number | null>[]
+      .all(currentHostId()) as Record<string, string | number | null>[]
   ).map((row) => ({
     id: Number(row.id),
     connectionId: row.connection_id === null ? null : Number(row.connection_id),
@@ -276,4 +307,120 @@ export function saveQuery(input: {
 
 export function deleteSavedQuery(id: number): boolean {
   return Number(getDb().prepare("DELETE FROM db_saved_queries WHERE id = ?").run(id).changes) > 0;
+}
+
+/* --- Envanter --- */
+
+export type InstanceRecord = {
+  key: string;
+  engine: DbEngine;
+  /** SQLite dosyaları "tcp": envanterden gelse de sürücüyle doğrudan açılıyor. */
+  transport: DbTransport;
+  container: string;
+  host: string;
+  port: number;
+  meta: NativeMeta;
+};
+
+/**
+ * Envanterin bulduğu sunucuyu bağlantı satırına eşler; satırın kimliği sabit
+ * kalır ki sorgu geçmişi ve kayıtlı sorgular ona bağlı kalsın.
+ *
+ * Yeni satır YAZILAMAZ başlar (keşifle aynı ilke). İç ad benzersiz; arayüz
+ * adı container/servis adından üretir (bkz. 034).
+ */
+export function upsertInstance(record: InstanceRecord): number {
+  const db = getDb();
+  const hostId = currentHostId();
+  const existing = db
+    .prepare("SELECT id FROM db_connections WHERE host_id = ? AND instance_key = ?")
+    .get(hostId, record.key) as { id: number } | undefined;
+
+  if (existing) {
+    db.prepare(
+      `UPDATE db_connections
+       SET engine = ?, transport = ?, container = ?, host = ?, port = ?, meta_json = ?
+       WHERE id = ?`,
+    ).run(
+      record.engine,
+      record.transport,
+      record.container,
+      record.host,
+      record.port,
+      JSON.stringify(record.meta),
+      existing.id,
+    );
+    return Number(existing.id);
+  }
+
+  const info = db
+    .prepare(
+      `INSERT INTO db_connections
+         (host_id, name, engine, host, port, writable, source, container, transport, instance_key, meta_json)
+       VALUES (?, ?, ?, ?, ?, 0, 'auto', ?, ?, ?, ?)`,
+    )
+    .run(
+      hostId,
+      `@${hostId}:${record.key}`,
+      record.engine,
+      record.host,
+      record.port,
+      record.container,
+      record.transport,
+      record.key,
+      JSON.stringify(record.meta),
+    );
+  return Number(info.lastInsertRowid);
+}
+
+/**
+ * Artık bulunmayan envanter satırlarını siler. Yalnızca kendiliğinden
+ * oluşanlar ve kullanıcının kimlik GİRMEDİKLERİ: girilmiş bir parolayı,
+ * container geçici olarak silindi diye kaybetmek can sıkardı.
+ *
+ * `scanned`: bu turda başarıyla taranan anahtar önekleri ("docker:",
+ * "sqlite:"…). Taraması başarısız olan türün satırlarına dokunulmaz.
+ */
+export function pruneInstances(presentKeys: string[], scanned: string[]): void {
+  const present = new Set(presentKeys);
+  const rows = getDb()
+    .prepare(
+      `SELECT id, instance_key FROM db_connections
+       WHERE host_id = ? AND source = 'auto' AND password_enc = '' AND username = ''`,
+    )
+    .all(currentHostId()) as { id: number; instance_key: string }[];
+  const remove = getDb().prepare("DELETE FROM db_connections WHERE id = ?");
+  for (const row of rows) {
+    const covered = scanned.some((prefix) => row.instance_key.startsWith(prefix));
+    if (covered && !present.has(row.instance_key)) remove.run(row.id);
+  }
+}
+
+/** Envanter sunucusunun kimliği: boş kullanıcı adı "kendiliğinden bul" demek. */
+export function setInstanceCredentials(id: number, username: string, password: string): boolean {
+  return (
+    Number(
+      getDb()
+        .prepare(
+          `UPDATE db_connections SET username = ?, password_enc = ?
+           WHERE id = ? AND host_id = ? AND instance_key <> ''`,
+        )
+        .run(
+          username.trim(),
+          password ? JSON.stringify(encryptSecret(password)) : "",
+          id,
+          currentHostId(),
+        ).changes,
+    ) > 0
+  );
+}
+
+export function setWritable(id: number, writable: boolean): boolean {
+  return (
+    Number(
+      getDb()
+        .prepare("UPDATE db_connections SET writable = ? WHERE id = ? AND host_id = ?")
+        .run(writable ? 1 : 0, id, currentHostId()).changes,
+    ) > 0
+  );
 }

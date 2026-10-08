@@ -220,10 +220,8 @@ export const mockDockerProvider: DockerProvider = {
   // Başarılı dönüyor: MOCK_MODE'un amacı ekranı sınamak ve "Caddy yeniden
   // yüklendi" akışının nasıl göründüğü de sınanabilmeli.
   async runOnce(nameOrId: string, command: string[]) {
-    return {
-      exitCode: 0,
-      output: `MOCK_MODE — çalıştırılmadı: ${nameOrId} $ ${command.join(" ")}`,
-    };
+    const output = `MOCK_MODE — çalıştırılmadı: ${nameOrId} $ ${command.join(" ")}`;
+    return { exitCode: 0, output, stdout: "", stderr: "" };
   },
 
   async runThrowaway(spec) {
