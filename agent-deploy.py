@@ -94,17 +94,26 @@ rollback() {
 OUT=$($D compose -p "$P" up -d --force-recreate "$S" 2>&1) || { echo "$OUT" | tail -5; rollback; fail "compose up"; }
 echo "$OUT" | tail -3
 
+# Doğrulama: container yeni imajla çalışıyor ve sağlık kontrolü geçiyor.
+# APP_VERSION'a bakılmıyor — eski yayın imajları onu çalışma ortamına
+# yazmıyor (sürüm koddaki varsayılandan geliyor).
 i=0
-while [ $i -lt 30 ]; do
+H=missing
+while [ $i -lt 60 ]; do
   C=$(find_agent) || C=""
-  if [ -n "$C" ] && [ "$($D inspect -f '{{.State.Running}}' "$C" 2>/dev/null)" = true ]; then
-    V=$($D exec "$C" printenv APP_VERSION 2>/dev/null || true)
-    [ "$V" = "$VERSION" ] && { echo "çalışan sürüm: $V"; exit 0; }
+  if [ -n "$C" ] && [ "$($D inspect -f '{{.Config.Image}}' "$C" 2>/dev/null)" = "$NEW" ]; then
+    H=$($D inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$C" 2>/dev/null)
+    case "$H" in
+      healthy|running) echo "ajan çalışıyor: $NEW ($H)"; exit 0 ;;
+      unhealthy|exited|dead) break ;;
+    esac
   fi
-  i=$((i + 1)); sleep 2
+  i=$((i + 1)); sleep 3
 done
+echo "son durum: $H"
+[ -n "$C" ] && $D logs --tail 20 "$C" 2>&1 | sed 's/^/   log: /'
 rollback
-fail "ajan $VERSION olarak ayağa kalkmadı"
+fail "ajan $NEW ile sağlıklı açılmadı"
 """
 
 
@@ -179,7 +188,9 @@ def main() -> int:
             if not status:
                 results.append((host, "HATA: sunucuda ajan container'ı bulunamadı (PANEL_ROLE=agent)"))
                 continue
-            current = status.get("VERSION") or "?"
+            # APP_VERSION yoksa (eski yayın imajları) imaj etiketinden.
+            tag = status.get("IMAGE", "").rsplit(":", 1)[-1] if ":" in status.get("IMAGE", "") else ""
+            current = status.get("VERSION") or (tag if tag[:1].isdigit() else "?")
             print(
                 f"   şu an: {current} ({status.get('IMAGE')}, {status.get('STATE')}), "
                 f"mimari: {status.get('ARCH')}, dizin: {status.get('DIR')}"
