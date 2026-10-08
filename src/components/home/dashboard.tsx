@@ -22,7 +22,8 @@ import { appGroups } from "@/lib/apps/store";
 import type { AppGroup } from "@/lib/apps/types";
 import { hasPermission } from "@/lib/auth/session";
 import type { SessionUser } from "@/lib/auth/types";
-import { lastSuccessfulRunAt, listJobs, listRuns } from "@/lib/backup/store";
+import { backupHealth, backupOverview } from "@/lib/backup/overview";
+import { listRuns } from "@/lib/backup/store/runs";
 import { RESOURCE_METRICS } from "@/lib/dashboard/catalog";
 import type { WidgetPlacement } from "@/lib/dashboard/catalog";
 import { layoutFor } from "@/lib/dashboard/store";
@@ -196,7 +197,12 @@ export async function buildDashboard({
     containers: containers && needs("containers") ? <ContainerSummary overview={containers} readOnly={readOnly} /> : null,
     backups:
       can.backup && needs("backups") ? (
-        <BackupStatus runs={listRuns(5)} stale={backupStale()} readOnly={readOnly} />
+        <BackupStatus
+          systems={backupOverview().systems}
+          runs={listRuns({ limit: 5 }).runs}
+          stale={backupStale()}
+          readOnly={readOnly}
+        />
       ) : null,
     maintenance: needs("maintenance") ? (
       <div id="maintenance">
@@ -209,12 +215,9 @@ export async function buildDashboard({
   return { layout, widgets };
 }
 
-/** Yedekleme işi tanımlıysa ve son başarılı yedek eşikten eskiyse true. */
+/** Etkin bir yedek sisteminin son yedeği başarısız ya da gecikmişse true. */
 function backupStale(): boolean {
-  if (listJobs().length === 0) return false;
-  const last = lastSuccessfulRunAt();
-  const limit = getNumber("backup.stale_after_hours") * 3600;
-  return last === null || Math.floor(Date.now() / 1000) - last > limit;
+  return backupHealth().failing.length > 0;
 }
 
 /**
@@ -303,8 +306,8 @@ function statusItems(input: {
     }
   }
 
-  if (can.backup && listJobs().length > 0) {
-    const last = lastSuccessfulRunAt();
+  if (can.backup && backupHealth().configured > 0) {
+    const last = backupHealth().lastSuccessAt;
     if (backupStale()) {
       items.push({
         key: "backup",

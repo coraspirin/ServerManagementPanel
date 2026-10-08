@@ -17,6 +17,7 @@ import type {
   PruneResult,
   PruneScope,
   RestartPolicy,
+  ThrowawaySpec,
 } from "./types";
 
 /**
@@ -689,69 +690,11 @@ export const liveDockerProvider: DockerProvider = {
   // --- M3.4 ---
 
   async runThrowaway(spec): Promise<ExecResult> {
-    const name = `${spec.namePrefix}-${randomBytes(4).toString("hex")}`;
     let containerId: string | null = null;
 
-    const payload = {
-      Image: spec.image,
-      Cmd: spec.cmd,
-      Env: Object.entries(spec.env).map(([key, value]) => `${key}=${value}`),
-      Tty: false,
-      ...(spec.user ? { User: spec.user } : {}),
-      HostConfig: {
-        Binds: spec.binds,
-        // AutoRemove kapalı: container kendini silerse çıkış kodunu ve
-        // loglarını okuyamayız — hata durumunda tam olarak ihtiyaç duyulan
-        // iki şey bunlar. Silme işini finally bloğu üstleniyor.
-        AutoRemove: false,
-        NetworkMode: spec.networkMode ?? "bridge",
-        ...(spec.pidMode ? { PidMode: spec.pidMode } : {}),
-        ...(spec.capAdd?.length ? { CapAdd: spec.capAdd } : {}),
-        ...(spec.securityOpt?.length ? { SecurityOpt: spec.securityOpt } : {}),
-      },
-    };
-
-    const createPath = `/containers/create?name=${encodeURIComponent(name)}`;
-
     try {
-      let created = await request(createPath, 30_000, "POST", payload);
-
-      /*
-        İmaj yerelde yoksa Docker 404 döner. Kullanıcıya "önce indir" demek
-        yanlış olurdu: bu imajlar panelin kendi araçları (restic, trivy,
-        alpine) ve kullanıcının onları yönetmesi beklenmiyor. Bir kez indirilip
-        yeniden deneniyor.
-      */
-      if (created.status === 404) {
-        try {
-          // İlerleme satırları tüketiliyor; akış bitince indirme tamam.
-          const progress = this.pullImage(spec.image);
-          while (!(await progress.next()).done) {
-            /* ilerleme yok sayılıyor */
-          }
-        } catch (error) {
-          throw new Error(
-            serverT("dockerLive.pullFailed", {
-              image: spec.image,
-              error: error instanceof Error ? error.message : "?",
-            }),
-          );
-        }
-        created = await request(createPath, 30_000, "POST", payload);
-      }
-
-      if (created.status === 404) {
-        throw new Error(serverT("dockerLive.imageMissing", { image: spec.image }));
-      }
-      if (created.status !== 201) throw dockerError(created);
-      containerId = (JSON.parse(created.body) as { Id: string }).Id;
-
-      const started = await request(
-        `/containers/${containerId}/start`,
-        30_000,
-        "POST",
-      );
-      if (started.status !== 204 && started.status !== 304) throw dockerError(started);
+      containerId = await createThrowaway(spec, (reference) => this.pullImage(reference));
+      await startThrowaway(containerId);
 
       const waited = await request(
         `/containers/${containerId}/wait`,
@@ -773,18 +716,174 @@ export const liveDockerProvider: DockerProvider = {
       const streams = splitFrames(logs);
       return { exitCode, ...streams };
     } finally {
+      if (containerId) await removeThrowaway(containerId);
+    }
+  },
+
+  async *runThrowawayStream(spec, signal) {
+    let containerId: string | null = null;
+    let cancelled = false;
+    let timedOut = false;
+
+    // SIGTERM + 15 sn: restic sinyali yakalayıp depo kilidini bırakıyor;
+    // doğrudan kill etmek depoyu kilitli bırakırdı.
+    const stop = () => {
       if (containerId) {
-        // Silme başarısız olsa da asıl sonucu bastırmamalı: yedekleme bitti mi
-        // sorusunun cevabı, geride kalan bir container'dan daha önemli.
-        try {
-          await request(`/containers/${containerId}?force=1&v=1`, 30_000, "DELETE");
-        } catch (error) {
-          console.error(`[docker] geçici container silinemedi (${name}):`, error);
-        }
+        request(`/containers/${containerId}/stop?t=15`, 30_000, "POST").catch(() => undefined);
       }
+    };
+    const onAbort = () => {
+      cancelled = true;
+      stop();
+    };
+
+    try {
+      containerId = await createThrowaway(spec, (reference) => this.pullImage(reference));
+      if (signal.aborted) {
+        yield { type: "exit", exitCode: -1, cancelled: true, timedOut: false };
+        return;
+      }
+      await startThrowaway(containerId);
+
+      signal.addEventListener("abort", onAbort, { once: true });
+      const timer = setTimeout(() => {
+        timedOut = true;
+        stop();
+      }, spec.timeoutMs);
+
+      try {
+        const response = await openStream(
+          `/containers/${containerId}/logs?stdout=1&stderr=1&follow=1`,
+        );
+        if (response.statusCode !== 200) {
+          response.resume();
+          throw new Error(`Docker API ${response.statusCode}`);
+        }
+
+        // Tty kapalı → çerçeveli akış. Bir satır iki çerçeveye bölünebilir;
+        // her akışın yarım kalan satırı ayrı tutuluyor.
+        const carry = { stdout: "", stderr: "" };
+        let buffer = Buffer.alloc(0);
+        for await (const chunk of response) {
+          buffer = Buffer.concat([buffer, chunk as Buffer]);
+          while (buffer.length >= 8) {
+            const size = buffer.readUInt32BE(4);
+            if (buffer.length < 8 + size) break;
+            const stream = buffer[0] === 2 ? "stderr" : "stdout";
+            carry[stream] += buffer.subarray(8, 8 + size).toString("utf8");
+            buffer = buffer.subarray(8 + size);
+
+            const lines = carry[stream].split("\n");
+            carry[stream] = lines.pop() ?? "";
+            for (const line of lines) {
+              if (line.length > 0) yield { type: "line", stream, text: line };
+            }
+          }
+        }
+        for (const stream of ["stdout", "stderr"] as const) {
+          if (carry[stream].length > 0) yield { type: "line", stream, text: carry[stream] };
+        }
+      } finally {
+        clearTimeout(timer);
+        signal.removeEventListener("abort", onAbort);
+      }
+
+      const waited = await request(`/containers/${containerId}/wait`, 60_000, "POST");
+      const exitCode =
+        waited.status === 200
+          ? Number((JSON.parse(waited.body) as { StatusCode: number }).StatusCode)
+          : -1;
+      yield { type: "exit", exitCode, cancelled, timedOut };
+    } finally {
+      if (containerId) await removeThrowaway(containerId);
     }
   },
 };
+
+/**
+ * Geçici container'ı yaratır (M3.4). İmaj yerelde yoksa Docker 404 döner;
+ * kullanıcıya "önce indir" demek yanlış olurdu: bu imajlar panelin kendi
+ * araçları (restic, trivy, alpine) ve kullanıcının onları yönetmesi
+ * beklenmiyor. Bir kez indirilip yeniden deneniyor.
+ */
+async function createThrowaway(
+  spec: ThrowawaySpec,
+  pull: (reference: string) => AsyncGenerator<string>,
+): Promise<string> {
+  const name = `${spec.namePrefix}-${randomBytes(4).toString("hex")}`;
+  const payload = {
+    Image: spec.image,
+    Cmd: spec.cmd,
+    ...(spec.entrypoint ? { Entrypoint: spec.entrypoint } : {}),
+    Env: Object.entries(spec.env).map(([key, value]) => `${key}=${value}`),
+    Tty: false,
+    ...(spec.user ? { User: spec.user } : {}),
+    HostConfig: {
+      Binds: spec.binds,
+      // AutoRemove kapalı: container kendini silerse çıkış kodunu ve
+      // loglarını okuyamayız — hata durumunda tam olarak ihtiyaç duyulan
+      // iki şey bunlar. Silme işini çağıranın finally bloğu üstleniyor.
+      AutoRemove: false,
+      NetworkMode: spec.networkMode ?? "bridge",
+      ...(spec.pidMode ? { PidMode: spec.pidMode } : {}),
+      ...(spec.capAdd?.length ? { CapAdd: spec.capAdd } : {}),
+      ...(spec.securityOpt?.length ? { SecurityOpt: spec.securityOpt } : {}),
+    },
+  };
+
+  const createPath = `/containers/create?name=${encodeURIComponent(name)}`;
+  let created = await request(createPath, 30_000, "POST", payload);
+
+  if (created.status === 404) {
+    try {
+      // İlerleme satırları tüketiliyor; akış bitince indirme tamam.
+      const progress = pull(spec.image);
+      while (!(await progress.next()).done) {
+        /* ilerleme yok sayılıyor */
+      }
+    } catch (error) {
+      throw new Error(
+        serverT("dockerLive.pullFailed", {
+          image: spec.image,
+          error: error instanceof Error ? error.message : "?",
+        }),
+      );
+    }
+    created = await request(createPath, 30_000, "POST", payload);
+  }
+
+  if (created.status === 404) {
+    throw new Error(serverT("dockerLive.imageMissing", { image: spec.image }));
+  }
+  if (created.status !== 201) throw dockerError(created);
+  return (JSON.parse(created.body) as { Id: string }).Id;
+}
+
+async function startThrowaway(containerId: string): Promise<void> {
+  const started = await request(`/containers/${containerId}/start`, 30_000, "POST");
+  if (started.status !== 204 && started.status !== 304) throw dockerError(started);
+}
+
+/**
+ * Silme başarısız olsa da asıl sonucu bastırmamalı: yedekleme bitti mi
+ * sorusunun cevabı, geride kalan bir container'dan daha önemli.
+ */
+async function removeThrowaway(containerId: string): Promise<void> {
+  try {
+    await request(`/containers/${containerId}?force=1&v=1`, 30_000, "DELETE");
+  } catch (error) {
+    console.error(`[docker] geçici container silinemedi (${containerId.slice(0, 12)}):`, error);
+  }
+}
+
+/** Süresiz GET akışı (follow) — zaman aşımı çağıranın sorumluluğunda. */
+function openStream(path: string): Promise<http.IncomingMessage> {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ socketPath: SOCKET_PATH, path, method: "GET" }, resolve);
+    req.on("error", reject);
+    req.end();
+  });
+}
 
 /** Ham bayt döndüren istek — çerçeveli exec çıktısı için (M2.8). */
 function requestBinary(path: string, timeoutMs: number, jsonBody: unknown): Promise<Buffer> {

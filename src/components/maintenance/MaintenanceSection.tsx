@@ -1,4 +1,7 @@
+import Link from "next/link";
 import { formatBytes } from "@/lib/metrics/catalog";
+import { backupOverview } from "@/lib/backup/overview";
+import type { SystemCategory } from "@/lib/backup/types";
 import { backupStatus } from "@/lib/backup/watch";
 import { cachedImageUpdates } from "@/lib/updates";
 import { osUpdateReport } from "@/lib/updates/os";
@@ -22,6 +25,7 @@ import { ImageUpdatePanel } from "./ImageUpdatePanel";
 export async function MaintenanceSection({ canAct }: { canAct: boolean }) {
   const [os, backup] = await Promise.all([osUpdateReport(), backupStatus()]);
   const images = cachedImageUpdates();
+  const systems = backupOverview().systems;
   const t = getT();
   const dict = getActiveDictionary();
   const ago = (ts: number) => formatRelative(ts * 1000, dict);
@@ -100,35 +104,54 @@ EOF`}
         </section>
 
         <section className="rounded-lg border border-line bg-surface">
-          <div className="border-b border-line px-5 py-3">
+          <div className="flex items-center justify-between border-b border-line px-5 py-3">
             <h3 className="font-semibold">{t("maintenance.backup.title")}</h3>
-            <p className="mt-0.5 text-xs text-subtle">
-              {backup.watching ? backup.dir : t("maintenance.backup.off")}
-            </p>
+            <Link href="/backup" className="text-xs text-brand hover:underline">
+              {t("maintenance.backup.open")}
+            </Link>
           </div>
 
           <div className="px-5 py-3 text-sm">
-            {!backup.watching ? (
-              <p className="text-subtle">
-                {t("maintenance.backup.setup")}
-              </p>
-            ) : backup.error ? (
-              <p className="text-danger">{backup.error}</p>
-            ) : backup.newestAt === null ? (
-              <p className="text-danger">{t("maintenance.backup.empty")}</p>
+            {systems.every((system) => !system.configured) ? (
+              <p className="text-subtle">{t("maintenance.backup.setup")}</p>
             ) : (
-              <>
-                <p className={backup.stale ? "text-danger" : "text-ok"}>
-                  {t("maintenance.backup.latest", { when: ago(backup.newestAt) })}
-                  {backup.stale &&
-                    t("maintenance.backup.threshold", { hours: backup.staleAfterHours })}
-                </p>
-                <p className="mt-1 text-xs text-subtle">
-                  {backup.newestName} ·{" "}
-                  {t("maintenance.backup.files", { count: backup.fileCount })} ·{" "}
-                  {formatBytes(backup.totalBytes)}
-                </p>
-              </>
+              <ul className="space-y-1">
+                {systems.map((system) => (
+                  <li key={system.category} className="flex items-center gap-2">
+                    <span
+                      className={`size-2 shrink-0 rounded-full ${
+                        system.state === "ok"
+                          ? "bg-ok"
+                          : system.state === "error"
+                            ? "bg-danger"
+                            : system.state === "warning"
+                              ? "bg-warn"
+                              : "bg-line"
+                      }`}
+                      aria-hidden
+                    />
+                    <span className="flex-1">{t(`backup.category.${system.category as SystemCategory}`)}</span>
+                    <span className={`text-xs ${system.state === "error" ? "text-danger" : "text-subtle"}`}>
+                      {!system.configured
+                        ? t("backup.state.unset")
+                        : system.lastSuccessAt
+                          ? t("maintenance.backup.latest", { when: ago(system.lastSuccessAt) })
+                          : t("backup.card.none")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {backup.watching && (
+              <p className={`mt-3 border-t border-line pt-2 text-xs ${backup.error || backup.stale ? "text-danger" : "text-subtle"}`}>
+                {t("maintenance.backup.external", { dir: backup.dir })}{" "}
+                {backup.error
+                  ? backup.error
+                  : backup.newestAt === null
+                    ? t("maintenance.backup.empty")
+                    : `${t("maintenance.backup.latest", { when: ago(backup.newestAt) })} · ${t("maintenance.backup.files", { count: backup.fileCount })} · ${formatBytes(backup.totalBytes)}`}
+              </p>
             )}
           </div>
         </section>

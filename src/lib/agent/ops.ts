@@ -190,6 +190,13 @@ export const AGENT_OPS: Record<string, AgentOp> = {
       return getDockerProvider().logs(String(args[0]), { ...options, signal });
     },
   },
+  // Yedekleme (restic) canlı ilerlemesi: merkez bağlantıyı kapatınca bu
+  // isteğin sinyali container'ı durdurur.
+  "docker.runThrowawayStream": {
+    kind: "stream",
+    run: (args, signal) =>
+      getDockerProvider().runThrowawayStream(args[0] as Parameters<DockerProvider["runThrowawayStream"]>[0], signal),
+  },
   // Helper: eylem bu sunucunun helper'ına iletilir; asıl izin listesi helper'ın
   // kendi allow.conf'u. Burada yalnızca uzaktan yönetilen alanlar geçer.
   "helper.call": {

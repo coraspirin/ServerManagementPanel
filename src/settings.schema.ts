@@ -1228,6 +1228,15 @@ export const settingDefs: SettingDef[] = [
     min: 5,
     max: 1440,
   },
+  {
+    // Veritabanı dökümleri ve container yapılandırmaları yedeğe girmeden önce
+    // bu named volume'e yazılır; koşu bitince temizlenir.
+    key: "backup.staging_volume",
+    group: "updates",
+    section: "backupEngine",
+    type: "string",
+    default: "panel-backup-staging",
+  },
 
   // ---------- Merkezi log arama (M3.3) ----------
   {

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { backupOverview } from "@/lib/backup/overview";
+import type { SystemCategory } from "@/lib/backup/types";
 import { backupStatus } from "@/lib/backup/watch";
 import { getDb } from "@/lib/db/client";
 import { currentHostId, LOCAL_HOST_ID } from "@/lib/hosts/context";
@@ -450,8 +452,35 @@ async function osUpdateConditions(): Promise<Condition[]> {
   return conditions;
 }
 
-/** Yedek eskimesi — yedekleme sisteminin en sinsi arızası sessizce durmasıdır. */
+/**
+ * Yedek eskimesi — yedekleme sisteminin en sinsi arızası sessizce durmasıdır.
+ *
+ * İki kaynak: üç yedek sisteminin her biri (zamanlamasının 2 katı boyunca
+ * başarılı yedek yoksa) ve isteğe bağlı panel dışı yedek klasörü.
+ */
 async function backupConditions(): Promise<Condition[]> {
+  const conditions: Condition[] = [];
+  for (const system of backupOverview().systems) {
+    if (!system.configured || !system.enabled || !system.scheduleCron) continue;
+    const name = serverT(`backup.category.${system.category as SystemCategory}`);
+    conditions.push({
+      key: `backup:gecikme:${system.category}`,
+      source: "system",
+      severity: system.overdue ? "critical" : "ok",
+      title: system.overdue
+        ? serverT("alerts.backup.systemOverdueTitle", { name })
+        : serverT("alerts.backup.systemFreshTitle", { name }),
+      detail: system.lastSuccessAt
+        ? serverT("alerts.backup.systemDetail", {
+            hours: Math.floor((Date.now() / 1000 - system.lastSuccessAt) / 3600),
+          })
+        : serverT("alerts.backup.systemNever"),
+    });
+  }
+  return [...conditions, ...(await folderConditions())];
+}
+
+async function folderConditions(): Promise<Condition[]> {
   const status = await backupStatus();
   if (!status.watching) return [];
 

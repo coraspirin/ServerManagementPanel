@@ -388,6 +388,16 @@ export interface DockerProvider {
    */
   runThrowaway(spec: ThrowawaySpec): Promise<ExecResult>;
 
+  /**
+   * `runThrowaway`'in akışlı hâli: çıktı satırları geldikçe verilir, en sonda
+   * tek bir `exit` olayı gelir. Yedekleme ekranındaki canlı ilerleme için —
+   * restic `--json` durum satırlarını saniyede bir yazıyor.
+   *
+   * `signal` iptal edilince container durdurulur; yine de `exit` gelir ve
+   * container her durumda silinir.
+   */
+  runThrowawayStream(spec: ThrowawaySpec, signal: AbortSignal): AsyncGenerator<ThrowawayEvent>;
+
   // --- M3.23 (container içi dosya tarayıcı) ---
   /**
    * Container içindeki bir yolu TAR arşivi olarak okur.
@@ -484,6 +494,11 @@ export type ImageLayer = {
 export type ThrowawaySpec = {
   image: string;
   cmd: string[];
+  /**
+   * İmajın ENTRYPOINT'i yerine. restic imajının giriş noktası `restic`;
+   * düşük öncelik (`nice`) ya da kabuk adımları (döküm, `df`) için gerekli.
+   */
+  entrypoint?: string[];
   /** "kaynak:hedef:mod" — Docker bind sözdizimi. */
   binds: string[];
   env: Record<string, string>;
@@ -527,6 +542,10 @@ export type ThrowawaySpec = {
    */
   securityOpt?: string[];
 };
+
+export type ThrowawayEvent =
+  | { type: "line"; stream: "stdout" | "stderr"; text: string }
+  | { type: "exit"; exitCode: number; cancelled: boolean; timedOut: boolean };
 
 export type ExecResult = {
   exitCode: number;

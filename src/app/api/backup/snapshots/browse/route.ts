@@ -1,0 +1,23 @@
+import { backupGuard, describe, fail } from "@/lib/backup/http";
+import { browseSnapshot, jobContext } from "@/lib/backup/restore";
+
+export const dynamic = "force-dynamic";
+
+/** Snapshot gezgini: bir klasörün doğrudan içeriği (tembel ağaç). */
+export async function GET(request: Request) {
+  const guard = await backupGuard(request);
+  if (!guard.ok) return guard.response;
+  const url = new URL(request.url);
+  const context = jobContext(Number(url.searchParams.get("jobId") ?? 0));
+  if ("error" in context) return fail(context.error, 404);
+  try {
+    const entries = await browseSnapshot(
+      context,
+      String(url.searchParams.get("snapshotId") ?? ""),
+      String(url.searchParams.get("path") ?? "/"),
+    );
+    return Response.json({ entries });
+  } catch (error) {
+    return fail(describe(error), 400);
+  }
+}

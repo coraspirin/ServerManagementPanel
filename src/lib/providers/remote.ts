@@ -32,6 +32,11 @@ function remoteDocker(host: Host): DockerProvider {
           return agentStream(host, "docker.logs", [id, rest], signal);
         };
       }
+      if (property === "runThrowawayStream") {
+        // İptal: merkez bağlantıyı kapatır, ajan kendi sinyaliyle container'ı durdurur.
+        return (spec: Parameters<DockerProvider["runThrowawayStream"]>[0], signal: AbortSignal) =>
+          agentStream(host, "docker.runThrowawayStream", [spec], signal);
+      }
       if (STREAMS.has(property)) {
         return (...args: unknown[]) => agentStream(host, `docker.${property}`, args);
       }

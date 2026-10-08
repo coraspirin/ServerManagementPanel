@@ -3,7 +3,7 @@ import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { getNumber, getString } from "@/lib/settings";
 import { onHost } from "@/lib/hosts/on-host";
-import { lastSuccessfulRunAt } from "./store";
+import { lastSuccessfulRunAt } from "./store/runs";
 
 /**
  * Yedek klasörü takibi (M1.10 + M3.4).

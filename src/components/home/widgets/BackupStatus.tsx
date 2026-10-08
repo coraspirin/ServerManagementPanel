@@ -1,22 +1,36 @@
-import { Archive, CheckCircle2, CircleAlert, Loader2 } from "lucide-react";
-import type { BackupRun } from "@/lib/backup/types";
+import { Archive, CheckCircle2, CircleAlert, CircleDashed, Loader2, PauseCircle, TriangleAlert } from "lucide-react";
+import type { SystemState, SystemStatus } from "@/lib/backup/overview";
+import type { BackupRun, SystemCategory } from "@/lib/backup/types";
 import { formatBytes } from "@/lib/metrics/catalog";
 import { formatRelative } from "@/lib/i18n/format";
 import { getActiveDictionary, getT } from "@/lib/i18n/server";
 import { WidgetCard, WidgetEmpty } from "./WidgetCard";
 
-/** Yedekler — son çalışmalar; ayrıntı ve geri yükleme Yedekleme ekranında. */
+const STATE_ICON: Record<SystemState, { icon: typeof CheckCircle2; className: string }> = {
+  ok: { icon: CheckCircle2, className: "text-ok" },
+  warning: { icon: TriangleAlert, className: "text-warn" },
+  error: { icon: CircleAlert, className: "text-danger" },
+  off: { icon: PauseCircle, className: "text-subtle" },
+  running: { icon: Loader2, className: "animate-spin text-brand" },
+  unset: { icon: CircleDashed, className: "text-subtle" },
+};
+
+/** Yedekler — üç sistemin durumu ve son çalışma; ayrıntı Yedekleme ekranında. */
 export function BackupStatus({
+  systems,
   runs,
   stale,
   readOnly = false,
 }: {
+  systems: SystemStatus[];
   runs: BackupRun[];
   stale: boolean;
   readOnly?: boolean;
 }) {
   const t = getT();
   const dict = getActiveDictionary();
+  const configured = systems.filter((system) => system.configured);
+  const lastRun = runs.find((run) => run.kind === "backup");
 
   return (
     <WidgetCard
@@ -30,31 +44,43 @@ export function BackupStatus({
         ) : undefined
       }
     >
-      {runs.length === 0 ? (
+      {configured.length === 0 ? (
         <WidgetEmpty>{t("dashboard.backups.empty")}</WidgetEmpty>
       ) : (
-        <ul className="divide-y divide-line">
-          {runs.map((run) => (
-            <li key={run.id} className="flex items-center gap-2 py-2 text-sm first:pt-0 last:pb-0">
-              {run.status === "ok" ? (
-                <CheckCircle2 className="size-4 shrink-0 text-ok" aria-label={t("dashboard.backups.ok")} />
-              ) : run.status === "error" ? (
-                <CircleAlert className="size-4 shrink-0 text-danger" aria-label={t("dashboard.backups.error")} />
-              ) : (
-                <Loader2 className="size-4 shrink-0 animate-spin text-brand" aria-label={t("dashboard.backups.running")} />
-              )}
-              <span className="min-w-0 flex-1 truncate" title={run.detail || run.jobName}>
-                {run.jobName}
-              </span>
-              {run.status === "ok" && (
-                <span className="shrink-0 text-xs tabular-nums text-subtle">+{formatBytes(run.bytesAdded)}</span>
-              )}
-              <time className="shrink-0 text-xs text-subtle">
-                {formatRelative((run.finishedAt ?? run.startedAt) * 1000, dict)}
-              </time>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="divide-y divide-line">
+            {systems.map((system) => {
+              const style = STATE_ICON[system.state];
+              const Icon = style.icon;
+              return (
+                <li key={system.category} className="flex items-center gap-2 py-2 text-sm first:pt-0 last:pb-0">
+                  <Icon className={`size-4 shrink-0 ${style.className}`} aria-label={t(`backup.state.${system.state}`)} />
+                  <span className="min-w-0 flex-1 truncate">{t(`backup.category.${system.category as SystemCategory}`)}</span>
+                  {system.configured ? (
+                    <>
+                      {system.lastSize !== null && (
+                        <span className="shrink-0 text-xs tabular-nums text-subtle">{formatBytes(system.lastSize)}</span>
+                      )}
+                      <time className="shrink-0 text-xs text-subtle">
+                        {system.lastSuccessAt ? formatRelative(system.lastSuccessAt * 1000, dict) : t("backup.card.none")}
+                      </time>
+                    </>
+                  ) : (
+                    <span className="shrink-0 text-xs text-subtle">{t("backup.state.unset")}</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {lastRun && (
+            <p className="mt-2 truncate border-t border-line pt-2 text-xs text-subtle" title={lastRun.detail}>
+              {t("dashboard.backups.lastRun", {
+                when: formatRelative((lastRun.finishedAt ?? lastRun.startedAt) * 1000, dict),
+                status: t(`backup.runStatus.${lastRun.status}`),
+              })}
+            </p>
+          )}
+        </>
       )}
     </WidgetCard>
   );

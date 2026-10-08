@@ -238,6 +238,15 @@ export const mockDockerProvider: DockerProvider = {
     };
   },
 
+  async *runThrowawayStream(spec) {
+    yield {
+      type: "line",
+      stream: "stderr",
+      text: `MOCK_MODE — çalıştırılmadı: ${spec.image} ${spec.cmd.join(" ")}`,
+    };
+    yield { type: "exit", exitCode: 1, cancelled: false, timedOut: false };
+  },
+
   async imageHistory() {
     // Fixture'da katman geçmişi yok; boş liste "katman bilgisi yok" olarak
     // gösteriliyor ve arayüz bunu doğru karşılıyor.

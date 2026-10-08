@@ -16,8 +16,9 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
  * 2: terminal (exec.*), Docker olayları, helper.call ve sunucu dosya
  * işlemleri eklendi. 1.10.0 ajanı bunları bilmiyor; bağlanıp yarım
  * çalışmak yerine açıkça uyumsuz görünsün.
+ * 3: yedekleme v2 — akışlı geçici container (docker.runThrowawayStream).
  */
-export const AGENT_PROTOCOL = 2;
+export const AGENT_PROTOCOL = 3;
 
 export const AGENT_HEADERS = {
   ts: "x-agent-ts",
@@ -142,7 +143,7 @@ export const DOCKER_CALLS = [
 ] as const;
 
 /** Akış döndüren Docker metotları (`AsyncGenerator`). */
-export const DOCKER_STREAMS = ["pullImage", "logs"] as const;
+export const DOCKER_STREAMS = ["pullImage", "logs", "runThrowawayStream"] as const;
 
 // --- Codec -----------------------------------------------------------------
 

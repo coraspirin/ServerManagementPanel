@@ -4,7 +4,7 @@ import { announce } from "@/lib/alerts/announce";
 import { pruneApiTokens } from "@/lib/auth/apitoken";
 import { pruneAudit } from "@/lib/auth/audit";
 import { pruneExpiredChallenges } from "@/lib/auth/twofactor";
-import { runDueBackups } from "@/lib/backup/engine";
+import { runDueBackups } from "@/lib/backup/scheduler";
 import { runAlertCycle } from "@/lib/alerts/engine";
 import { pruneEvents } from "@/lib/alerts/store";
 import { mqttConfigured, publishDiscovery, publishMetrics } from "@/lib/integration/publish";

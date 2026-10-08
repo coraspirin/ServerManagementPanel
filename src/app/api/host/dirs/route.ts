@@ -9,9 +9,15 @@ export const dynamic = "force-dynamic";
  * `settings.edit` ile korunuyor, `files.read` ile DEĞİL: bu uç dosya
  * yöneticisinin izinli kök listesini yapılandırmak için var ve o listeyle
  * sınırlanamaz (bkz. lib/host/dirs.ts). Yalnızca klasör ADLARI dönüyor.
+ *
+ * Yedekleme ekranı da kullanıyor (konum ve geri yükleme hedefi seçimi):
+ * `backup.manage` yetkisi de yeterli.
  */
 export async function GET(request: Request) {
-  const guard = await guardHostApi(request, "settings.edit", { agent: true });
+  let guard = await guardHostApi(request, "settings.edit", { agent: true });
+  if (!guard.ok && guard.response.status === 403) {
+    guard = await guardHostApi(request, "backup.manage", { agent: true });
+  }
   if (!guard.ok) return guard.response;
   enterHost(guard.hostId);
 
