@@ -23,9 +23,6 @@ services:
       # T3 — secret şifreleme anahtarı. Yoksa panel açılmaz.
       # Panel dışında AYRI bir yerde de saklanmalı; yedeğe girmez.
       MASTER_KEY: ${MASTER_KEY:?MASTER_KEY tanimli degil - bkz .env.example}
-      # İlk kurulumda admin parolası (boşsa rastgele üretilip loga yazılır).
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       # T4 — host-helper ile paylaşılan HMAC sırrı. Boşsa host işlemleri
       # (güç, systemd, compose) kapalıdır ve panel bunu açıkça söyler.
       HELPER_SECRET: ${HELPER_SECRET:-}

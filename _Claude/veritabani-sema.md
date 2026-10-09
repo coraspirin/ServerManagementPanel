@@ -10,14 +10,14 @@ Dosya: `data/panel.db` (container'da `/app/data`, named volume `panel-data`). Er
 |---|---|---|---|---|
 | `hosts` | 001 (+026) | — | `lib/hosts/store.ts` | id 1 = yerel sunucu |
 | `metrics_raw`, `metrics_1m`, `metrics_1h`, `metrics_1d` | 001 | ✓ (PK parçası) | `lib/metrics/*`, `lib/docker/collect.ts`, `lib/alerts/conditions.ts`, `lib/dashboard/summary.ts` | katmanlı zaman serisi; container ölçümleri de burada (label = container adı) |
-| `users`, `roles`, `permissions`, `role_permissions`, `sessions` | 002 (+013) | sessions ✓ | `lib/auth/{users,session,login,bootstrap,apitoken}.ts` | izin kataloğu `permissions`'a migration'la eklenir |
+| `users`, `roles`, `permissions`, `role_permissions`, `sessions` | 002 (+013) | sessions ✓ | `lib/auth/{users,session,login,setup,apitoken}.ts` | izin kataloğu `permissions`'a migration'la eklenir |
 | `audit_log` | 002 | ✓ | `lib/auth/audit.ts`, `lib/timeline`, `lib/security/fail2ban.ts` | |
 | `settings`, `settings_seed_log` | 003 | kapsam sütunu | `lib/settings/index.ts` | yalnız varsayılandan sapmalar; tanımlar `src/settings.schema.ts` |
 | `jobs`, `job_locks`, `job_runs` | 004 (+026 job_runs) | job_runs ✓ | `lib/jobs/runner.ts` | |
 | `monitors`, `uptime_log`, `maintenance_windows` | 005 | monitors ✓ | `lib/monitors/*` | |
 | `events`, `alert_state` | 006 | events ✓ | `lib/alerts/{engine,store}.ts` | |
 | `runbooks` | 007 | ✓ | `lib/docker/runbooks.ts` | container ADINA bağlı |
-| `cache` | 008 | — | `lib/db/cache.ts` | anahtar/değer önbellek (sunucu başına anahtar önekli) |
+| `cache` | 008 | — | `lib/db/cache.ts` | anahtar/değer önbellek (sunucu başına anahtar önekli); `auth:setup-code` = ilk kurulum kodunun özeti (`lib/auth/setup.ts`) |
 | `apps`, `app_categories`, `bookmarks`, `wol_devices`, `speedtest_results` | 009 (+024, +026 apps) | apps ✓ | `lib/apps/store.ts`, `lib/home/bookmarks.ts`, `lib/network/{wol,speedtest}.ts` | 024: karşılama sayfasında görünme bayrağı |
 | `kiosk_tokens` | 010 | — | `lib/home/kiosk.ts` | token sha256 |
 | `kiosk_widgets` | 032 | — | `lib/home/kiosk.ts`, `lib/dashboard/store.ts` | |

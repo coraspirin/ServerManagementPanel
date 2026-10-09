@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { LoginForm } from "./LoginForm";
 import { currentSession } from "@/lib/auth/session";
+import { needsSetup } from "@/lib/auth/setup";
 import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,8 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ next?: string }>;
 }) {
+  if (needsSetup()) redirect("/kurulum");
+
   const session = await currentSession();
   if (session) {
     redirect(session.user.mustChangePassword ? "/login/parola" : "/panel");

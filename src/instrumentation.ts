@@ -1,7 +1,7 @@
 /**
  * Sunucu açılışında bir kez çalışır (dev ve production).
  *
- * Sıra önemli: önce şema, sonra ilk yönetici hesabı. Migration başarısız
+ * Sıra önemli: önce şema, sonra ilk kurulum kodu. Migration başarısız
  * olursa hata fırlatılır ve uygulama açılmaz — bozuk şemayla çalışmaktansa
  * açılmamak yeğdir (T11).
  *
@@ -53,8 +53,8 @@ export async function register() {
     console.log(`[db] şema güncel (v${result.to})`);
   }
 
-  // T9 — env tohumlaması migration'lardan SONRA, admin'den ÖNCE:
-  // bootstrap ayarlardan okuyabilsin.
+  // T9 — env tohumlaması migration'lardan SONRA, kurulum kodundan ÖNCE:
+  // kurulum ayarlardan okuyabilsin.
   const { seedFromEnv } = await import("@/lib/settings");
   const seeded = seedFromEnv();
   if (seeded.length > 0) {
@@ -67,8 +67,10 @@ export async function register() {
   const { registerLocaleResolver } = await import("@/lib/i18n/server");
   registerLocaleResolver();
 
-  const { bootstrapAdmin } = await import("@/lib/auth/bootstrap");
-  bootstrapAdmin();
+  // Kullanıcı yoksa yönetici OLUŞTURULMAZ: /kurulum sihirbazının istediği
+  // tek kullanımlık kod üretilip loga yazılır (bkz. lib/auth/setup.ts).
+  const { prepareSetupCode } = await import("@/lib/auth/setup");
+  prepareSetupCode();
 
   // Yerel sunucunun adı/hostname'i — migration "local" adıyla tohumluyor.
   // Başarısızlık açılışı durdurmaz: ad yalnızca görünüm.

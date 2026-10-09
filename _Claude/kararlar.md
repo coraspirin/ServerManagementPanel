@@ -28,6 +28,7 @@ Bu kararlar bilerek alındı; değiştirmeden önce gerekçeyi oku ve kullanıc�
 - **Ajan güncelleme op adları (`agent.update`, `agent.updateStatus`) KALICI**, `AGENT_PROTOCOL`'e bağlanmaz — eski ajanlar da güncellenebilsin. Merkezden ajana imaj aktarma yolu yapıldı ve kullanıcının isteğiyle KALDIRILDI: ajan sürümü kendi kurulumuna göre GitHub/GHCR'den alır. · 2026-10-08
 
 ## Güvenlik modeli
+- **İlk yönetici tarayıcıdaki `/kurulum` sihirbazıyla oluşur, sihirbaz container logundaki tek kullanımlık kodu ister** — kullanıcı yokken açık sayfayı ağdaki biri kapmasın (Grafana/Jenkins yöntemi); kod her açılışta yenilenir, özeti `cache`'te. · Reddedilen: `ADMIN_PASSWORD` env'i / loga rastgele parola (kullanıcının isteğiyle tamamen kaldırıldı), kodsuz sihirbaz, süre sınırlı sihirbaz. · 2026-10-09
 - **Host kökü container'a SALT-OKUNUR bağlı ve öyle kalır**; yazma her zaman yalnız hedef klasörü rw bağlayan geçici container ile. · M3.5
 - **Panel container'ı uid 1001**; yetkisiz okuma yalnız izin hatasında root geçici container'a düşer (`docker.sock` zaten root demek, yeni yetki yok). · M3.5
 - **Host'ta komut çalıştırma host-helper'dan "rica" ile**; izin listesi host'ta, container'a mount edilmez; panel komut string'i değil preset anahtarı gönderir. · T4 / M1.13

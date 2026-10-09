@@ -202,15 +202,15 @@ docker buildx imagetools inspect ghcr.io/<kullanici>/<repo>:<etiket>
 
 Çıktıda `linux/arm64` görünmüyorsa ARM64 sunucuda o imaj çalışmaz; genellikle `exec format error` ya da `no matching manifest for linux/arm64` hatası alınır. Bu durumda kaynak koddan `docker compose up -d --build` ile derle veya ARM64/multi-arch olarak yeniden yayınlanmış imajı kullan.
 
-İlk açılışta veritabanı şeması oluşturulur ve yönetici hesabı açılır. `ADMIN_PASSWORD` boş bırakıldıysa rastgele üretilen parola container loguna yazılır:
+İlk açılışta veritabanı şeması oluşturulur. Henüz kullanıcı hesabı yoktur; bunun yerine container loguna tek kullanımlık bir kurulum kodu yazılır:
 
 ```bash
-docker compose logs panel
+docker compose logs panel | grep -A3 KURULUM
 ```
 
-### 5. Giriş yap
+### 5. Yöneticiyi oluştur
 
-Tarayıcıda `http://<sunucu-adresi>:8080` adresini aç ve `admin` kullanıcısıyla giriş yap. İlk girişte parolayı değiştirmen istenir.
+Tarayıcıda `http://<sunucu-adresi>:8080` adresini aç. Kullanıcı olmadığı sürece panel kurulum sihirbazına (`/kurulum`) yönlendirir. Logdaki kurulum kodunu gir, kullanıcı adı ve parola seç; sihirbaz ilk yöneticiyi oluşturup seni içeri alır. Kod her yeniden başlatmada değişir; ilk hesap oluştuktan sonra sihirbaz kalıcı olarak kapanır.
 
 Panel bu noktada izleme, Docker yönetimi, uygulama kartları ve bildirimlerle çalışır durumdadır. Host üzerinde işlem yapan özellikler (güç, systemd, compose, güvenlik duvarı, sunucu konsolu, host cron) host-helper kurulana kadar kapalıdır ve panel bunu ekranda açıkça söyler.
 
@@ -303,8 +303,6 @@ Buradakiler **dağıtım parametreleridir**. Panelden değiştirilebilen her şe
 | `PANEL_HTTP_PORT` | | `8080` | Panelin host'taki portu. Portsuz adres istiyorsan `80` yap. |
 | `PANEL_HTTPS_PORT` | | `8443` | Yalnızca panelden yayınlanan TLS'li siteler için. Panel bu portta sunulmaz. |
 | `PANEL_SITE_ADDRESSES` | | `:80` | Panelin cevap vereceği adresler. Boş bırakılırsa her IP ve host adıyla açılır. Sınırlamak için satırın yorumunu kaldır; boş değer verme. |
-| `ADMIN_USERNAME` | | `admin` | İlk kurulumda oluşturulan yönetici. |
-| `ADMIN_PASSWORD` | | rastgele | Boşsa üretilip container loguna yazılır. |
 | `HELPER_SECRET` | | — | host-helper paylaşılan sırrı. Boşsa host işlemleri kapalıdır. |
 | `PANEL_SUBNET` | | `172.28.0.0/16` | Panel container ağının sabit alt ağı. ufw kuralları buna göre yazıldığı için sabit tutulur. |
 | `PANEL_REPORTS_DIR` | | `./reports` | Host cron betiklerinin JSON bıraktığı dizin. |
@@ -469,7 +467,7 @@ Her push'ta GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.ym
 ├── host-helper/             # panel-helper.py, install.sh, PROTOCOL.md
 ├── scripts/                 # hardware.sh, os-updates.sh (host cron), check-openapi.mjs
 └── src/
-    ├── instrumentation.ts   # Açılış: MASTER_KEY kontrolü, migration, ilk yönetici
+    ├── instrumentation.ts   # Açılış: MASTER_KEY kontrolü, migration, kurulum kodu
     ├── settings.schema.ts   # Tüm ayarların tek kaynağı
     ├── app/
     │   ├── (panel)/         # Oturum gerektiren ekranlar (docker, monitoring, backup, …)

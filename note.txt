@@ -12,8 +12,8 @@ bash deploy.sh
 
 #github versiyon yükleme
 git push
-git push origin v1.12.6
-gh release create v1.12.6 --title "v1.12.6" --generate-notes
+git push origin v1.13.0
+gh release create v1.13.0 --title "v1.13.0" --generate-notes
 
 
 

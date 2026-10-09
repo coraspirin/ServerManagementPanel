@@ -277,15 +277,15 @@ Comment out the following line in `docker-compose.yml`. Otherwise compose will f
 docker compose up -d --build
 ```
 
-On first launch, the database schema is created and an admin account is opened. If `ADMIN_PASSWORD` was left blank, the randomly generated password is written to the container log:
+On first launch, the database schema is created. No user account exists yet; instead, a one-time setup code is written to the container log:
 
 ```bash
-docker compose logs panel
+docker compose logs panel | grep -A3 KURULUM
 ```
 
-### 5. Log in
+### 5. Create the administrator
 
-Open `http://<server-address>:8080` in a browser and log in with the `admin` user. You'll be asked to change the password on first login.
+Open `http://<server-address>:8080` in a browser. As long as there are no users, the panel redirects to the setup wizard (`/kurulum`). Enter the setup code from the log, choose a username and password, and the wizard creates the first administrator and logs you in. The code changes on every restart, and the wizard closes for good once the first account exists.
 
 At this point the panel is functional for monitoring, Docker management, application cards, and notifications. Features that operate on the host (power, systemd, compose, firewall, server console, host cron) remain disabled until host-helper is installed, and the panel states this clearly on screen.
 
@@ -378,8 +378,6 @@ These are **deployment parameters**. Anything that can be changed from within th
 | `PANEL_HTTP_PORT` | | `8080` | The panel's port on the host. Set to `80` if you want a portless address. |
 | `PANEL_HTTPS_PORT` | | `8443` | Only for TLS sites published from the panel. The panel itself is not served on this port. |
 | `PANEL_SITE_ADDRESSES` | | `:80` | Addresses the panel will respond to. If left empty, it opens on every IP and hostname. Uncomment the line to restrict; don't give an empty value. |
-| `ADMIN_USERNAME` | | `admin` | The admin account created on first install. |
-| `ADMIN_PASSWORD` | | random | If blank, generated and written to the container log. |
 | `HELPER_SECRET` | | — | host-helper's shared secret. If blank, host operations remain disabled. |
 | `PANEL_SUBNET` | | `172.28.0.0/16` | The fixed subnet of the panel's container network. Kept fixed because ufw rules are written against it. |
 | `PANEL_REPORTS_DIR` | | `./reports` | The directory where host cron scripts drop JSON output. |

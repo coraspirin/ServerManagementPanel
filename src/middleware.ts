@@ -31,6 +31,13 @@ const PUBLIC_PREFIXES = [
   "/api/auth/login",
   "/api/auth/2fa",
   "/api/health",
+  /*
+   * İlk kurulum sihirbazı — kullanıcı yokken çerez de olamaz. Korumasız değil:
+   * sayfa ve uç kullanıcı varsa kapanıyor (yönlendirme / 409), yokken de
+   * container logundaki tek kullanımlık kodu istiyor (lib/auth/setup.ts).
+   */
+  "/kurulum",
+  "/api/auth/setup",
   "/kiosk",
   /*
    * Karşılama sayfasındaki kartların logoları. Sayfa açıksa görselleri de açık

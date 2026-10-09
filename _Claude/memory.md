@@ -12,6 +12,13 @@ Biçim:
 
 ---
 
+## 2026-10-09 17:43 — İlk kurulum sihirbazı (/kurulum)
+- Önceden kullanıcı yoksa `bootstrap.ts` `admin`'i `ADMIN_PASSWORD` ile (yoksa loga rastgele parola) kendisi açıyordu; sihirbaz hiç yoktu. Kullanıcının isteğiyle yerine sihirbaz geldi: açılışta tek kullanımlık kurulum kodu loga basılıyor, `/kurulum` bu kodu isteyip ilk yöneticiyi oluşturuyor ve içeri alıyor. Kullanıcı yokken `/` ve `/login` sihirbaza yönlendiriyor.
+- Yeni: `src/lib/auth/setup.ts`, `src/app/api/auth/setup/route.ts`, `src/app/kurulum/{page,SetupForm}.tsx`. Silinen: `src/lib/auth/bootstrap.ts`. Değişen: `instrumentation.ts`, `middleware.ts`, `app/page.tsx`, `app/login/page.tsx`, locale'ler (`bootstrapLib.*` → `setup.*`, `auth.password.forcedNotice` artık loga atıf yapmıyor).
+- `ADMIN_USERNAME`/`ADMIN_PASSWORD` kaldırıldı: `docker-compose.yml`, `.env.example`, yerel `.env`, `ci.yml`, 3 README.
+- Doğrulama: typecheck, eslint, i18n:check/scan, `npm test` (619/619). Boş veritabanıyla MOCK dev sunucusunda: kod loga basıldı; `/` ve `/login` → `/kurulum`; yanlış kod 403, zayıf parola 400, doğru kod (küçük harf/boşluklu) 200 + oturum; tekrar 409; `/kurulum` → `/login`; yeniden başlatmada kod basılmadı; audit kayıtları doğru. `npm run build` başarılı. Sunucuda deneme yapılmadı.
+- Durum: commit edilmedi. Belgeler: `_digerleri.md`, `kararlar.md`, `veritabani-sema.md`.
+
 ## 2026-10-09 01:12 — Genel rehberler eklendi
 - Yeni: `_Claude/surum-deploy.md` (deploy.sh + `scripts/set-version.sh` + GHCR + ajan güncelleme + geri alma), `yapilacaklar.md` (açık işler, doğrulanmamışlar, bilinen sınırlamalar), `kararlar.md` (mimari karar kaydı), `tarifler.md` (sayfa/uç/op/sağlayıcı/migration/ayar/izin/locale/widget/job ekleme), `test-dogrulama.md`, `veritabani-sema.md` (tüm tablolar, migration, host_id, kullanan lib), `host-helper.md` (eylem listesi, güvenlik, kurulum).
 - `_Claude/README.md`'ye "Genel rehberler" tablosu; `CLAUDE.md`'ye iş başında memory/yapilacaklar/kararlar okuma kuralı.

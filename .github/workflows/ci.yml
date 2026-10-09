@@ -82,7 +82,6 @@ jobs:
           docker run -d --name panel-ci \
             -e MOCK_MODE=1 \
             -e MASTER_KEY="$(openssl rand -hex 32)" \
-            -e ADMIN_PASSWORD="ci-gecici-parola" \
             -p 3000:3000 server-panel:ci
 
           for i in $(seq 1 30); do

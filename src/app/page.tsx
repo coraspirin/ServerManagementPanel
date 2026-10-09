@@ -1,10 +1,12 @@
 import { headers } from "next/headers";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { LayoutDashboard, LogIn, Server } from "lucide-react";
 import { WelcomeTiles } from "@/components/welcome/WelcomeTiles";
 import { unacknowledgedCount } from "@/lib/alerts/store";
 import { publicAppGroups, welcomeAppGroups } from "@/lib/apps/store";
 import { currentSession, hasPermission } from "@/lib/auth/session";
+import { needsSetup } from "@/lib/auth/setup";
 import { sanitizeRichText } from "@/lib/richtext";
 import { getBool, getString } from "@/lib/settings";
 import { getT } from "@/lib/i18n/server";
@@ -23,6 +25,9 @@ export const dynamic = "force-dynamic";
  * listesine yazılması şart — gerekçesi o dosyada yazılı.
  */
 export default async function WelcomePage() {
+  // Henüz kullanıcı yoksa gösterilecek bir şey de yok — doğrudan sihirbaza.
+  if (needsSetup()) redirect("/kurulum");
+
   const session = await currentSession();
   const t = getT();
 
