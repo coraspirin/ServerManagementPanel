@@ -8,17 +8,15 @@ import { WidgetCard, WidgetEmpty } from "./WidgetCard";
 /** Container özeti — sayılar, sorunlu olanlar ve en çok kaynak kullananlar. */
 export function ContainerSummary({
   overview,
-  readOnly = false,
 }: {
   overview: ContainerOverview;
-  readOnly?: boolean;
 }) {
   const t = getT();
   const dict = getActiveDictionary();
   const topCpu = Math.max(1, ...overview.top.map((entry) => entry.cpuPct));
 
   return (
-    <WidgetCard title={t("dashboard.containers.title")} icon={Container} href={readOnly ? undefined : "/docker"} linkLabel={t("dashboard.all")}>
+    <WidgetCard title={t("dashboard.containers.title")} icon={Container} href="/docker" linkLabel={t("dashboard.all")}>
       {!overview.available ? (
         <WidgetEmpty>{t("dashboard.containers.unavailable")}</WidgetEmpty>
       ) : (

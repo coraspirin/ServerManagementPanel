@@ -2,10 +2,7 @@ export type PermissionKey =
   | "panel.view"
   | "metrics.view"
   | "monitors.manage"
-  | "apps.manage"
   | "panel.dashboard"
-  | "kiosk.manage"
-  | "proxy.manage"
   | "network.manage"
   | "docker.view"
   | "docker.action"
@@ -30,8 +27,6 @@ export type PermissionKey =
   | "apps.install"
   | "repos.manage"
   | "vault.view"
-  // T12 (migration 025) — dış API anahtarı üretme/iptal.
-  | "api.manage"
   // Çoklu sunucu (migration 026).
   | "hosts.view"
   | "hosts.manage"
@@ -84,9 +79,9 @@ export type ActiveSession = {
 
   ## Bunun tekrar yaşanmaması için
 
-  Asıl koşul, AYNI host'un hem HTTP hem HTTPS ile sunulmaması. Panel kendisini
-  proxy kaydı olarak yayınlıyorsa (Ayarlar → Proxy & DDNS) o kaydın TLS ayarı
-  "kapalı" olmalı; açık kalırsa bu sefer YENİ adlarla aynı tuzak kurulur.
+  Asıl koşul, AYNI host'un hem HTTP hem HTTPS ile sunulmaması. Panelin önüne
+  TLS sonlandıran bir vekil konacaksa paneli YALNIZCA o adresten kullanın;
+  aynı host'u iki şemayla açmak bu sefer YENİ adlarla aynı tuzağı kurar.
 */
 export const SESSION_COOKIE = "panel_sid";
 export const CSRF_COOKIE = "panel_xsrf";

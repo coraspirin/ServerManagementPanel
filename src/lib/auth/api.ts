@@ -41,7 +41,7 @@ export async function guardApi(
     if (!header || !safeEquals(header, session.csrfToken)) {
       return {
         ok: false,
-        response: Response.json({ error: serverT("apiv1.csrfFailed") }, { status: 403 }),
+        response: Response.json({ error: serverT("api.auth.csrfFailed") }, { status: 403 }),
       };
     }
   }
@@ -49,7 +49,7 @@ export async function guardApi(
   if (!hasPermission(session.user, permission)) {
     return {
       ok: false,
-      response: Response.json({ error: serverT("apiv1.forbidden") }, { status: 403 }),
+      response: Response.json({ error: serverT("api.auth.forbidden") }, { status: 403 }),
     };
   }
 
@@ -71,7 +71,7 @@ export type HostGuardResult =
  * `await` dönüşünde çağırana geçmez.
  *
  * `localOnly`: özellik yalnızca panelin kendi sunucusunda var (host cron,
- * ufw, LAN taraması...). Uzak sunucu seçiliyken 501 döner.
+ * LAN taraması...). Uzak sunucu seçiliyken 501 döner.
  *
  * `agent`: uç panel-agent üzerinden çalışacak şekilde taşındı (yalnızca
  * sağlayıcılar/ajan işlemleri kullanıyor). İşaretsiz uçlar ajan sunucusunda

@@ -1,5 +1,5 @@
 # Panel veritabanı şeması (SQLite)
-Son güncelleme: 2026-10-09 · son migration `034_dbadmin_inventory`
+Son güncelleme: 2026-10-11 · son migration `035_drop_removed_features`
 
 Dosya: `data/panel.db` (container'da `/app/data`, named volume `panel-data`). Erişim `src/lib/db/client.ts` (`node:sqlite`, senkron, WAL, `foreign_keys = ON`). Migration'lar `src/lib/db/migrations/NNN_ad.ts` + `index.ts`'e kayıt; çalıştırıcı `src/lib/db/migrate.ts` (her migration öncesi `data/backups/pre-migration-NN.db` kopyası).
 
@@ -18,10 +18,7 @@ Dosya: `data/panel.db` (container'da `/app/data`, named volume `panel-data`). Er
 | `events`, `alert_state` | 006 | events ✓ | `lib/alerts/{engine,store}.ts` | |
 | `runbooks` | 007 | ✓ | `lib/docker/runbooks.ts` | container ADINA bağlı |
 | `cache` | 008 | — | `lib/db/cache.ts` | anahtar/değer önbellek (sunucu başına anahtar önekli); `auth:setup-code` = ilk kurulum kodunun özeti (`lib/auth/setup.ts`) |
-| `apps`, `app_categories`, `bookmarks`, `wol_devices`, `speedtest_results` | 009 (+024, +026 apps) | apps ✓ | `lib/apps/store.ts`, `lib/home/bookmarks.ts`, `lib/network/{wol,speedtest}.ts` | 024: karşılama sayfasında görünme bayrağı |
-| `kiosk_tokens` | 010 | — | `lib/home/kiosk.ts` | token sha256 |
-| `kiosk_widgets` | 032 | — | `lib/home/kiosk.ts`, `lib/dashboard/store.ts` | |
-| `proxy_hosts`, `certificates`, `ddns_records` | 011 | — | `lib/proxy/*` | merkezi |
+| `wol_devices`, `speedtest_results` | 009 | — | `lib/network/*` | |
 | `network_devices` | 012 | — | `lib/network/scan.ts` | yalnız yerel |
 | `login_challenges`, `recovery_codes` | 013 | — | `lib/auth/twofactor.ts` | 2FA |
 | `log_lines`, `log_fts` (FTS5), `log_patterns`, `log_cursors` | 014 (log_cursors 030'da yeniden kuruldu) | log_lines ✓, log_cursors PK(host_id, source) | `lib/logs/store.ts` | |
@@ -34,10 +31,11 @@ Dosya: `data/panel.db` (container'da `/app/data`, named volume `panel-data`). Er
 | `app_stacks` | 018 → 029'da yeniden kuruldu | ✓, UNIQUE(host_id, name) | `lib/appstore/install.ts` | |
 | `appstore_sources` | 021 | — | (kullanan kod yok — katalog kaldırıldı) | |
 | `dashboard_widgets` | 020 (+031) | — | `lib/dashboard/store.ts` | kullanıcı başına düzen |
-| `api_tokens` | 019 → 022 DROP → 025 yeniden | — | `lib/auth/apitoken.ts` | token sha256 |
 | `automations`, `automation_runs` | 019 → 022 DROP | | | otomasyon kaldırıldı |
 
 ## Tuzaklar
 - SQLite tablo genelindeki `UNIQUE` kısıtını tablo yeniden kurulmadan kaldıramaz; yeniden kurmak `foreign_keys = ON` iken FK CASCADE ile bağlı satırları siler (ör. `db_connections` → `db_query_history`). Çözüm örnekleri: 029/030 (yeni tablo + kopyala + RENAME, FK'siz tablolarda), 033/034 (benzersiz iç ad).
 - `ALTER TABLE … ADD COLUMN` ile FK eklenemez → ilişkili tablolar birlikte açılır (009 notu).
 - Migration'ı denemek: `test-dogrulama.md` → "Migration'ı bellekte dene".
+
+035 (`drop_removed_features`, 2026-10-11): `apps`, `app_categories`, `bookmarks`, `kiosk_tokens`, `kiosk_widgets`, `proxy_hosts`, `certificates`, `ddns_records`, `api_tokens` DROP; ilgili izinler, ayarlar, iş kayıtları ve `dashboard_widgets` satırları silindi.

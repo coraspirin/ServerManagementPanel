@@ -82,9 +82,8 @@ COPY --from=builder --chown=panel:panel /app/scripts/docker-entry.mjs ./docker-e
 # SQLite ve migration kopyaları buraya (M0.3) — compose'da volume bağlanır.
 # Dizinler İMAJDA oluşturuluyor ki boş bir named volume ilk bağlandığında
 # sahipliği buradan devralsın. Yalnızca compose'da mount edilseydi volume
-# root'a ait olurdu ve panel (uid 1001) içine yazamazdı — M2.8'de tam olarak
-# bu yaşandı: Caddy yapılandırması yazılamayınca yayınlama ucu 500 döndü.
-RUN mkdir -p /app/data /app/proxy && chown panel:panel /app/data /app/proxy
+# root'a ait olurdu ve panel (uid 1001) içine yazamazdı.
+RUN mkdir -p /app/data && chown panel:panel /app/data
 
 USER panel
 EXPOSE 3000

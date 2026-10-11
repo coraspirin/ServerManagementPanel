@@ -1,11 +1,7 @@
 import { requireSession } from "@/lib/auth/guard";
-import { hasPermission } from "@/lib/auth/session";
-import { activeTokenCount, listApiTokens } from "@/lib/auth/apitoken";
-import { getBool, getNumber } from "@/lib/settings";
 import { recoveryCodesLeft, totpEnabled } from "@/lib/auth/twofactor";
 import { PasswordSection } from "@/components/account/PasswordSection";
 import { TwoFactorSection } from "@/components/account/TwoFactorSection";
-import { ApiTokenSection } from "@/components/account/ApiTokenSection";
 import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
@@ -36,27 +32,6 @@ export default async function AccountPage() {
         enabled={totpEnabled(session.user.id)}
         recoveryCodesLeft={recoveryCodesLeft(session.user.id)}
       />
-
-      {/* api.manage bilerek ayrı bir izin: token 2FA'sız ve uzun ömürlü bir
-          kimlik, bu yüzden basma yetkisi yöneticinin bilerek verdiği bir şey.
-          İzni olmayan kullanıcı bölümü hiç görmez. */}
-      {hasPermission(session.user, "api.manage") && (
-        <ApiTokenSection
-          apiEnabled={getBool("api.enabled")}
-          initial={{
-            tokens: listApiTokens({ userId: session.user.id }),
-            canSeeAll: hasPermission(session.user, "users.manage"),
-            activeCount: activeTokenCount(session.user.id),
-            maxTokens: getNumber("api.max_tokens_per_user"),
-            defaultTtlDays: getNumber("api.token_default_ttl_days"),
-            // Seçilebilir izinler = kendi izinleri eksi hiç verilmeyecekler.
-            // Asıl sınır sunucuda (/api/tokens POST); bu yalnızca arayüz.
-            grantablePermissions: session.user.permissions.filter(
-              (key) => key !== "docker.exec" && key !== "host.shell",
-            ),
-          }}
-        />
-      )}
 
       <PasswordSection />
     </div>

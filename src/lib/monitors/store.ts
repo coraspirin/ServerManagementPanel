@@ -466,11 +466,8 @@ export function pruneUptime(now: number = Math.floor(Date.now() / 1000)): number
 /**
  * Gövdeden monitör girdisi üretir; biçim hatasında mesaj döner (M1.2).
  *
- * Route dosyasından BURAYA taşındı (T12/Faz D): artık iki farklı yüzey
- * kullanıyor — panelin kendi `/api/monitors` ucu ve dışa açık
- * `/api/v1/monitors`. İkisinin aynı doğrulamadan geçmesi şart; ayrı
- * kopyalar tutulsaydı biri sıkılaşırken diğeri gevşek kalırdı ve dış yüzey
- * panelin kabul etmediği bir kaydı yazabilirdi.
+ * Route dosyasından BURAYA taşındı (T12/Faz D): doğrulama tek yerde, route
+ * yalnızca çağırıyor.
  */
 export function parseMonitorInput(
   body: Record<string, unknown>,

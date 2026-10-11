@@ -15,7 +15,6 @@ Her tarifin sonunda: `npm run typecheck && npm run lint && npm test && npm run i
 2. Girişte: `const guard = await guardHostApi(request, "<izin>", { agent: true })` (merkezi uçsa `guardApi`), `if (!guard.ok) return guard.response; enterHost(guard.hostId);`.
 3. Gövde: `try { body = await request.json() } catch { 400 api.invalidRequest }`; kullanıcıya dönen metin `serverT()`.
 4. Yazma işleminde `audit({ userId, username, action, targetType, targetId, detail, result })` — gizli değer `detail`'e yazılmaz.
-5. Uç `/api/v1/**` ise `docs/openapi.yaml` + `docs/API.md` + `npm run check:openapi`.
 
 ## Host dosya sistemine dokunan iş (ajan op'u)
 1. Mantığı `localXxx()` olarak yaz (`/host/root` = `process.env.HOST_ROOT ?? "/host/root"`).

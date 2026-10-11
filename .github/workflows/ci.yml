@@ -43,15 +43,6 @@ jobs:
       - name: Kodda sabit metin var mı
         run: npm run i18n:scan
 
-      # Şema kendi içinde geçerli mi (redocly) VE kodla uyuşuyor mu (betik).
-      # İkincisi olmadan birincisi yanıltıcı: geçerli ama yanlış bir şema,
-      # güvenilmez olduğu hâlde güvenilir görünen bir belgedir.
-      - name: OpenAPI şeması geçerli mi
-        run: npx --yes @redocly/cli@latest lint docs/openapi.yaml
-
-      - name: OpenAPI şeması kodla uyuşuyor mu
-        run: npm run check:openapi
-
       - name: Build
         run: npm run build
 

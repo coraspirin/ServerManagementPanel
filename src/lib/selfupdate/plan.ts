@@ -81,6 +81,8 @@ export const PRESERVED_NAMES = [
   "docker-compose*.yaml",
   "compose*.yml",
   "compose*.yaml",
+  // Caddy depodan kaldırıldı, ama eski kurulumların compose'u onu hâlâ
+  // bağlıyor olabilir: elle geçiş yapılana dek sunucudaki dosya silinmesin.
   "Caddyfile",
   "reports",
   "data",

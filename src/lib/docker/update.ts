@@ -115,8 +115,7 @@ export async function updateContainerImage(
 
     Panelin kendi container'ını güncellemek, paneli kendi işleminin ortasında
     durdurmak demek: süreç ölür, yeni container yaratılmaz, eski container
-    `_panel_yedek` adıyla durur ve panel erişilemez hâle gelir. Reverse proxy
-    için de aynısı — panele giden yolu keser ve kendini kurtaramaz.
+    `_panel_yedek` adıyla durur ve panel erişilemez hâle gelir.
 
     Kontrol arayüzde de var ama tek başına yeterli değil: bu fonksiyona API
     ucundan, zamanlanmış bir işten ya da toplu güncellemeden de gelinebiliyor.
@@ -124,11 +123,6 @@ export async function updateContainerImage(
   */
   if (name === panelContainerName()) {
     throw new Error(serverT("dockerUpdate.selfUpdate"));
-  }
-
-  const caddy = getString("proxy.caddy_container").trim();
-  if (caddy && name === caddy) {
-    throw new Error(serverT("dockerUpdate.proxyUpdate", { name: caddy }));
   }
 
   const reference = raw.Config.Image;

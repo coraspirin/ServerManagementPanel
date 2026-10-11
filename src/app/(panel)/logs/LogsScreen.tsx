@@ -94,9 +94,12 @@ function toQuery(filters: Filters, offset: number): string {
 export function LogsScreen({
   initial,
   canManagePatterns,
+  canClear,
 }: {
   initial: Payload;
   canManagePatterns: boolean;
+  /** "Kayıtları temizle" — `settings.edit`. */
+  canClear: boolean;
 }) {
   const t = useT();
   const f = useFormat();
@@ -162,6 +165,29 @@ export function LogsScreen({
                 : "")
           : t("logsScreen.done"),
       );
+      await load(filters, 0);
+    } catch {
+      setNotice(t("common.errors.network"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Seçili sunucunun tüm log satırlarını siler. */
+  async function clearAll() {
+    if (!confirm(t("logsScreen.confirmClear"))) return;
+    setBusy(true);
+    try {
+      const response = await fetch("/api/logs", {
+        method: "DELETE",
+        headers: { [CSRF_HEADER]: readCsrfToken() },
+      });
+      const payload = (await response.json()) as { removed?: number; error?: string };
+      if (!response.ok) {
+        setNotice(payload.error ?? t("logsScreen.clearFailed"));
+        return;
+      }
+      setNotice(t("logsScreen.cleared", { count: payload.removed ?? 0 }));
       await load(filters, 0);
     } catch {
       setNotice(t("common.errors.network"));
@@ -244,6 +270,17 @@ export function LogsScreen({
             <Bell className="size-4" /> {t("logsScreen.rules")}
             <span className="text-xs text-subtle">{activePatterns}</span>
           </button>
+
+          {canClear && (
+            <button
+              type="button"
+              onClick={() => void clearAll()}
+              disabled={busy}
+              className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm text-danger transition-colors hover:border-danger disabled:opacity-50"
+            >
+              <Trash2 className="size-4" /> {t("logsScreen.clear")}
+            </button>
+          )}
         </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">

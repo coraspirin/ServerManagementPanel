@@ -23,7 +23,7 @@ import {
   type ServiceConfig,
 } from "@/lib/compose/service";
 import { getDockerProvider } from "@/lib/providers";
-import { panelPorts } from "@/lib/security/firewall";
+import { panelPorts } from "@/lib/security/ports";
 import { cachedPortScan } from "@/lib/security/ports";
 import { dockerPublishedPorts, reservedByOthers } from "@/lib/security/portmap";
 

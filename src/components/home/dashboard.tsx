@@ -1,13 +1,9 @@
 import "server-only";
 
-import { headers } from "next/headers";
-import Link from "next/link";
 import { Info } from "lucide-react";
 import { MaintenanceSection } from "@/components/maintenance/MaintenanceSection";
-import { AppTile } from "@/components/apps/AppTile";
 import { Clock } from "@/components/home/Clock";
 import { InternetIndicator } from "@/components/home/InternetIndicator";
-import { QuickLinks } from "@/components/home/QuickLinks";
 import { WeatherCard } from "@/components/home/WeatherCard";
 import { BackupStatus } from "@/components/home/widgets/BackupStatus";
 import { ContainerSummary } from "@/components/home/widgets/ContainerSummary";
@@ -18,8 +14,6 @@ import { StatusStrip, type StatusItem } from "@/components/home/widgets/StatusSt
 import { UptimeWidget } from "@/components/home/widgets/UptimeWidget";
 import { WidgetCard } from "@/components/home/widgets/WidgetCard";
 import { listEvents, unacknowledgedCount } from "@/lib/alerts/store";
-import { appGroups } from "@/lib/apps/store";
-import type { AppGroup } from "@/lib/apps/types";
 import { hasPermission } from "@/lib/auth/session";
 import type { SessionUser } from "@/lib/auth/types";
 import { backupHealth, backupOverview } from "@/lib/backup/overview";
@@ -28,7 +22,6 @@ import { RESOURCE_METRICS } from "@/lib/dashboard/catalog";
 import type { WidgetPlacement } from "@/lib/dashboard/catalog";
 import { layoutFor } from "@/lib/dashboard/store";
 import { containerOverview, fleetOverview, type ContainerOverview, type FleetEntry } from "@/lib/dashboard/summary";
-import { bookmarkGroups } from "@/lib/home/bookmarks";
 import { internetStatus, type InternetStatus } from "@/lib/home/internet";
 import { currentWeather } from "@/lib/home/weather";
 import { latestSnapshot } from "@/lib/metrics/collect";
@@ -42,42 +35,24 @@ import { cachedImageUpdates } from "@/lib/updates";
 import { isMockMode } from "@/lib/env";
 import { formatBytes } from "@/lib/metrics/catalog";
 import { formatPct, formatRelative, formatUptime } from "@/lib/i18n/format";
-import { Rich } from "@/lib/i18n/rich";
 import { getActiveDictionary, getT } from "@/lib/i18n/server";
 
 /**
- * Gösterge paneli widget'larının sunucuda üretimi — /panel ve kiosk ortak.
+ * Gösterge paneli widget'larının sunucuda üretimi (/panel).
  *
  * Widget'lar burada, SUNUCUDA render ediliyor ve hazır JSX olarak düzen
- * bileşenine geçiyor (M3.13). Kiosk da AYNI fonksiyonu kullanıyor ki iki
- * ekran zamanla birbirinden kopmasın.
- *
- * `readOnly` (kiosk): oturum, CSRF ve sunucu çerezi yok. Bağlantılar ve
- * eylem düğmeleri çizilmiyor, canlı kartlar API yoklamıyor; görünenler
- * yine `user`ın yetkileriyle sınırlı.
+ * bileşenine geçiyor (M3.13).
  */
-
-/** Kart adreslerindeki {host} yer tutucusu için (M2.5). */
-export async function browserHost(): Promise<string> {
-  const host = ((await headers()).get("host") ?? "").trim();
-  return /^(\[[^\]]+\]|[^:]+)(?::\d+)?$/.exec(host)?.[1] ?? "";
-}
-
 export async function buildDashboard({
   user,
   hostId,
-  readOnly = false,
-  layout: given,
 }: {
   user: SessionUser;
   hostId: number;
-  readOnly?: boolean;
-  /** Hazır düzen (kiosk bağlantısının kendi düzeni); verilmezse kullanıcınınki. */
-  layout?: WidgetPlacement[];
 }): Promise<{ layout: WidgetPlacement[]; widgets: Record<string, React.ReactNode> }> {
   const t = getT();
   const dict = getActiveDictionary();
-  const layout = given ?? layoutFor(user.id, user.permissions);
+  const layout = layoutFor(user.id, user.permissions);
   /*
     Yalnızca GÖRÜNÜR widget'ların verisi yükleniyor: gizlenmiş bir container
     özeti için uzak ajana istek atmanın anlamı yok. Durum şeridi diğer
@@ -93,7 +68,7 @@ export async function buildDashboard({
     docker: hasPermission(user, "docker.view"),
     backup: hasPermission(user, "backup.manage"),
     hosts: hasPermission(user, "hosts.view"),
-    ack: !readOnly && hasPermission(user, "monitors.manage"),
+    ack: hasPermission(user, "monitors.manage"),
   };
 
   const thresholds = {
@@ -110,8 +85,7 @@ export async function buildDashboard({
   const wantMonitors = can.metrics && (needs("uptime") || strip);
   const wantFleet = can.hosts && (needs("fleet") || strip);
 
-  const [host, internet, weather, system, containers] = await Promise.all([
-    browserHost(),
+  const [internet, weather, system, containers] = await Promise.all([
     wantInternet ? internetStatus() : Promise.resolve(null),
     needs("clock") ? currentWeather() : Promise.resolve(null),
     needs("system") ? getSystemProvider().info() : Promise.resolve(null),
@@ -121,7 +95,6 @@ export async function buildDashboard({
   const monitors: MonitorView[] = wantMonitors ? monitorViews(30, { hostId }) : [];
   const fleet: FleetEntry[] = wantFleet ? fleetOverview() : [];
   const snapshot = can.metrics && (needs("resources") || strip) ? latestSnapshot() : null;
-  const apps = needs("apps", "quicklinks") ? appGroups(host) : [];
   const locationLabel = getString("home.location_label");
 
   const items = strip
@@ -136,7 +109,7 @@ export async function buildDashboard({
    * ızgara onu atlıyor.
    */
   const widgets: Record<string, React.ReactNode> = {
-    status: strip ? <StatusStrip items={items} readOnly={readOnly} /> : null,
+    status: strip ? <StatusStrip items={items} /> : null,
     clock: (
       <section className="flex h-full flex-wrap items-center justify-between gap-4 rounded-lg border border-line bg-surface p-5">
         <Clock />
@@ -148,7 +121,7 @@ export async function buildDashboard({
       <WidgetCard
         title={t("overview.system")}
         icon={Info}
-        href={readOnly ? undefined : "/host"}
+        href="/host"
         linkLabel={t("dashboard.all")}
         aside={
           <span className="shrink-0 text-[11px] text-subtle">
@@ -183,34 +156,29 @@ export async function buildDashboard({
           refreshSeconds={getNumber("general.ui_refresh_interval")}
           thresholds={thresholds}
           diskForecast={Object.fromEntries(diskForecasts().map((entry) => [entry.label, entry.daysToFull]))}
-          live={!readOnly}
         />
       ) : null,
-    fleet: fleet.length > 0 && needs("fleet") ? <FleetCard hosts={fleet} thresholds={thresholds} currentId={hostId} readOnly={readOnly} /> : null,
+    fleet: fleet.length > 0 && needs("fleet") ? <FleetCard hosts={fleet} thresholds={thresholds} currentId={hostId} /> : null,
     events:
       can.metrics && needs("events") ? (
-        <RecentEvents events={listEvents({ limit: 8, hostId })} canAck={can.ack} readOnly={readOnly} />
+        <RecentEvents events={listEvents({ limit: 8, hostId })} canAck={can.ack} />
       ) : null,
-    uptime: wantMonitors && needs("uptime") ? <UptimeWidget monitors={monitors} readOnly={readOnly} /> : null,
-    quicklinks: needs("quicklinks") ? <QuickLinks apps={apps} bookmarks={bookmarkGroups()} /> : null,
-    apps: needs("apps") ? <AppSections groups={apps} /> : null,
-    containers: containers && needs("containers") ? <ContainerSummary overview={containers} readOnly={readOnly} /> : null,
+    uptime: wantMonitors && needs("uptime") ? <UptimeWidget monitors={monitors} /> : null,
+    containers: containers && needs("containers") ? <ContainerSummary overview={containers} /> : null,
     backups:
       can.backup && needs("backups") ? (
         <BackupStatus
           systems={backupOverview().systems}
           runs={listRuns({ limit: 5 }).runs}
           stale={backupStale()}
-          readOnly={readOnly}
         />
       ) : null,
     maintenance: needs("maintenance") ? (
       <div id="maintenance">
-        <MaintenanceSection canAct={!readOnly && hasPermission(user, "docker.action")} />
+        <MaintenanceSection canAct={hasPermission(user, "docker.action")} />
       </div>
     ) : null,
   };
-
 
   return { layout, widgets };
 }
@@ -246,7 +214,7 @@ function statusItems(input: {
       key: "services",
       tone: "warn",
       label: t("dashboard.status.servicesDown", { count: input.internet.servicesDown }),
-      href: "/apps",
+      href: "/uptime",
     });
   }
 
@@ -329,44 +297,4 @@ function statusItems(input: {
   }
 
   return items;
-}
-
-/** Kart ızgarası — ana sayfada salt okunur; yönetim Uygulamalar ekranında. */
-export function AppSections({ groups }: { groups: AppGroup[] }) {
-  const t = getT();
-  const total = groups.reduce((sum, group) => sum + group.cards.length, 0);
-
-  if (total === 0) {
-    return (
-      <p className="rounded-lg border border-dashed border-line bg-surface px-5 py-8 text-center text-sm text-subtle">
-        <Rich
-          text={t("overview.noApps")}
-          values={{
-            link: (
-              <Link href="/apps" className="text-brand hover:underline">
-                {t("overview.appsLink")}
-              </Link>
-            ),
-          }}
-        />
-      </p>
-    );
-  }
-
-  return (
-    <div className="space-y-5">
-      {groups.map((group) => (
-        <section key={group.category?.id ?? "diger"}>
-          <h2 className="mb-2 text-sm font-semibold">{group.category?.name ?? t("common.uncategorized")}</h2>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {group.cards
-              .filter((card) => card.enabled)
-              .map((card) => (
-                <AppTile key={card.id} card={card} />
-              ))}
-          </div>
-        </section>
-      ))}
-    </div>
-  );
 }

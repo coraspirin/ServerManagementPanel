@@ -156,10 +156,6 @@ export function NetworkTab({
                 text={t("docker.networkTab.ufwNote")}
                 values={{ strong: <strong>{t("docker.networkTab.ufwBypass")}</strong> }}
               />{" "}
-              <Link href="/firewall" className="underline underline-offset-2">
-                {t("docker.networkTab.firewall")}
-              </Link>{" "}
-              ·{" "}
               <Link href="/ports" className="underline underline-offset-2">
                 {t("docker.networkTab.portMap")}
               </Link>

@@ -1,5 +1,5 @@
 # Yapılacaklar ve açık konular
-Son güncelleme: 2026-10-09
+Son güncelleme: 2026-10-11
 
 Kural: biten maddeyi sil (ya da "Kapananlar"a taşı) ve `memory.md`'ye kayıt düş. Yeni açık iş / bilinen hata buraya eklenir. Bir madde ile çalışmadan önce burada ve ilgili sayfa rehberinde güncel durumu kontrol et.
 
@@ -8,6 +8,11 @@ Kural: biten maddeyi sil (ya da "Kapananlar"a taşı) ve `memory.md`'ye kayıt d
 - [ ] **Sayfa rehberleri + `CLAUDE.md` + `_Claude/`** — commit edilmedi.
 - [ ] **Yeni sürüm yayınlama** — ajanlarda envanterin çalışması için gerekli (`runOnce` env seçeneği, `db.native` op'u, imajdaki DB istemcileri). Bkz. `surum-deploy.md`.
 
+- [ ] **Sadeleştirme** (2026-10-11): uygulamalar/kiosk/karşılama/proxy+Caddy/Tailscale/güvenlik duvarı/dış API kaldırıldı, log/olay temizleme eklendi — commit edilmedi, deploy edilmedi.
+- [ ] **deploy.sh (ZimaOS/CasaOS sürümü)** — 0. adım gerçek sunucuda denendi (compose dizini/servis/imaj doğru bulundu); derleme + compose değişikliği + yeniden başlatma henüz sunucuda çalıştırılmadı. İlk çalıştırmada migration 035 uygulanacak (kartlar/proxy/token tabloları silinir).
+- [ ] **CasaOS compose'unda `PANEL_HTTP_PORT` yok** — panel yayın portunu 8080 sanıyor (gerçek: 8081); yalnız yığın kurulumundaki "panelin kendi portu" uyarısını etkiler. CasaOS uygulama ayarından `PANEL_HTTP_PORT=8081` eklenebilir.
+- [ ] **`.env.example`** — okuma izni engelli olduğu için güncellenmedi: `PANEL_HTTPS_PORT`, `PANEL_SITE_ADDRESSES`, Caddy/Tailscale/Proxy açıklamaları temizlenmeli; `PANEL_TRUST_PROXY` eklenmeli.
+
 ## Doğrulanmamış özellikler
 - [ ] **Yedekleme v2** (`backup.md`): sunucuda gerçek restic koşusu (yedekle → geri yükle → doğrulama) yapılmadı; yalnız MOCK_MODE'da ekran testi.
 - [ ] **Ajanın kendini güncellemesi** (`hosts.md`, commit 428d5e8): uçtan uca denenmedi (panelden `agent.update` → ajan GHCR'den çeker → yeniden başlar). Eski ajanlar bir kez elle güncellenmeli (`agent-deploy.py`).
@@ -15,7 +20,6 @@ Kural: biten maddeyi sil (ya da "Kapananlar"a taşı) ve `memory.md`'ye kayıt d
 
 ## Eksik / yarım işler
 - [ ] **Yedekleme**: "ilk kurulumda yedekten geri yükle" (v2 planındaki ek #6) yapılmadı. İndirme yalnız yerel sunucuda.
-- [ ] **Çoklu sunucu P7**: v1 API (`src/app/api/v1/**`) host seçimini (`?host=`) desteklemiyor — yalnız yerel sunucu; `docs/API.md` güncellenmeli.
 - [ ] **SQLite dosyaları**: döküm/indirme yok (yalnız sunucu motorlarında).
 
 ## Bilinen sınırlamalar / hatalar

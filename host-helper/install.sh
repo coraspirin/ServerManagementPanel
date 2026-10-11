@@ -86,26 +86,6 @@ if [ ! -f "$CONF_DIR/allow.conf" ]; then
 # compose.down bir yığını tamamen durdurur — kapalı bırakmak yeğdir.
 #compose.down ^/home/KULLANICI/docker/
 
-# --- Güvenlik duvarı (M3.7 + M3.18) ---
-# Her eylem ayrı satır: "görebilsin ama değiştiremesin" ve "kural ekleyebilsin
-# ama duvarı kapatamasın" ancak böyle ifade edilir.
-#
-# Yalnızca okuma (Güvenlik Duvarı ekranı bu ikisiyle çalışır, kural yazamaz):
-#ufw.status
-#ufw.status_verbose
-#ufw.app_list
-# Kural ekleme/silme — kural söz dizimi helper tarafında doğrulanır, serbest
-# metin kabul edilmez:
-#ufw.allow
-#ufw.deny
-#ufw.delete
-# DİKKAT: ufw.enable, kural listesi eksik bir sunucuda SSH dahil her şeyi
-# keser. Panel önce uyarır ama son sözü izin listesi söyler.
-#ufw.enable
-#ufw.disable
-#ufw.default
-#ufw.logging
-
 # --- Sunucu konsolu: hazır kalıplar ---
 # Çalışacak komutlar host tarafında (panel-helper.py içindeki PRESETS) sabittir;
 # panel yalnızca bir anahtar gönderir. Desen o anahtara uygulanır.

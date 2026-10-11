@@ -1,5 +1,5 @@
 # Ayarlar — /settings, /settings/[group]
-Son güncelleme: 2026-10-08 · commit 428d5e8
+Son güncelleme: 2026-10-11 · `container`/`richtext` ayar tipleri ve api/apps/proxy/tailscale grupları kaldırıldı
 
 ## Ne yapar
 Tüm panel ayarları gruplar halinde (sekme başına bir grup): genel, izleme, saklama, bildirim, dosyalar, yedek, giriş sayfası… Alan tipleri: metin, sayı, anahtar, cron (insan dili), dizin seçici, host kullanıcısı, container seçici, zengin metin. Yapılandırma dışa/içe aktarma da burada.
@@ -16,7 +16,6 @@ Tüm panel ayarları gruplar halinde (sekme başına bir grup): genel, izleme, s
   - `src/settings.schema.ts` — TÜM ayarların tek kaynağı: `settingGroups` + ayar tanımları (anahtar, `group`, `section`, `type`, `default`, `min/max`). Ekran bundan otomatik üretilir.
   - `src/lib/settings/index.ts` (397) — çözümleme (`getNumber/getBool/getString`; kaynak ezmesi → global ezme → şema varsayılanı), yazma/doğrulama; `settings/types.ts`.
   - `src/lib/backup/config.ts` — dışa aktarma kapsamı (kurulum ayarları; geçmiş veriler ve SECRET'lar hariç).
-  - `src/lib/richtext.ts` — giriş sayfası duyurusu HTML temizleme (oturumsuz sayfada `dangerouslySetInnerHTML` kullanılan tek yer).
   - `src/lib/host/{dirs,users}.ts`.
 - Tablo: `settings` (`003_settings.ts`).
 - Locale: `settings.*` (grup/alan etiketleri), `cron.editor.*`, `dirPicker.*`, `configTransfer.*`.

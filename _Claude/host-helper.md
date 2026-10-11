@@ -18,19 +18,17 @@ Host'ta root olarak çalışan küçük Python daemon (`host-helper/panel-helper
 - Sistem: `disk.usage`, `memory.usage`, `top.processes`
 - journald: `journal.read`, `journal.errors`
 - Docker: `docker.df`, `docker.prune`
-- ufw: `ufw.status`, `ufw.status_verbose`, `ufw.allow`, `ufw.deny`, `ufw.delete`, `ufw.enable`, `ufw.disable`, `ufw.default`, `ufw.logging`, `ufw.app_list`
 - fail2ban: `fail2ban.status`, `fail2ban.jail`, `fail2ban.unban`
 - cron (okuma): `cron.list`, `cron.list_system`
 - compose: `compose.ps|config|up|pull|restart|down` (dizin izin desenine uymalı)
 - Konsol: `shell.preset` (anahtar → `PRESETS` tablosundaki sabit argv), `shell.exec` (serbest komut; ayrıca izin gerekir)
-Argüman doğrulayıcılar dosyanın üstünde (`_unit`, `_ufw_rule`, `_project_dir`, `_preset`, `_command`…).
+Argüman doğrulayıcılar dosyanın üstünde (`_unit`, `_project_dir`, `_preset`, `_command`…).
 
 ## Kullanan özellikler
 | Özellik | Eylemler | Rehber |
 |---|---|---|
 | Sunucu sayfası (servis, güç, konsol, OS güncelleme) | `service.*`, `power.*`, `apt.*`, `shell.*` | `host.md` |
 | Docker yığınları / uygulama kurulumu | `compose.*` | `docker.md`, `appstore.md` |
-| Güvenlik duvarı | `ufw.*` | `firewall.md` |
 | Loglar (journald) | `journal.*` | `logs.md` |
 | fail2ban | `fail2ban.*` | `security.md` |
 | Docker temizlik | `docker.df`, `docker.prune` | `docker.md` |
@@ -51,3 +49,5 @@ Host cron YAZMA'sı helper'ı kullanmaz (geçici container, `/etc/cron.d/panel-*
 2. Panelde çağrı (`src/lib/host/helper.ts` üzerinden) + gerekiyorsa uzak için `onHost`/`helper.call`.
 3. Kullanıcının sunucusunda `allow.conf`'a satır ekle ve helper'ı yeniden kur/başlat (`install.sh` dosyayı kopyalar).
 4. `PROTOCOL.md` ve bu dosyayı güncelle.
+
+Not: `ufw.*` eylemleri güvenlik duvarı ekranıyla birlikte 2026-10-11'de kaldırıldı; sunucudaki eski `allow.conf` satırları zararsızdır (yükleyici yalnız adları saklar).

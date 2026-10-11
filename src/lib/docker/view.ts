@@ -4,7 +4,7 @@ import { serverT } from "@/lib/i18n/runtime";
 import { getDb } from "@/lib/db/client";
 import { panelContainerName } from "@/lib/host/self";
 import { getDockerProvider } from "@/lib/providers";
-import { getNumber, getString } from "@/lib/settings";
+import { getNumber } from "@/lib/settings";
 import { detectRestartLoops, latestContainerMetrics } from "./collect";
 import { hidden, order } from "./labels";
 import type { ContainerView, DockerOverview } from "./types";
@@ -46,9 +46,9 @@ export async function dockerOverview(): Promise<DockerOverview> {
    */
   const gorunur = summaries.filter((summary) => !hidden(summary.labels));
 
-  // Emniyet kilidi (M3.27/M3.30): panelin kendisi ve reverse proxy. Etiketle
-  // açılamıyor — bu bir tercih değil, panelin ayakta kalma koşulu.
-  const kilitli = new Set([panelContainerName(), getString("proxy.caddy_container").trim()]);
+  // Emniyet kilidi (M3.27/M3.30): panelin kendisi. Etiketle açılamıyor — bu
+  // bir tercih değil, panelin ayakta kalma koşulu.
+  const kilitli = new Set([panelContainerName()]);
   kilitli.delete("");
 
   const containers: ContainerView[] = gorunur.map((summary) => {

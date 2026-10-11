@@ -1,6 +1,6 @@
 # Sunucu Yönetim Paneli
 
-Tek bir Linux + Docker sunucusu için yazılmış, kendi sunucunda barındırdığın bir yönetim paneli. İzleme, alarm, Docker ve compose yönetimi, servislere hızlı erişim, yedekleme, güvenlik duvarı, dosya ve veritabanı yönetimini tek arayüzde toplar.
+Tek bir Linux + Docker sunucusu için yazılmış, kendi sunucunda barındırdığın bir yönetim paneli. İzleme, alarm, Docker ve compose yönetimi, yedekleme, dosya ve veritabanı yönetimini tek arayüzde toplar.
 
 Ev sunucusu (homelab) ölçeği düşünülerek tasarlandı: tek container, gömülü SQLite, harici veritabanı ya da kuyruk yok. Arayüz ve tüm metinler Türkçedir.
 
@@ -19,7 +19,7 @@ Ev sunucusu (homelab) ölçeği düşünülerek tasarlandı: tek container, göm
 - [Ortam değişkenleri](#ortam-değişkenleri)
 - [Güncelleme ve geri alma](#güncelleme-ve-geri-alma)
 - [Docker etiketleri](#docker-etiketleri)
-- [Dış API, Prometheus ve MQTT](#dış-api-prometheus-ve-mqtt)
+- [MQTT](#mqtt)
 - [Dil desteği](#dil-desteği)
 - [Geliştirme](#geliştirme)
 - [Proje yapısı](#proje-yapısı)
@@ -32,9 +32,7 @@ Ev sunucusu (homelab) ölçeği düşünülerek tasarlandı: tek container, göm
 
 ### Genel
 
-- **Genel Bakış:** anlık CPU, bellek, disk ve ağ kullanımı, container sayısı, açık alarmlar, işletim sistemi ve image güncellemeleri, son yedeğin zamanı ve seçtiğin kartlar.
-- **Uygulamalar:** sunucudaki servislere tek tıkla gitmek için kart panosu. Kategoriler, sıralama, logo yükleme ve karta bağlı canlı durum noktası var. Docker etiketiyle kartlar otomatik keşfedilir. Pi-hole gibi servisler için kart üstünde widget gösterilir.
-- **Ana sayfa ve kiosk:** kartlar ile yer imlerini birlikte arayan bir arama kutusu, saat, hava durumu (Open-Meteo, anahtar gerekmez) ve "internet çalışıyor mu?" göstergesi. Duvardaki tablet için oturum gerektirmeyen, salt okunur, token'lı bir kiosk adresi (`/kiosk/<token>`) de var.
+- **Genel Bakış:** anlık CPU, bellek, disk ve ağ kullanımı, container sayısı, açık alarmlar, işletim sistemi ve image güncellemeleri ve son yedeğin zamanı; düzenlenebilir bir widget ızgarası olarak. Saat, hava durumu (Open-Meteo, anahtar gerekmez) ve "internet çalışıyor mu?" göstergesi. Kök adres (`/`) bu sayfayı açar.
 - **Komut paleti:** `Ctrl+K` / `Cmd+K` ile her ekrana ve işleme hızlıca ulaşılır.
 
 ### İzleme
@@ -43,7 +41,7 @@ Ev sunucusu (homelab) ölçeği düşünülerek tasarlandı: tek container, göm
 - **Donanım sağlığı:** sensör sıcaklıkları, mdraid, S.M.A.R.T ve ZFS havuz durumu. Sanal makinede panel boş kutu göstermez, sebebini yazar.
 - **Servis Durumu:** HTTP, TCP, ping, DNS ve container yoklamaları. 60 günlük kullanılabilirlik şeridi ve bakım pencereleri var.
 - **Olaylar ve bildirimler:** Telegram, Home Assistant, ntfy, Discord ve e-posta kanalları, her biri kendi seviye filtresiyle. Yanlış alarm yağmurunu önlemek için dalgalanma (flap) koruması, tekrar bastırma, sessiz saatler ve çözülmeyen kritik alarmların tekrar hatırlatılması uygulanır. **Zaman çizelgesi** denetim kaydını, olayları ve metrik sıçramalarını tek şeritte birleştirir ("22:00'de şu ayar değişti, 22:05'te şu container çöktü").
-- **Loglar:** container logları ve journald tek yerde toplanır, SQLite FTS5 ile aranır. Aksan duyarsızdır: "olcum" yazınca "ölçüm" bulunur. Log desenine bağlı alarm kuralı tanımlanabilir.
+- **Loglar:** container logları ve journald tek yerde toplanır, SQLite FTS5 ile aranır. Aksan duyarsızdır: "olcum" yazınca "ölçüm" bulunur. Log desenine bağlı alarm kuralı tanımlanabilir. Seçili sunucunun logları ve olayları tek düğmeyle temizlenebilir.
 
 ### Yönetim
 
@@ -62,10 +60,8 @@ Ev sunucusu (homelab) ölçeği düşünülerek tasarlandı: tek container, göm
 
 ### Ağ ve Güvenlik
 
-- **Proxy:** bir alan adını sunucudaki bir servise yönlendirme (Caddy, Let's Encrypt ya da yerel CA). Sertifika bitiş takibi ve dinamik DNS (Cloudflare, DuckDNS) de burada.
-- **Ağ:** yerel ağ cihaz keşfi ve envanteri (MAC→üretici eşlemesiyle), yeni bilinmeyen cihaz bildirimi, Wake-on-LAN, hız testi geçmişi ve Tailscale peer durumu.
+- **Ağ:** yerel ağ cihaz keşfi ve envanteri (MAC→üretici eşlemesiyle), yeni bilinmeyen cihaz bildirimi, Wake-on-LAN ve hız testi geçmişi.
 - **Port Haritası:** hangi portu hangi container ya da sistem servisinin tuttuğu ve yeni bir container'a verilecek boş portlar.
-- **Güvenlik Duvarı:** ufw kurallarını görüntüleme, ekleme ve silme, varsayılan politikayı değiştirme.
 - **Güvenlik:** açık portlar, SSH anahtarları, fail2ban ve başarısız giriş denemeleri, UPnP yönlendirmeleri, image'larda Trivy ile bilinen zafiyet (CVE) taraması.
 
 ### Sistem
@@ -83,18 +79,16 @@ Ev sunucusu (homelab) ölçeği düşünülerek tasarlandı: tek container, göm
 
 ```mermaid
 flowchart LR
-    B[Tarayıcı] -->|"HTTP :8080"| C[Caddy]
-    C -->|reverse proxy| P["Panel<br/>Next.js :3000"]
-    C -.->|yayınlanan siteler| S[Diğer servisler]
+    B[Tarayıcı] -->|"HTTP :8080"| P["Panel<br/>ön katman :3000 → Next.js"]
     P --> DB[("SQLite<br/>panel-data volume")]
     P -->|docker.sock| D[Docker Engine]
     P -->|"HMAC imzalı istek<br/>/run/panel-helper"| H["host-helper<br/>(host'ta, root)"]
-    H -->|izin listesindeki eylemler| OS["systemd · ufw · compose · güç"]
+    H -->|izin listesindeki eylemler| OS["systemd · compose · güç"]
     P -->|salt okunur| M["/proc · /sys · /<br/>reports/*.json"]
     CR["Host cron<br/>hardware.sh · os-updates.sh"] --> M
 ```
 
-- **Tek giriş noktası Caddy'dir.** Panel container'ı dışarıya port açmaz. Caddy panelin kendisini HTTP portunda sunar. Panelden yayınlanan siteler kendi TLS ayarlarıyla aynı Caddy üzerinden çıkar. Panel yayın kurallarını ayrı bir dosyaya yazar ve Caddy'yi yeniden başlatmadan `reload` eder. Böylece hatalı bir kural panelin kendi girişini bozamaz.
+- **Panel kendi portunu yayınlar; ters vekil yok.** Container içinde küçük bir ön katman (`scripts/docker-entry.mjs`) 3000'de dinler, Next.js yalnızca loopback'te. Ön katman `X-Real-IP` / `X-Forwarded-*` başlıklarını soketin gerçek adresiyle yeniden yazar; rate limit ve denetim kaydının kullandığı istemci IP'si uydurulamaz.
 - **Host'ta yetki gerektiren işler container'a root verilerek yapılmaz.** Host'ta çalışan küçük bir Python daemon'ı (`host-helper`) Unix soketi üzerinden HMAC-SHA256 imzalı istekleri kabul eder. Hangi eylemin çalışacağına host'taki `/etc/panel-helper/allow.conf` karar verir. Bu dosya container'a mount edilmez. Container komut metni göndermez, yalnızca eylem adı ve yazılı argümanlar gönderir.
 - **Ham disk erişimi isteyen veriler host'ta üretilir.** S.M.A.R.T/ZFS ve işletim sistemi güncelleme raporları host cron'unda çalışan betiklerle JSON olarak yazılır. Panel bu dosyaları yalnızca okur.
 - **Veritabanı gömülüdür.** Node'un yerleşik `node:sqlite` modülü WAL modunda kullanılır, native derleme gerekmez. Migration'lar ileri yönlüdür ve her migration'dan önce veritabanının otomatik bir kopyası alınır.
@@ -108,7 +102,7 @@ flowchart LR
 Kurmadan önce bu bölümü oku. Panel bir sunucuyu yönetmek için var ve bu işi yapabilmesi yüksek yetki gerektiriyor.
 
 > [!WARNING]
-> **Panel yalnızca düz HTTP sunar.** Parolalar, oturum çerezi ve web terminal trafiği yerel ağda **şifresiz** taşınır. Paneli doğrudan internete açma. Uzaktan erişim için Tailscale gibi bir VPN kullan. HTTPS gerekiyorsa `Caddyfile`'daki panel bloğunu `https://` adresleriyle ve `tls` satırıyla geri çevirmen yeterli; oturum çerezinin `secure` bayrağı isteğin şemasından okunduğu için kodda başka değişiklik gerekmez.
+> **Panel yalnızca düz HTTP sunar.** Parolalar, oturum çerezi ve web terminal trafiği yerel ağda **şifresiz** taşınır. Paneli doğrudan internete açma; uzaktan erişim için bir VPN kullan. HTTPS gerekiyorsa panelin önüne TLS sonlandıran kendi ters vekilini koy ve `PANEL_TRUST_PROXY=1` yap — oturum çerezinin `secure` bayrağı iletilen şemadan okunur. Bunu yalnızca panel portuna o vekilden başka hiçbir yerden ulaşılamıyorsa yap.
 
 > [!WARNING]
 > **`docker.sock` erişimi pratikte host'ta root demektir.** Panel container'ı Docker soketine erişir. `:ro` bayrağı bunu engellemez, çünkü soket üzerinden giden API çağrıları salt okunur yapılamaz. Paneli ele geçiren biri sunucuyu da ele geçirmiş olur. Güçlü parolalar kullan ve iki adımlı doğrulamayı aç.
@@ -121,7 +115,7 @@ Bu riski sınırlamak için alınan önlemler:
 | Denetim kaydı | Değişiklik yapan her işlem kim ve ne zaman bilgisiyle kaydedilir. Gizli değerler maskelenir. |
 | Oturum güvenliği | Giriş hız sınırı, hesap kilitleme, tüm değiştirici uçlarda CSRF koruması (double-submit cookie), girişten sonra oturum yenileme, TOTP 2FA. |
 | host-helper izin listesi | **Varsayılan olarak boş kurulur**, yani kurulum panele host'ta hiçbir yetki vermez. Hangi eylemin açılacağına sen karar verirsin. Panel tarafındaki izin ve host tarafındaki izin listesi iki ayrı kapıdır; panel ele geçirilse bile ikincisi durur. |
-| Korumalı container'lar | Panelin kendi container'ı ve reverse proxy container'ı toplu işlemlerde seçilemez ve otomatik güncellemeye girmez. |
+| Korumalı container | Panelin kendi container'ı toplu işlemlerde seçilemez ve otomatik güncellemeye girmez. |
 | Secret şifreleme | Ayarlardaki gizli değerler AES-256-GCM ile şifrelenir. `MASTER_KEY` yedeklere bilerek dahil edilmez. |
 
 **`MASTER_KEY`'i panel dışında ayrı bir yerde sakla.** Kaybedersen şifreli ayarlar (token'lar, parolalar) geri getirilemez. Veritabanıyla aynı yedeğe koyarsan da şifrelemenin koruması kalmaz.
@@ -136,7 +130,6 @@ Bu riski sınırlamak için alınan önlemler:
 | Docker Engine + Compose v2 | `docker compose` komutu. |
 | Python 3 (host'ta) | Yalnızca host-helper için. Standart kütüphane dışında bağımlılığı yok. |
 | `smartmontools` | İsteğe bağlı. S.M.A.R.T raporu için. |
-| Tailscale | İsteğe bağlı. Kurulu değilse compose dosyasında bir satır yoruma alınmalı (aşağıya bak). |
 
 ---
 
@@ -172,23 +165,15 @@ MASTER_KEY=<openssl çıktısı>
 DOCKER_GID=<getent çıktısı>
 ```
 
-Sunucuda dolu olmayan portları seç. Varsayılanlar `8080` (panel) ve `8443` (panelden yayınlanan TLS'li siteler):
+Sunucuda dolu olmayan bir port seç. Varsayılan `8080`:
 
 ```bash
-ss -lntp | grep -E ':(8080|8443) '
+ss -lntp | grep -E ':8080 '
 ```
 
 Diğer değişkenler için [Ortam değişkenleri](#ortam-değişkenleri) bölümüne bak.
 
-### 3. Tailscale kurulu değilse
-
-`docker-compose.yml` içindeki şu satırı yoruma al. Aksi halde compose ayağa kalkmaz:
-
-```yaml
-      # - /var/run/tailscale/tailscaled.sock:/run/tailscale/tailscaled.sock:ro
-```
-
-### 4. Başlat
+### 3. Başlat
 
 ```bash
 docker compose up -d --build
@@ -208,11 +193,11 @@ docker buildx imagetools inspect ghcr.io/<kullanici>/<repo>:<etiket>
 docker compose logs panel | grep -A3 KURULUM
 ```
 
-### 5. Yöneticiyi oluştur
+### 4. Yöneticiyi oluştur
 
 Tarayıcıda `http://<sunucu-adresi>:8080` adresini aç. Kullanıcı olmadığı sürece panel kurulum sihirbazına (`/kurulum`) yönlendirir. Logdaki kurulum kodunu gir, kullanıcı adı ve parola seç; sihirbaz ilk yöneticiyi oluşturup seni içeri alır. Kod her yeniden başlatmada değişir; ilk hesap oluştuktan sonra sihirbaz kalıcı olarak kapanır.
 
-Panel bu noktada izleme, Docker yönetimi, uygulama kartları ve bildirimlerle çalışır durumdadır. Host üzerinde işlem yapan özellikler (güç, systemd, compose, güvenlik duvarı, sunucu konsolu, host cron) host-helper kurulana kadar kapalıdır ve panel bunu ekranda açıkça söyler.
+Panel bu noktada izleme, Docker yönetimi ve bildirimlerle çalışır durumdadır. Host üzerinde işlem yapan özellikler (güç, systemd, compose, sunucu konsolu, host cron) host-helper kurulana kadar kapalıdır ve panel bunu ekranda açıkça söyler.
 
 ---
 
@@ -220,7 +205,7 @@ Panel bu noktada izleme, Docker yönetimi, uygulama kartları ve bildirimlerle �
 
 ### host-helper
 
-Compose yığınları, systemd servisleri, güç işlemleri, ufw, host crontab'ı, journald okuma ve sunucu konsolu için gerekir.
+Compose yığınları, systemd servisleri, güç işlemleri, host crontab'ı, journald okuma ve sunucu konsolu için gerekir.
 
 ```bash
 sudo host-helper/install.sh
@@ -301,8 +286,7 @@ Buradakiler **dağıtım parametreleridir**. Panelden değiştirilebilen her şe
 | `MASTER_KEY` | ✅ | — | Secret şifreleme anahtarı, 64 hex karakter. Yoksa panel açılmaz. |
 | `DOCKER_GID` | ✅ | — | Host'un `docker` grubunun GID'i. Panel root olmayan kullanıcıyla (uid 1001) çalışır. |
 | `PANEL_HTTP_PORT` | | `8080` | Panelin host'taki portu. Portsuz adres istiyorsan `80` yap. |
-| `PANEL_HTTPS_PORT` | | `8443` | Yalnızca panelden yayınlanan TLS'li siteler için. Panel bu portta sunulmaz. |
-| `PANEL_SITE_ADDRESSES` | | `:80` | Panelin cevap vereceği adresler. Boş bırakılırsa her IP ve host adıyla açılır. Sınırlamak için satırın yorumunu kaldır; boş değer verme. |
+| `PANEL_TRUST_PROXY` | | `0` | Yalnızca panelin önünde kendi TLS ters vekilin varsa `1` yap: o vekilden gelen `X-Forwarded-For` / `X-Forwarded-Proto` korunur. |
 | `HELPER_SECRET` | | — | host-helper paylaşılan sırrı. Boşsa host işlemleri kapalıdır. |
 | `PANEL_SUBNET` | | `172.28.0.0/16` | Panel container ağının sabit alt ağı. ufw kuralları buna göre yazıldığı için sabit tutulur. |
 | `PANEL_REPORTS_DIR` | | `./reports` | Host cron betiklerinin JSON bıraktığı dizin. |
@@ -339,23 +323,6 @@ python agent-deploy.py pi@192.168.1.21 --version 1.12.7 --sudo
 
 Panelin davranışı container'lara ya da compose dosyasına yazılan etiketlerle ayarlanabilir. Tanınmayan bir değer varsayılana düşer. Bu yüzden bir yazım hatası bir container'ı sessizce gizlemez.
 
-**Uygulama kartı keşfi** isteğe bağlıdır (opt-in). Yalnızca `panel.enable=true` taşıyan container kart olur:
-
-```yaml
-services:
-  pihole:
-    image: pihole/pihole
-    labels:
-      panel.enable: "true"
-      panel.name: "Pi-hole"
-      panel.port: "8081"
-      panel.path: "/admin"
-      panel.category: "Ağ"
-      panel.description: "Reklam engelleyici DNS"
-```
-
-Kullanılabilen alanlar: `panel.name`, `.url`, `.port`, `.scheme`, `.path`, `.description`, `.category`, `.icon`, `.internal_url`. Adres verilmezse container'ın yayınladığı ilk TCP portu kullanılır. Keşfedilen bir kartı panelden düzenlersen kart senin olur ve keşif bir daha ona dokunmaz.
-
 **Davranış etiketleri:**
 
 | Etiket | Etkisi |
@@ -370,11 +337,9 @@ Kullanılabilen alanlar: `panel.name`, `.url`, `.port`, `.scheme`, `.path`, `.de
 
 ---
 
-## Dış API, Prometheus ve MQTT
+## MQTT
 
-- **`/api/v1`:** kendi betiklerinden, Home Assistant'tan ya da n8n'den çağırmak için sürümlenmiş, `Authorization: Bearer` ile çalışan bir HTTP API. **Varsayılan olarak kapalıdır;** kapalıyken her uç `404` döner. Açmak için **Ayarlar → Dış API**, anahtar üretmek için **Hesabım → API Anahtarları**. Anahtar bir kullanıcıya bağlıdır ve o kullanıcının izinlerinin bir alt kümesini taşır. Ayrıntılar [`docs/API.md`](docs/API.md) dosyasında, makine okunur şema [`docs/openapi.yaml`](docs/openapi.yaml) dosyasında.
-- **Prometheus:** `/metrics` ucu sistem ve isteğe bağlı olarak container metriklerini yayınlar (**Ayarlar → Dış Entegrasyon**).
-- **MQTT:** metrikler ve olaylar bir MQTT broker'ına yayınlanabilir. Home Assistant MQTT Discovery desteklenir; sensörler Home Assistant'ta kendiliğinden belirir.
+Metrikler ve olaylar bir MQTT broker'ına yayınlanabilir (**Ayarlar → Dış Entegrasyon**). Home Assistant MQTT Discovery desteklenir; sensörler Home Assistant'ta kendiliğinden belirir.
 
 ---
 
@@ -419,7 +384,7 @@ Her dil `src/locales/` altında tek bir JSON dosyasıdır. Anahtarlar düz ve ba
 
 ## Geliştirme
 
-Panelin tamamı Windows'ta ya da macOS'ta sunucuya gitmeden geliştirilebilir. `MOCK_MODE=1` ile Docker, metrik, donanım, Tailscale ve host-helper sağlayıcıları `fixtures/` altındaki sahte veriyi kullanır.
+Panelin tamamı Windows'ta ya da macOS'ta sunucuya gitmeden geliştirilebilir. `MOCK_MODE=1` ile Docker, metrik, donanım ve host-helper sağlayıcıları `fixtures/` altındaki sahte veriyi kullanır.
 
 **Gereksinim:** Node.js 24 (yerleşik `node:sqlite` modülü için).
 
@@ -439,9 +404,8 @@ Panel `http://localhost:3000` adresinde açılır. Veritabanı `./data/` altınd
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
 | `npm test` | Birim testleri (`node --test`, `src/**/*.test.ts`) |
-| `npm run check:openapi` | OpenAPI şemasının route ağacıyla uyuşup uyuşmadığını denetler |
 
-Her push'ta GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) tip kontrolü, lint, testler, OpenAPI doğrulaması ve derleme çalıştırır. Ardından Docker imajını derler, container'ı ayağa kaldırır ve `/api/health` ucunun yanıt verdiğini doğrular.
+Her push'ta GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) tip kontrolü, lint, testler, çeviri denetimleri ve derleme çalıştırır. Ardından Docker imajını derler, container'ı ayağa kaldırır ve `/api/health` ucunun yanıt verdiğini doğrular.
 
 > [!NOTE]
 > Proje **Next.js 16** kullanıyor. Bu sürümde API'ler, kurallar ve dosya yapısı önceki sürümlerden farklı olabilir. Kod yazmadan önce `node_modules/next/dist/docs/` altındaki ilgili rehbere bak.
@@ -458,24 +422,22 @@ Her push'ta GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.ym
 ## Proje yapısı
 
 ```
-├── Caddyfile                # Giriş noktası; panelin ürettiği yayın kurallarını import eder
 ├── Dockerfile               # Çok aşamalı derleme, Debian slim, root olmayan kullanıcı, healthcheck
-├── docker-compose.yml       # panel + caddy, mount'lar ve gerekçeleri
+├── docker-compose.yml       # panel servisi, mount'lar ve gerekçeleri
 ├── .env.example             # Dağıtım parametreleri
-├── docs/                    # API.md + openapi.yaml
 ├── fixtures/                # MOCK_MODE sahte verileri
 ├── host-helper/             # panel-helper.py, install.sh, PROTOCOL.md
-├── scripts/                 # hardware.sh, os-updates.sh (host cron), check-openapi.mjs
+├── scripts/                 # hardware.sh, os-updates.sh (host cron), docker-entry.mjs (giriş + ön katman)
 └── src/
     ├── instrumentation.ts   # Açılış: MASTER_KEY kontrolü, migration, kurulum kodu
     ├── settings.schema.ts   # Tüm ayarların tek kaynağı
     ├── app/
     │   ├── (panel)/         # Oturum gerektiren ekranlar (docker, monitoring, backup, …)
-    │   ├── api/             # İç API uçları + api/v1 (dış API)
-    │   ├── login/ kiosk/ metrics/
+    │   ├── api/             # İç API uçları
+    │   ├── login/ kurulum/
     ├── components/          # Ekran bileşenleri (docker, settings, shell, …)
     └── lib/                 # İş mantığı: auth, db, docker, compose, jobs, alerts,
-                             # notify, backup, proxy, network, security, providers, …
+                             # notify, backup, network, security, providers, …
 ```
 
 ---
@@ -496,6 +458,4 @@ Her push'ta GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.ym
 | Belge | İçerik |
 |---|---|
 | [`PLAN.md`](PLAN.md) | Yol haritası, mimari kararlar (T1–T14) ve her milestone'un gerekçesi |
-| [`docs/API.md`](docs/API.md) | Dış API rehberi: anahtarlar, yetki modeli, curl, Prometheus ve Home Assistant örnekleri |
-| [`docs/openapi.yaml`](docs/openapi.yaml) | `/api/v1` OpenAPI şeması |
 | [`host-helper/PROTOCOL.md`](host-helper/PROTOCOL.md) | host-helper protokolü: taşıma, imza, istek/yanıt biçimi |

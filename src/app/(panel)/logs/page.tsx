@@ -16,6 +16,7 @@ export default async function LogsPage() {
     <LogsScreen
       initial={{ ...searchLogs({ limit: 200 }), patterns: listPatterns() }}
       canManagePatterns={hasPermission(session.user, "settings.edit")}
+      canClear={hasPermission(session.user, "settings.edit")}
     />
   );
 }

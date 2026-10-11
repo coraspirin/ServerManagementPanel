@@ -17,11 +17,9 @@ export type SettingType =
     ise sunucunun o anki durumundan geliyor (hangi container'lar var, host'ta
     hangi kullanıcılar tanımlı, diskte hangi klasörler duruyor). Hepsinin
     DEPOLAMA biçimi hâlâ metin — yalnızca giriş yolu değişiyor, dolayısıyla
-    okuyan kod (`allowedRoots`, `logs.sources` ayrıştırması, `caddy.ts`)
+    okuyan kod (`allowedRoots`, `logs.sources` ayrıştırması)
     hiç değişmiyor.
   */
-  /** Tek container adı; liste `/api/docker`den. */
-  | "container"
   /** Virgülle ayrılmış container adları; onay kutusu listesi. */
   | "containers"
   /** Tek mutlak klasör yolu; host klasör gezgininden seçilir. */
@@ -30,8 +28,6 @@ export type SettingType =
   | "dirs"
   /** "uid:gid" — host kullanıcı/grup listesinden seçilir. */
   | "owner"
-  /** Sınırlı HTML alt kümesi; popup'ta zengin metin kutusuyla yazılır. */
-  | "richtext"
   /**
    * Arayüz dili. Seçenekler şemada değil, dil kaydında (`src/locales/`):
    * yeni bir dil dosyası eklendiğinde listede kendiliğinden görünür.

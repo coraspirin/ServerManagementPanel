@@ -4,7 +4,6 @@ import { getDb } from "@/lib/db/client";
 import { currentHostId, hostSettingsOverlay, runWithHost } from "@/lib/hosts/context";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { audit } from "@/lib/auth/audit";
-import { sanitizeRichText } from "@/lib/richtext";
 import { findSetting, settingDefs } from "@/settings.schema";
 import { serverT } from "@/lib/i18n/runtime";
 import { isLocale } from "@/locales";
@@ -40,15 +39,6 @@ function parseValue(def: SettingDef, raw: string): string | number | boolean {
 
 function serializeValue(def: SettingDef, value: unknown): string {
   if (def.type === "bool") return value ? "1" : "0";
-  /*
-    Zengin metin DEPOLANIRKEN temizleniyor, yalnızca çizilirken değil (M3.45).
-
-    İstemci de temizliyor ama oraya güvenmek, uç noktayı doğrudan çağıran
-    birine kapıyı açık bırakmak olurdu. Bu değer anonim karşılama sayfasında
-    HTML olarak çiziliyor; kaydın kendisinin temiz olması, sonradan eklenecek
-    ikinci bir okuyucunun da güvende olması demek.
-  */
-  if (def.type === "richtext") return sanitizeRichText(String(value));
   return String(value);
 }
 

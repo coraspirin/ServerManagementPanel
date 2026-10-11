@@ -174,7 +174,7 @@ export function MonitorForm({
         </Field>
 
         <Field
-          label={t("proxy.form.target")}
+          label={t("common.target")}
           help={
             values.type === "container" && containerNames
               ? t("monitorForm.containerHelp")
@@ -195,7 +195,7 @@ export function MonitorForm({
               <option value="">{t("monitorForm.pickContainer")}</option>
               {!containerNames.includes(values.target) && values.target !== "" && (
                 <option value={values.target}>
-                  {t("appForm.notInList", { name: values.target })}
+                  {t("common.notInList", { name: values.target })}
                 </option>
               )}
               {containerNames.map((name) => (
@@ -250,7 +250,7 @@ export function MonitorForm({
           onChange={(e) => onChange({ enabled: e.target.checked })}
           className="size-4 accent-[var(--brand)]"
         />
-        {t("proxy.form.enabled")}
+        {t("common.enabled")}
       </label>
 
       <div className="rounded-md border border-line">
@@ -260,7 +260,7 @@ export function MonitorForm({
           className="flex w-full items-center justify-between px-3 py-2 text-xs text-subtle transition-colors hover:text-ink"
         >
           <span>{t("monitorForm.customSchedule")}</span>
-          <span>{showAdvanced ? t("appForm.hide") : t("appForm.show")}</span>
+          <span>{showAdvanced ? t("common.hide") : t("common.show")}</span>
         </button>
 
         {showAdvanced && (

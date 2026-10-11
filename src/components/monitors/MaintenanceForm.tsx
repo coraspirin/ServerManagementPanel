@@ -244,7 +244,7 @@ export function MaintenanceForm({
           onChange={(e) => onChange({ enabled: e.target.checked })}
           className="size-4 accent-[var(--brand)]"
         />
-        {t("proxy.form.enabled")}
+        {t("common.enabled")}
       </label>
 
       {error && <p className="text-sm text-danger">{error}</p>}

@@ -105,60 +105,6 @@ export function listEvents(options: {
   ).map(toEvent);
 }
 
-/**
- * İmleçli sayfa (T12 — /api/v1/events).
- *
- * `listEvents`ten ayrı bir fonksiyon çünkü soru farklı: o "son N olay" diyor
- * ve ekranı besliyor, bu "şu konumdan sonraki N olay" diyor. İkisini tek
- * fonksiyona sıkıştırmak, hiçbir çağıranın tam olarak istemediği bir imza
- * üretirdi.
- *
- * `limit + 1` satır okunuyor: "daha var mı" sorusunu ayrı bir COUNT sorgusu
- * olmadan cevaplamak için. Sayfalama sırası `ts DESC, id DESC` — `id`
- * olmadan aynı saniyedeki kayıtlarda sayfa sınırı belirsiz kalırdı.
- */
-export function listEventsPage(options: {
-  limit: number;
-  severity?: Severity;
-  source?: string;
-  since?: number;
-  until?: number;
-  cursor?: { ts: number; id: number };
-}): EventRow[] {
-  const clauses: string[] = [];
-  const params: (string | number)[] = [];
-
-  if (options.severity) {
-    clauses.push("severity = ?");
-    params.push(options.severity);
-  }
-  if (options.source) {
-    clauses.push("source = ?");
-    params.push(options.source);
-  }
-  if (options.since !== undefined) {
-    clauses.push("ts >= ?");
-    params.push(options.since);
-  }
-  if (options.until !== undefined) {
-    clauses.push("ts <= ?");
-    params.push(options.until);
-  }
-  if (options.cursor) {
-    // İmleç FİLTREYİ değil, filtre içindeki KONUMU taşıyor.
-    clauses.push("(ts < ? OR (ts = ? AND id < ?))");
-    params.push(options.cursor.ts, options.cursor.ts, options.cursor.id);
-  }
-
-  const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
-
-  return (
-    getDb()
-      .prepare(`SELECT * FROM events ${where} ORDER BY ts DESC, id DESC LIMIT ?`)
-      .all(...params, options.limit + 1) as Row[]
-  ).map(toEvent);
-}
-
 /** Okundu işaretleme — tırmandırmayı da durdurur. */
 export function acknowledgeEvents(ids: number[], by: string, now: number): number {
   if (ids.length === 0) return 0;
@@ -182,6 +128,14 @@ export function unacknowledgedCount(hostId?: number): number {
       : getDb().prepare(`${sql} AND host_id = ?`).get(hostId)
   ) as { n: number };
   return row.n;
+}
+
+/**
+ * Bir sunucunun TÜM olaylarını siler ("Kayıtları temizle"). Zaman çizelgesi
+ * olayları bu tablodan okuduğu için oradan da düşerler; audit kaydı kalır.
+ */
+export function clearEvents(hostId: number): number {
+  return Number(getDb().prepare("DELETE FROM events WHERE host_id = ?").run(hostId).changes);
 }
 
 export function pruneEvents(now: number = Math.floor(Date.now() / 1000)): number {

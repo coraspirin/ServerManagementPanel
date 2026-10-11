@@ -20,12 +20,10 @@ export function BackupStatus({
   systems,
   runs,
   stale,
-  readOnly = false,
 }: {
   systems: SystemStatus[];
   runs: BackupRun[];
   stale: boolean;
-  readOnly?: boolean;
 }) {
   const t = getT();
   const dict = getActiveDictionary();
@@ -36,7 +34,7 @@ export function BackupStatus({
     <WidgetCard
       title={t("dashboard.backups.title")}
       icon={Archive}
-      href={readOnly ? undefined : "/backup"}
+      href="/backup"
       linkLabel={t("dashboard.all")}
       aside={
         stale ? (

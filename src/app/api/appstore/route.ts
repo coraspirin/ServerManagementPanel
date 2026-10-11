@@ -12,7 +12,7 @@ import { composePreflight } from "@/lib/appstore/preflight";
 import { applyFix, checkCompose } from "@/lib/compose/checks";
 import { parseCompose, readAllServices, stringifyCompose } from "@/lib/compose/service";
 import { getDockerProvider } from "@/lib/providers";
-import { panelPorts } from "@/lib/security/firewall";
+import { panelPorts } from "@/lib/security/ports";
 import { cachedPortScan } from "@/lib/security/ports";
 
 export const dynamic = "force-dynamic";

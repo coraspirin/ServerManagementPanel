@@ -166,7 +166,6 @@ const HOST_SCOPED_TABLES = [
   "backup_repos",
   "db_connections",
   "job_runs",
-  "apps",
   "log_cursors",
 ] as const;
 

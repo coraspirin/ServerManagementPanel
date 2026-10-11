@@ -116,70 +116,6 @@ def _cron_user(args):
     return user
 
 
-def _ufw_rule(args):
-    """ufw kural argümanı — argv PARÇALARI olarak.
-
-    Serbest metin KABUL EDİLMİYOR: yalnızca `port/proto` ya da
-    `from <ip> to any port <n> [proto tcp|udp]` kalıpları. ufw'nin kendi söz
-    dizimi çok geniş ve panelden gelen bir dizeyi olduğu gibi geçirmek, izin
-    listesini anlamsızlaştırırdı.
-
-    ⚠️ LİSTE DÖNÜYOR, DİZE DEĞİL. `subprocess.run` komutu `shell=False` ile
-    çalıştırdığı için çok kelimelik bir kural tek argüman olarak geçerse ufw
-    onu ayrıştıramaz ("Wrong number of arguments") — `from ... to any port ...`
-    biçimi bu yüzden hiç çalışmıyordu. Bölme, kural DESENE UYDUKTAN sonra
-    yapılıyor: parçaların tamamı beyaz listeden geliyor, kabuk devrede değil.
-    """
-    rule = str(args.get("rule", "")).strip()
-    if re.fullmatch(r"\d{1,5}(/(tcp|udp))?", rule):
-        return rule.split()
-    if re.fullmatch(
-        r"from [0-9a-fA-F:.]{3,45}(/\d{1,3})? to any port \d{1,5}( proto (tcp|udp))?", rule
-    ):
-        return rule.split()
-    raise ValueError("gecersiz ufw kurali")
-
-
-def _ufw_comment(args):
-    """İsteğe bağlı kural açıklaması.
-
-    Ayrı argüman olarak duruyor çünkü kuralın kendisi boşluktan bölünüyor;
-    boşluk içeren bir açıklama o bölmede parçalanırdı. Tırnak ve kaçış
-    karakteri yok — ufw'ye argv olarak gidiyor, kabuk yorumlaması yok.
-    """
-    text = str(args.get("comment", "")).strip()
-    if not text:
-        return []
-    if not re.fullmatch(r"[A-Za-z0-9 ._-]{1,64}", text):
-        raise ValueError("gecersiz aciklama")
-    return ["comment", text]
-
-
-def _ufw_policy(args):
-    """`ufw default <policy> <direction>` argümanları."""
-    policy = str(args.get("policy", ""))
-    direction = str(args.get("direction", ""))
-    if policy not in ("allow", "deny", "reject"):
-        raise ValueError("gecersiz politika")
-    if direction not in ("incoming", "outgoing", "routed"):
-        raise ValueError("gecersiz yon")
-    return [policy, direction]
-
-
-def _ufw_logging(args):
-    level = str(args.get("level", ""))
-    if level not in ("off", "low", "medium", "high", "full"):
-        raise ValueError("gecersiz log seviyesi")
-    return level
-
-
-def _ufw_number(args):
-    number = str(args.get("number", ""))
-    if not re.fullmatch(r"\d{1,4}", number):
-        raise ValueError("gecersiz kural numarasi")
-    return number
-
-
 def _jail(args):
     jail = str(args.get("jail", ""))
     if not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", jail):
@@ -305,30 +241,6 @@ ACTIONS = {
         "json",
         "--no-pager",
     ],
-    # M3.7 — güvenlik duvarı. `ufw.status` salt okuma; kural ekleme/silme
-    # ayrı eylemler, çünkü izin listesinde farklı satırlar olarak açılıp
-    # kapatılabilmeleri gerekiyor ("görebilsin ama değiştiremesin").
-    "ufw.status": lambda a: ["/usr/sbin/ufw", "status", "numbered"],
-    # `status verbose` ile `status numbered` BİRLİKTE verilemez; varsayılan
-    # politikayı ve log seviyesini yalnızca verbose gösterdiği için ayrı eylem.
-    # Varsayılanı "gelen: allow" olan bir güvenlik duvarı hiçbir şey korumaz —
-    # kural listesine bakan biri bunu göremez.
-    "ufw.status_verbose": lambda a: ["/usr/sbin/ufw", "status", "verbose"],
-    "ufw.allow": lambda a: ["/usr/sbin/ufw", "allow"] + _ufw_rule(a) + _ufw_comment(a),
-    "ufw.deny": lambda a: ["/usr/sbin/ufw", "deny"] + _ufw_rule(a) + _ufw_comment(a),
-    "ufw.delete": lambda a: ["/usr/sbin/ufw", "--force", "delete", _ufw_number(a)],
-    # M3.18 — açma/kapama ve varsayılan politika. HER BİRİ AYRI SATIR: "kural
-    # ekleyebilsin ama güvenlik duvarını kapatamasın" en olağan istek ve tek
-    # bir `ufw.*` izniyle bunu ifade etmek mümkün olmazdı.
-    #
-    # `--force` olmadan `ufw enable` SSH bağlantısını keseceği uyarısını verip
-    # onay bekler ve etkileşimsiz çalışan helper'da zaman aşımına düşerdi.
-    # Onay panelde alınıyor (bkz. dangerousChange).
-    "ufw.enable": lambda a: ["/usr/sbin/ufw", "--force", "enable"],
-    "ufw.disable": lambda a: ["/usr/sbin/ufw", "disable"],
-    "ufw.default": lambda a: ["/usr/sbin/ufw", "default"] + _ufw_policy(a),
-    "ufw.logging": lambda a: ["/usr/sbin/ufw", "logging", _ufw_logging(a)],
-    "ufw.app_list": lambda a: ["/usr/sbin/ufw", "app", "list"],
     # M3.8 — fail2ban. Yalnızca okuma ve BAN KALDIRMA var; ban EKLEME yok:
     # paneli bir saldırı aracına çevirmenin gereği yok, fail2ban zaten kendi
     # kurallarıyla banlıyor.

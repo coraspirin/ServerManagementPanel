@@ -39,8 +39,7 @@ export type WidgetDef = {
 
 /*
   Varsayılan sıra "dengeli": üstte sağlık özeti ve günlük bilgiler, ortada
-  kaynaklar ve olaylar, altta uygulamalar ve bakım. Ev halkının da kullandığı
-  uygulama kartları varsayılanda açık kalıyor.
+  kaynaklar ve olaylar, altta container/yedek özeti ve bakım.
 */
 export const WIDGETS: WidgetDef[] = [
   { key: "status", permission: "metrics.view", visible: true, size: "full" },
@@ -51,8 +50,6 @@ export const WIDGETS: WidgetDef[] = [
   { key: "fleet", permission: "hosts.view", visible: true, size: "full" },
   { key: "events", permission: "metrics.view", visible: true, size: "lg" },
   { key: "uptime", permission: "metrics.view", visible: true, size: "lg" },
-  { key: "quicklinks", visible: true, size: "full" },
-  { key: "apps", visible: true, size: "full" },
   { key: "containers", permission: "docker.view", visible: true, size: "lg" },
   { key: "backups", permission: "backup.manage", visible: true, size: "lg" },
   { key: "maintenance", permission: "panel.dashboard", visible: true, size: "full" },

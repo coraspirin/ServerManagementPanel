@@ -64,8 +64,6 @@ const GROUP_LABELS: Record<string, MessageKey> = {
   docker: "users.group.docker",
   host: "users.group.host",
   apps: "users.group.apps",
-  kiosk: "users.group.kiosk",
-  proxy: "users.group.proxy",
   network: "users.group.network",
   files: "users.group.files",
   db: "users.group.db",

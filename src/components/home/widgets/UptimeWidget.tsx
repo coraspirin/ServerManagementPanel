@@ -12,7 +12,7 @@ const MAX_ROWS = 6;
  * Uptime monitörleri — önce düşenler, sonra diğerleri; her biri son 30 günün
  * şeridi ve 24 saatlik oranıyla.
  */
-export function UptimeWidget({ monitors, readOnly = false }: { monitors: MonitorView[]; readOnly?: boolean }) {
+export function UptimeWidget({ monitors }: { monitors: MonitorView[] }) {
   const t = getT();
   const dict = getActiveDictionary();
   const enabled = monitors.filter((monitor) => monitor.enabled);
@@ -25,7 +25,7 @@ export function UptimeWidget({ monitors, readOnly = false }: { monitors: Monitor
     <WidgetCard
       title={t("dashboard.uptime.title")}
       icon={HeartPulse}
-      href={readOnly ? undefined : "/uptime"}
+      href="/uptime"
       linkLabel={t("dashboard.all")}
       aside={
         enabled.length > 0 ? (

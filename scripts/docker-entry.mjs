@@ -1,7 +1,8 @@
 /**
  * Container giriş noktası (CMD).
  *
- *  - PANEL_ROLE=central (varsayılan): Next sunucusunu olduğu gibi başlatır.
+ *  - PANEL_ROLE=central (varsayılan): Next'i YALNIZCA 127.0.0.1'de başlatır ve
+ *    önüne düz HTTP bir ön katman koyar (aşağıda, `startFront`).
  *  - PANEL_ROLE=agent: TLS sertifikasını (yoksa) üretir, Next'i YALNIZCA
  *    127.0.0.1'de başlatır ve önüne izinli yolları ileten bir HTTPS katmanı
  *    koyar. Dışarıdan erişilebilen tek şey /api/agent/* ve /api/health —
@@ -19,7 +20,7 @@ import https from "node:https";
 import path from "node:path";
 
 if (process.env.PANEL_ROLE !== "agent") {
-  await import("./server.js");
+  await startFront();
 } else {
   const dir = path.join(process.env.DATA_DIR ?? "/app/data", "agent");
   const keyPath = path.join(dir, "key.pem");
@@ -85,5 +86,63 @@ if (process.env.PANEL_ROLE !== "agent") {
   const bind = process.env.AGENT_BIND ?? "0.0.0.0";
   server.listen(port, bind, () => {
     console.log(`[agent] https://${bind}:${port} dinleniyor`); // i18n-ignore — operatör logu
+  });
+}
+
+/**
+ * Merkez rolünün ön katmanı — eskiden Caddy'nin yaptığı tek iş.
+ *
+ * Panel istemci IP'sini (rate limit, audit, giriş kısıtlaması) ve şemayı
+ * (`secure` çerez) `X-Real-IP` / `X-Forwarded-*` başlıklarından okuyor
+ * (`src/lib/request.ts`, `src/lib/auth/session.ts`). Next doğrudan dışarı
+ * açılsaydı bu başlıkları istemci UYDURABİLİRDİ. Bu katman gelen değerleri
+ * siler ve soketin gerçek adresini yazar; Next yalnızca loopback'te dinlediği
+ * için başka yoldan ulaşılamaz.
+ *
+ * `PANEL_TRUST_PROXY=1`: önüne TLS sonlandıran kendi vekilini koyan kurulum
+ * için. O zaman gelen `X-Forwarded-For` / `X-Forwarded-Proto` korunur — yalnız
+ * panel portu başka hiçbir yere açık değilse kullanılmalı.
+ */
+async function startFront() {
+  const publicPort = Number(process.env.PORT ?? 3000);
+  const publicBind = process.env.HOSTNAME ?? "0.0.0.0";
+  const internalPort = Number(process.env.PANEL_INTERNAL_PORT ?? 3001);
+  const trustProxy = process.env.PANEL_TRUST_PROXY === "1";
+
+  process.env.HOSTNAME = "127.0.0.1";
+  process.env.PORT = String(internalPort);
+  await import("./server.js");
+
+  const server = http.createServer((req, res) => {
+    const remote = (req.socket.remoteAddress ?? "").replace(/^::ffff:/, "");
+    const headers = { ...req.headers };
+    const forwarded = trustProxy ? String(headers["x-forwarded-for"] ?? "").split(",")[0].trim() : "";
+    const proto = trustProxy ? String(headers["x-forwarded-proto"] ?? "").split(",")[0].trim() : "";
+    delete headers["x-real-ip"];
+    delete headers["x-forwarded-for"];
+    delete headers["x-forwarded-proto"];
+    headers["x-real-ip"] = forwarded || remote;
+    headers["x-forwarded-for"] = forwarded || remote;
+    headers["x-forwarded-proto"] = proto === "https" ? "https" : "http";
+
+    const upstream = http.request(
+      { host: "127.0.0.1", port: internalPort, method: req.method, path: req.url, headers },
+      (response) => {
+        res.writeHead(response.statusCode ?? 502, response.headers);
+        response.pipe(res);
+      },
+    );
+    upstream.on("error", () => {
+      if (!res.headersSent) res.writeHead(502);
+      res.end();
+    });
+    // İstemci giderse iç isteği de kapat — log/çekme akışları sürüp gitmesin.
+    res.on("close", () => upstream.destroy());
+    req.pipe(upstream);
+  });
+  // Uzun akışlar (image çekme, log takibi, SSE) kesilmesin.
+  server.requestTimeout = 0;
+  server.listen(publicPort, publicBind, () => {
+    console.log(`[panel] http://${publicBind}:${publicPort} dinleniyor`); // i18n-ignore — operatör logu
   });
 }

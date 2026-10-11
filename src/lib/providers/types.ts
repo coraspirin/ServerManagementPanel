@@ -149,10 +149,9 @@ export type ContainerSummary = {
   /**
    * Bağlı olduğu Docker ağlarının adları.
    *
-   * Yayınlama ekranı (M2.8) bunu kullanıyor: Caddy, hedef container'la ortak
-   * bir ağda değilse container ADINI çözemez ve `reverse_proxy` 502 verir.
-   * Bu, kullanıcının yalnızca Caddy loglarında görebileceği türden bir hata —
-   * panel artık kaydı kaydetmeden önce söylüyor.
+   * Ağ haritası ve "aynı ağda mı" kontrolleri bunu kullanıyor: bir ters vekil
+   * hedef container'la ortak bir ağda değilse container ADINI çözemez ve 502
+   * verir.
    *
    * Etiketlerle aynı gerekçe: liste API'si zaten döndürüyor, container başına
    * ayrı `inspect` çağırmaya gerek yok.

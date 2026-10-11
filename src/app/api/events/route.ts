@@ -1,7 +1,7 @@
 import { serverT } from "@/lib/i18n/runtime";
 import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
-import { acknowledgeEvents, listEvents, unacknowledgedCount } from "@/lib/alerts/store";
+import { acknowledgeEvents, clearEvents, listEvents, unacknowledgedCount } from "@/lib/alerts/store";
 import { isSeverity } from "@/lib/alerts/types";
 import { channelStatuses } from "@/lib/notify";
 
@@ -63,4 +63,23 @@ export async function POST(request: Request) {
     events: listEvents({ limit: 100, hostId: guard.hostId }),
     unacknowledged: unacknowledgedCount(guard.hostId),
   });
+}
+
+/** "Kayıtları temizle" — seçili sunucunun tüm olayları. */
+export async function DELETE(request: Request) {
+  const guard = await guardHostApi(request, "monitors.manage", { agent: true });
+  if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
+
+  const removed = clearEvents(guard.hostId);
+
+  audit({
+    userId: guard.session.user.id,
+    username: guard.session.user.username,
+    action: "events.clear",
+    detail: serverT("api.events.cleared", { count: removed }),
+    result: "ok",
+  });
+
+  return Response.json({ ok: true, removed, events: [], unacknowledged: 0 });
 }

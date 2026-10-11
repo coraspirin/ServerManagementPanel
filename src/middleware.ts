@@ -10,21 +10,15 @@ import { SESSION_COOKIE } from "@/lib/auth/types";
  * sınırı değil, gereksiz sayfa yüklemesini önleyen bir kısayoldur.
  */
 /**
- * `/kiosk` bilerek açık: duvara asılı ekran oturum taşımaz, yetkiyi adresteki
- * token verir ve token sayfanın kendisinde doğrulanır (M2.7). Buraya
- * eklenmeseydi middleware onu /login'e yollardı ve kiosk hiç çalışmazdı.
- */
-/**
  * `/api/auth/2fa` de açık olmak ZORUNDA (M3.1): girişin ikinci adımı, henüz
  * hiçbir oturum çerezi yokken çağrılıyor. Buraya eklenmeseydi middleware onu
  * 401'le keserdi ve 2FA açık olan kullanıcı hiç giriş yapamazdı. Korumasız
  * değil: yetkiyi tek kullanımlık, 5 dakika ömürlü bilet veriyor.
  */
 /**
- * Burada `/metrics` ve `/api/hooks` da vardı (M3.11). Otomasyon bölümüyle
- * birlikte kaldırıldılar: ikisi de API anahtarıyla kimlik doğruluyordu ve
- * anahtar üretecek arayüz kalmayınca kullanılamaz hâle geldiler. Açık yol
- * listesini gereksiz genişletmemek için buradan da çıkarıldılar.
+ * Burada `/kiosk`, `/api/login/logo`, `/api/v1` ve `/metrics` da vardı.
+ * Uygulama kartları, kiosk ve dış API (anahtar/token sistemi) kaldırılınca
+ * açık yol listesinden de çıkarıldılar.
  */
 const PUBLIC_PREFIXES = [
   "/login",
@@ -38,28 +32,6 @@ const PUBLIC_PREFIXES = [
    */
   "/kurulum",
   "/api/auth/setup",
-  "/kiosk",
-  /*
-   * Karşılama sayfasındaki kartların logoları. Sayfa açıksa görselleri de açık
-   * olmalı, yoksa her kart baş harflerine düşerdi.
-   *
-   * `/api/apps/logo` DEĞİL: burası ayrı ve dar bir route ve oturum yerine
-   * "bu dosya karşılama sayfasında görünen bir karta mı ait" sorusuna bakıyor.
-   * Gerçek sınır orada; bu satır her zamanki gibi yalnızca kısayol.
-   */
-  "/api/login/logo",
-  /*
-   * Dış API (T12). Yukarıdaki yorum bunların NEDEN çıkarıldığını anlatıyor;
-   * geri gelmelerinin sebebi o yorumda eksik olan şeyin tamamlanması:
-   * anahtar üretecek arayüz artık var (/hesap → API anahtarları).
-   *
-   * Burada olmaları korumasız oldukları anlamına GELMEZ — çerez yok diye
-   * middleware'in 401'i yanlış olurdu, gerçek sınır guardV1'de: bearer
-   * çözümleme, izin kontrolü, iki ayrı hız sınırı ve `api.enabled` şalteri.
-   * Şalter kapalıyken guardV1 hepsine 404 döner.
-   */
-  "/api/v1",
-  "/metrics",
   /*
    * panel-agent uçları (çoklu sunucu). Çerezle değil HMAC imzasıyla doğrulanır
    * ve yalnızca PANEL_ROLE=agent iken cevap verir; merkez rolünde 404.
@@ -68,7 +40,9 @@ const PUBLIC_PREFIXES = [
 ];
 
 /**
- * Yalnızca TAM eşleşen açık yollar.
+ * Yalnızca TAM eşleşen açık yollar. Kök adres yalnızca yönlendirir (kurulum /
+ * panel / giriş) ama kurulum gerekip gerekmediğini middleware bilemez
+ * (veritabanı yok), o yüzden kararı sayfaya bırakmak için açık.
  *
  * ⚠️ Kök adres bu listede olmak ZORUNDA, `PUBLIC_PREFIXES`te değil. Önek
  * kontrolü `pathname.startsWith(`${p}/`)` yapıyor; oraya "/" yazılsaydı

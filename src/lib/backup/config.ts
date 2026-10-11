@@ -25,12 +25,8 @@ export type ConfigExport = {
   exportedAt: number;
   appVersion: string;
   settings: { key: string; value: string }[];
-  categories: unknown[];
-  apps: unknown[];
-  bookmarks: unknown[];
   monitors: unknown[];
   maintenanceWindows: unknown[];
-  proxyHosts: unknown[];
   wolDevices: unknown[];
   /** Dışarıda bırakılanlar — dosyayı açan kişi ne olmadığını da bilsin. */
   excluded: string[];
@@ -57,16 +53,6 @@ export function exportConfig(): ConfigExport {
     exportedAt: Math.floor(Date.now() / 1000),
     appVersion: appVersion(),
     settings,
-    categories: db.prepare("SELECT * FROM app_categories ORDER BY sort_order").all(),
-    // Widget yapılandırması şifreli; sütun dışarıda bırakılıyor.
-    apps: db
-      .prepare(
-        `SELECT id, category_id, name, description, url, internal_url, icon, color,
-                container_name, source, widget_type, open_new_tab, enabled, sort_order
-         FROM apps ORDER BY sort_order`,
-      )
-      .all(),
-    bookmarks: db.prepare("SELECT * FROM bookmarks ORDER BY group_name, sort_order").all(),
     monitors: db
       .prepare(
         `SELECT name, type, target, expected, enabled, ignore_tls,
@@ -75,20 +61,13 @@ export function exportConfig(): ConfigExport {
       )
       .all(),
     maintenanceWindows: db.prepare("SELECT * FROM maintenance_windows").all(),
-    proxyHosts: db
-      .prepare(
-        "SELECT domain, target_kind, target, port, tls, websocket, enabled FROM proxy_hosts",
-      )
-      .all(),
     wolDevices: db
       .prepare("SELECT name, mac, broadcast, port, check_host FROM wol_devices")
       .all(),
     excluded: [
       serverT("configLib.excluded.secrets"),
-      serverT("configLib.excluded.tokens"),
       serverT("configLib.excluded.history"),
       serverT("configLib.excluded.users"),
-      serverT("configLib.excluded.logos"),
     ],
   };
 }
@@ -143,37 +122,6 @@ export function importConfig(
     }
     applied.settings = count;
 
-    applied.categories = upsert(
-      data.categories,
-      "app_categories",
-      ["name", "icon", "sort_order"],
-      "name",
-    );
-    applied.apps = upsert(
-      data.apps,
-      "apps",
-      [
-        "name",
-        "description",
-        "url",
-        "internal_url",
-        "icon",
-        "color",
-        "container_name",
-        "source",
-        "widget_type",
-        "open_new_tab",
-        "enabled",
-        "sort_order",
-      ],
-      "name",
-    );
-    applied.bookmarks = upsert(
-      data.bookmarks,
-      "bookmarks",
-      ["group_name", "title", "url", "sort_order"],
-      "title",
-    );
     applied.monitors = upsert(
       data.monitors,
       "monitors",
@@ -191,12 +139,6 @@ export function importConfig(
         "sort_order",
       ],
       "name",
-    );
-    applied.proxyHosts = upsert(
-      data.proxyHosts,
-      "proxy_hosts",
-      ["domain", "target_kind", "target", "port", "tls", "websocket", "enabled"],
-      "domain",
     );
     applied.wolDevices = upsert(
       data.wolDevices,

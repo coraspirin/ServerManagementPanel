@@ -49,16 +49,6 @@ export type HelperAction =
   | "compose.restart"
   | "compose.down"
   | "journal.read"
-  | "ufw.status"
-  | "ufw.status_verbose"
-  | "ufw.allow"
-  | "ufw.deny"
-  | "ufw.delete"
-  | "ufw.enable"
-  | "ufw.disable"
-  | "ufw.default"
-  | "ufw.logging"
-  | "ufw.app_list"
   | "fail2ban.status"
   | "fail2ban.jail"
   | "fail2ban.unban"
@@ -87,8 +77,8 @@ export function helperConfigured(): boolean {
 }
 
 /**
- * Uzak sunucuda helper'a yalnızca bu alanlar iletilir; güvenlik duvarı,
- * fail2ban ve cron yalnızca yerel sunucuda yönetiliyor (menüde de gizli).
+ * Uzak sunucuda helper'a yalnızca bu alanlar iletilir; fail2ban ve
+ * cron yalnızca yerel sunucuda yönetiliyor (menüde de gizli).
  * Ajan aynı listeyi ayrıca uyguluyor — merkez atlatılsa bile.
  */
 export const REMOTE_HELPER_PREFIXES = ["power.", "service.", "compose.", "journal.", "shell."] as const;
@@ -186,9 +176,9 @@ export async function callHelper(
   /**
    * İstek kimliği — normalde rastgele, ama çağıran BELİRLEYEBİLİR.
    *
-   * Tek kullanıcısı /api/v1'in `Idempotency-Key` desteği: anahtardan
-   * türetilmiş sabit bir id, helper'ın kendi 5 dakikalık tekrar penceresine
-   * çarpar ve ikinci komut host tarafında reddedilir. Böylece garanti panelin
+   * Şu an onu belirleyen çağıran yok (dış API'nin `Idempotency-Key`
+   * desteği kaldırıldı). Sabit bir id helper'ın kendi 5 dakikalık tekrar
+   * penceresine çarpar ve ikinci komut host tarafında reddedilir. Böylece garanti panelin
    * belleğine değil, protokolün en güvenilir katmanına dayanır.
    *
    * ⚠️ Aynı id ile İKİ FARKLI istek göndermek, ikincisini sessizce

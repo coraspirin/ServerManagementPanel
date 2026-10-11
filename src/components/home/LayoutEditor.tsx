@@ -8,9 +8,8 @@ import { useT } from "@/lib/i18n/client";
 /**
  * Widget listesi düzenleyicisi — sıra, boyut, görünürlük.
  *
- * Hem kişisel gösterge paneli (DashboardGrid) hem kiosk bağlantısı düzeni
- * (KioskManager) bunu kullanıyor; iki ayrı düzenleyici zamanla birbirinden
- * kopardı. Durum dışarıda tutuluyor, bileşen yalnızca yeni sırayı bildiriyor.
+ * Gösterge panelinin (DashboardGrid) düzenleyicisi. Durum dışarıda tutuluyor,
+ * bileşen yalnızca yeni sırayı bildiriyor.
  *
  * Sürükle-bırak için kütüphane yok: tarayıcının kendi HTML5 DnD'si tek
  * sütunlu bir liste için yeterli. Ama HTML5 DnD dokunmatikte çalışmaz, bu

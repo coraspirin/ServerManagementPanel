@@ -1,7 +1,16 @@
 # Mimari kararlar
-Son güncelleme: 2026-10-09
+Son güncelleme: 2026-10-11
 
 Bu kararlar bilerek alındı; değiştirmeden önce gerekçeyi oku ve kullanıcıya sor. Yeni karar en üste, biçim: **Karar** — neden · reddedilen alternatif · tarih/kaynak.
+
+## Sadeleştirme (2026-10-11)
+- **Kaldırıldı, kullanıcının isteğiyle**: uygulama kartları + kategoriler + servis widget'ları + yer imleri + hızlı bağlantılar, kiosk, herkese açık karşılama sayfası (`/` artık yalnız yönlendirir → `/panel`), yayınlama (Caddy ters vekil, sertifika, DDNS, teşhis), Tailscale, güvenlik duvarı (ufw) ekranı ve helper eylemleri, dış API (`/api/v1`, API token'ları, `api.manage`, Prometheus `/metrics`). Tablolar 035 ile DROP. Geri getirmek kullanıcıya sorulmadan yapılmaz. · 2026-10-11
+- **Caddy tamamen kalktı; panel portu kendisi yayınlar** (`${PANEL_HTTP_PORT}:3000`). İstemci IP'si/şeması için `scripts/docker-entry.mjs` içinde ön katman: Next yalnız loopback'te, ön katman `X-Real-IP`/`X-Forwarded-*`'ı soketten yeniden yazar (uydurulamaz). `PANEL_TRUST_PROXY=1` kullanıcının kendi TLS vekili için. · Reddedilen: Caddy'yi yalnız giriş olarak tutmak (kullanıcı tamamen kaldırmayı seçti); başlıklara koşulsuz güvenmek (rate limit/audit IP'si sahtelenirdi). · 2026-10-11
+- **Self-update `Caddyfile`'ı korumaya devam eder** — eski kurulumların compose'u onu bağlıyor olabilir; elle geçiş yapılana dek silinmesin. · 2026-10-11
+- **"Kayıtları temizle" yalnız seçili sunucuyu siler**; log imleçleri korunur (eski loglar geri toplanmasın). Log: `settings.edit`, olay: `monitors.manage`. · 2026-10-11
+
+## Dağıtım (ZimaOS)
+- **Merkez sunucu ZimaOS/CasaOS; deploy.sh mevcut CasaOS uygulamasını günceller**: kaynak `/DATA/AppData/server-panel-src`'ye yüklenir, imaj SUNUCUDA derlenir (`server-panel:local`), CasaOS compose'unda yalnızca `image:` satırı değişir. Veri klasörüne (`/DATA/AppData/server-panel`) kod konmaz. · Reddedilen: GHCR üzerinden (her yükleme için sürüm yayınlamak gerekirdi), kodu veri klasörüne koymak (veritabanıyla karışır). Kullanıcı seçimi. · 2026-10-11
 
 ## Veritabanı yöneticisi
 - **Keşfedilen DB'lere ağdan değil "exec transport" ile erişilir** (Docker: container'ın kendi istemcisi `docker exec`; native: panel imajından geçici container + host soketi) — ajan ayrı Docker ağında olduğu için ad çözülmüyordu (ENOTFOUND), native DB'ler loopback'te. · Reddedilen: panel/ajanı DB ağlarına `connectNetwork` ile bağlamak (ağ yapısını değiştirir, native'i çözmez). · 2026-10-08
@@ -24,7 +33,7 @@ Bu kararlar bilerek alındı; değiştirmeden önce gerekçeyi oku ve kullanıc�
 - **Seçili sunucu `AsyncLocalStorage` ile taşınır** (`runWithHost`/`currentHostId`), imzalar değişmez. Yerel sunucu (id 1) live sağlayıcıları doğrudan kullanır. · 2026-09-24
 - **Seçim önceliği**: `x-panel-host` başlığı > `?host=` > `panel_host` çerezi > yerel; URL yapısı değişmez. Üst çubukta global seçici. · 2026-09-24
 - **Yetenek kapısı**: port edilmemiş uç uzakta 501 + çevrilmiş mesaj; uçlar `{ agent: true }` ile tek tek açılır. · 2026-09-24
-- **Yalnız yerel kalanlar**: host cron, ufw/fail2ban, LAN taraması/WoL/hız testi/UPnP, zafiyet taraması, Tailscale. Proxy/Caddy ve uptime monitörleri merkezi. · 2026-09-24
+- **Yalnız yerel kalanlar**: host cron, fail2ban, LAN taraması/WoL/hız testi/UPnP, zafiyet taraması. Uptime monitörleri merkezi. · 2026-09-24
 - **Ajan güncelleme op adları (`agent.update`, `agent.updateStatus`) KALICI**, `AGENT_PROTOCOL`'e bağlanmaz — eski ajanlar da güncellenebilsin. Merkezden ajana imaj aktarma yolu yapıldı ve kullanıcının isteğiyle KALDIRILDI: ajan sürümü kendi kurulumuna göre GitHub/GHCR'den alır. · 2026-10-08
 
 ## Güvenlik modeli
@@ -32,21 +41,18 @@ Bu kararlar bilerek alındı; değiştirmeden önce gerekçeyi oku ve kullanıc�
 - **Host kökü container'a SALT-OKUNUR bağlı ve öyle kalır**; yazma her zaman yalnız hedef klasörü rw bağlayan geçici container ile. · M3.5
 - **Panel container'ı uid 1001**; yetkisiz okuma yalnız izin hatasında root geçici container'a düşer (`docker.sock` zaten root demek, yeni yetki yok). · M3.5
 - **Host'ta komut çalıştırma host-helper'dan "rica" ile**; izin listesi host'ta, container'a mount edilmez; panel komut string'i değil preset anahtarı gönderir. · T4 / M1.13
-- **ufw kural söz dizimi host tarafında doğrulanır**; serbest metin geçmez. · M3.7
 - **Panel fail2ban'a ban EKLEYEMEZ**, yalnız okur/kaldırır. · M3.8
-- **API token'ı tek başına kimlik** → `Authorization` hiçbir loga girmez; token'a `docker.exec`/`host.shell` asla verilmez. · T12
 - Gizli değerler `MASTER_KEY` ile şifreli; anahtar değişirse çözülemez (2FA, depo parolaları, bağlantı parolaları). · T3
 
 ## Altyapı
 - **Job runner Next sürecinin içinde**, ayrı worker yok (standalone çıktı ikinci TS süreci paketlemiyor). · T2
 - **Migration'lar TS modülü** (`.sql` değil) — standalone çıktı runtime'da okunan dosyaları kopyalamayabilir. · M0.3
 - **Sağlayıcı arayüzleri + live/mock** (`MOCK_MODE`); mock metrik üretici deterministik. · T10
-- **`node:sqlite` senkron** → Prometheus `/metrics` yalnız hazır kaynaklardan beslenir. · T12
+- **`node:sqlite` senkron** → ağır sorgu event loop'u bloklar; özet/sayaçlar hazır kaynaklardan (önbellek, son snapshot) okunur. · T12
 - **Metrikler katmanlı** (ham + özet), grafik aralığa göre katman seçer. · T1
 
 ## Arayüz ve dil
 - **`tr.json` kaynak dil**; diğerleri ondan çevrilir. Makine yeniden çevirisi Türkçeyi bozmuştu (8c8593d) → geri yüklendi; tr.json'ı otomatik çeviriyle değiştirme. Kodda sabit Türkçe metin yok (`i18n:scan`). · 2026-09-25
 - **Cron kullanıcıya hiç ham gösterilmez** (sıklık seçici + `cron/friendly.ts`). · M3.45
-- **Keşifler opt-in** (uygulama kartı: `<önek>.enable=true` etiketi); Docker etiketleri opt-out istisna tanımlar. · M2.5 / M3.27
+- **Docker etiketleri opt-out istisna tanımlar** (`panel.hidden`, `panel.update=false`…). · M3.27
 - **Uygulama kurulumu Docker sayfasının Yığınlar sekmesine taşındı**; `/appstore` yönlendirme. · 2026-10
-- **Karşılama sayfası (/) herkese açık**, kart başına açık işaret olmadan hiçbir kart gösterilmez. · 2026-08-21

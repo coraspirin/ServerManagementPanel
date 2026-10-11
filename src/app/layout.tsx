@@ -72,7 +72,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {/*
           Sözlük prop olarak geçiyor: sağlayıcı iki dili birden içe aktarsaydı
           ikisinin tüm metni istemci paketine girerdi. Kök layout burada
-          olduğu için giriş ve kiosk ekranları da kapsanıyor.
+          olduğu için giriş ve kurulum ekranları da kapsanıyor.
         */}
         <I18nProvider locale={locale} dict={getDictionary(locale)}>
           {children}

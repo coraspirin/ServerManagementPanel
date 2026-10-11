@@ -354,7 +354,7 @@ export async function startUpdate(tag: string): Promise<void> {
     HostConfig: {
       Binds: [
         `${socket}:/var/run/docker.sock`,
-        // Aynı yol: compose'un göreli bind'leri (./Caddyfile) host yolu olarak çözülsün.
+        // Aynı yol: compose'un göreli bind'leri (./reports) host yolu olarak çözülsün.
         `${workdir}:${workdir}`,
         `${dataSource}:/panel-data`,
       ],

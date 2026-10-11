@@ -2,7 +2,7 @@ import { serverT } from "@/lib/i18n/runtime";
 import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { collectLogs } from "@/lib/logs/collect";
-import { listPatterns, searchLogs } from "@/lib/logs/store";
+import { clearLogs, listPatterns, searchLogs } from "@/lib/logs/store";
 import type { LogKind, LogLevel } from "@/lib/logs/types";
 
 export const dynamic = "force-dynamic";
@@ -89,4 +89,26 @@ export async function POST(request: Request) {
   });
 
   return Response.json({ ok: true, outcome, ...searchLogs({ limit: 200 }) });
+}
+
+/**
+ * "Kayıtları temizle" — seçili sunucunun tüm log satırları. Okuma izni
+ * (`logs.view`) yetmiyor: geçmişi silmek ayar değiştirmekle aynı ağırlıkta.
+ */
+export async function DELETE(request: Request) {
+  const guard = await guardHostApi(request, "settings.edit", { agent: true });
+  if (!guard.ok) return guard.response;
+  enterHost(guard.hostId);
+
+  const removed = clearLogs();
+
+  audit({
+    userId: guard.session.user.id,
+    username: guard.session.user.username,
+    action: "logs.clear",
+    detail: serverT("api.logs.cleared", { lines: removed }),
+    result: "ok",
+  });
+
+  return Response.json({ ok: true, removed, ...searchLogs({ limit: 200 }) });
 }

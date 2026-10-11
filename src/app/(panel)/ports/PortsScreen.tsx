@@ -221,7 +221,7 @@ export function PortsScreen({ initial }: { initial: CachedPortScan }) {
             <table className="rtable w-full min-w-[46rem] text-sm">
               <thead className="border-b border-line text-left text-xs text-subtle">
                 <tr>
-                  <th className="px-5 py-2 font-medium">{t("proxy.form.port")}</th>
+                  <th className="px-5 py-2 font-medium">{t("common.port")}</th>
                   <th className="px-4 py-2 font-medium">{t("ports.col.protocol")}</th>
                   <th className="px-4 py-2 font-medium">{t("ports.col.address")}</th>
                   <th className="px-4 py-2 font-medium">{t("ports.col.owner")}</th>
@@ -292,7 +292,7 @@ function PortRow({
   const t = useT();
   return (
     <tr className="hover:bg-line/30">
-      <td data-label={t("proxy.form.port")} className="px-5 py-1.5 font-mono text-xs tabular-nums">
+      <td data-label={t("common.port")} className="px-5 py-1.5 font-mono text-xs tabular-nums">
         {port.port}
       </td>
       <td data-label={t("ports.col.protocol")} className="px-4 py-1.5 text-xs text-subtle">{port.protocol}</td>

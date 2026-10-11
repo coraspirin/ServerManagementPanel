@@ -184,8 +184,8 @@ export function deleteMaintenance(id: number): void {
 /**
  * Gövdeden bakım penceresi girdisi üretir.
  *
- * Route dosyasından buraya taşındı (T12/Faz D) — iç uç ve
- * `/api/v1/maintenance` aynı doğrulamayı paylaşmalı.
+ * Route dosyasından buraya taşındı (T12/Faz D); doğrulama route'tan ayrı,
+ * saf bir işlev olarak duruyor.
  */
 export function parseMaintenanceInput(
   body: Record<string, unknown>,

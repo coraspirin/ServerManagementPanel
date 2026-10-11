@@ -1,6 +1,5 @@
 import { guardApi } from "@/lib/auth/api";
 import { hasPermission } from "@/lib/auth/session";
-import { appGroups } from "@/lib/apps/store";
 import { listMonitors } from "@/lib/monitors/store";
 import { getDockerProvider } from "@/lib/providers";
 
@@ -9,8 +8,7 @@ import { getDockerProvider } from "@/lib/providers";
  *
  * Sayfalar `nav.ts`'ten geldiği için burada YOK: onlar istemcide zaten var ve
  * palet ağ isteği beklemeden açılabilmeli. Buradan yalnızca sunucuyu bilmeden
- * listelenemeyecek şeyler dönüyor — container'lar, uygulama kartları,
- * monitörler.
+ * listelenemeyecek şeyler dönüyor — container'lar ve monitörler.
  *
  * Her kaynak KENDİ yetkisine göre süzülüyor: `docker.view` olmayan biri
  * palette container adı göremez. Palet bir kısayol, yetki atlama yolu değil.
@@ -22,9 +20,7 @@ export type PaletteEntry = {
   label: string;
   hint: string;
   href: string;
-  kind: "container" | "app" | "monitor";
-  /** Dış adres mi — yeni sekmede açılmalı. */
-  external: boolean;
+  kind: "container" | "monitor";
 };
 
 export async function GET(request: Request) {
@@ -43,26 +39,11 @@ export async function GET(request: Request) {
           hint: `${container.state} · ${container.image}`,
           href: "/docker",
           kind: "container",
-          external: false,
         });
       }
     } catch {
       // Docker erişilemezse palet yine açılır, yalnızca container'sız.
       // Tek bir kaynağın düşmesi aramanın tamamını düşürmemeli.
-    }
-  }
-
-  for (const group of appGroups("")) {
-    for (const card of group.cards) {
-      if (!card.enabled) continue;
-      entries.push({
-        id: `app:${card.id}`,
-        label: card.name,
-        hint: group.category?.name ?? "Uygulama",
-        href: card.href,
-        kind: "app",
-        external: true,
-      });
     }
   }
 
@@ -74,7 +55,6 @@ export async function GET(request: Request) {
         hint: `Servis · ${monitor.status}`,
         href: "/uptime",
         kind: "monitor",
-        external: false,
       });
     }
   }

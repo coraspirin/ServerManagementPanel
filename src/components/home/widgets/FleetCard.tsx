@@ -14,10 +14,6 @@ import { TONE_BG, TONE_TEXT, WidgetCard, toneFor } from "./WidgetCard";
  * Bir satıra tıklamak üst çubuktaki sunucu seçiciyle AYNI işi yapıyor:
  * çerez yazılıyor ve sayfa yenileniyor; ana bölge sunucu anahtarıyla
  * yeniden kurulduğu için bütün widget'lar o sunucuya geçer.
- *
- * Seçili sunucu `HostContext`ten değil prop'tan geliyor: kiosk ekranı panel
- * kabuğunun dışında, orada sağlayıcı yok. Kioskta (`readOnly`) satırlar
- * tıklanamaz — oturumsuz ekranda sunucu seçimi anlamsız.
  */
 
 type Thresholds = { cpuWarn: number; cpuCrit: number; ramWarn: number; ramCrit: number; diskWarn: number; diskCrit: number };
@@ -34,12 +30,10 @@ export function FleetCard({
   hosts,
   thresholds,
   currentId,
-  readOnly = false,
 }: {
   hosts: FleetEntry[];
   thresholds: Thresholds;
   currentId: number;
-  readOnly?: boolean;
 }) {
   const t = useT();
   const tk = useDynamicT();
@@ -48,7 +42,7 @@ export function FleetCard({
   const [pending, startTransition] = useTransition();
 
   function select(id: number) {
-    if (readOnly || id === currentId) return;
+    if (id === currentId) return;
     writeHostCookie(id);
     startTransition(() => router.refresh());
   }
@@ -59,7 +53,7 @@ export function FleetCard({
     <WidgetCard
       title={t("dashboard.fleet.title")}
       icon={Server}
-      href={readOnly ? undefined : "/hosts"}
+      href="/hosts"
       linkLabel={t("dashboard.fleet.manage")}
       aside={
         <span className="shrink-0 text-xs text-subtle">
@@ -75,12 +69,10 @@ export function FleetCard({
             <li key={host.id}>
               <button
                 type="button"
-                disabled={pending || readOnly}
+                disabled={pending}
                 onClick={() => select(host.id)}
                 aria-pressed={selected}
-                className={`flex w-full flex-col gap-2 rounded-md border px-3 py-2.5 text-left transition-colors disabled:cursor-default ${
-                  readOnly ? "" : "hover:border-brand/50"
-                } ${
+                className={`flex w-full flex-col gap-2 rounded-md border px-3 py-2.5 text-left transition-colors hover:border-brand/50 disabled:cursor-default ${
                   selected ? "border-brand/60 bg-brand/5" : "border-line bg-canvas"
                 }`}
               >

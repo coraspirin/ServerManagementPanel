@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { BellOff, Check, Send } from "lucide-react";
+import { BellOff, Check, Send, Trash2 } from "lucide-react";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import {
   SEVERITY_LABEL,
@@ -112,6 +112,30 @@ export function EventsScreen({
       const data = (await response.json()) as { events?: EventRow[]; error?: string };
       if (response.ok && data.events) setEvents(data.events);
       else setNotice({ text: data.error ?? t("common.errors.actionFailed"), ok: false });
+    } catch {
+      setNotice({ text: t("common.errors.network"), ok: false });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** Seçili sunucunun tüm olaylarını siler (zaman çizelgesinden de düşer). */
+  async function clearAll() {
+    if (!confirm(t("eventsScreen.confirmClear"))) return;
+    setBusy("clear");
+    setNotice(null);
+    try {
+      const response = await fetch("/api/events", {
+        method: "DELETE",
+        headers: { [CSRF_HEADER]: readCsrfToken() },
+      });
+      const data = (await response.json()) as { removed?: number; error?: string };
+      if (!response.ok) {
+        setNotice({ text: data.error ?? t("common.errors.actionFailed"), ok: false });
+        return;
+      }
+      setEvents([]);
+      setNotice({ text: t("eventsScreen.cleared", { count: data.removed ?? 0 }), ok: true });
     } catch {
       setNotice({ text: t("common.errors.network"), ok: false });
     } finally {
@@ -235,17 +259,29 @@ export function EventsScreen({
           ))}
         </div>
 
-        {canManage && unacknowledged.length > 0 && (
-          <button
-            type="button"
-            onClick={() => void acknowledge(unacknowledged.map((e) => e.id))}
-            disabled={busy !== null}
-            className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand hover:text-brand disabled:opacity-50"
-          >
-            <Check className="size-3.5" />{" "}
-            {t("eventsScreen.ackAll", { count: unacknowledged.length })}
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {canManage && unacknowledged.length > 0 && (
+            <button
+              type="button"
+              onClick={() => void acknowledge(unacknowledged.map((e) => e.id))}
+              disabled={busy !== null}
+              className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs transition-colors hover:border-brand hover:text-brand disabled:opacity-50"
+            >
+              <Check className="size-3.5" />{" "}
+              {t("eventsScreen.ackAll", { count: unacknowledged.length })}
+            </button>
+          )}
+          {canManage && events.length > 0 && (
+            <button
+              type="button"
+              onClick={() => void clearAll()}
+              disabled={busy !== null}
+              className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs text-danger transition-colors hover:border-danger disabled:opacity-50"
+            >
+              <Trash2 className="size-3.5" /> {t("eventsScreen.clear")}
+            </button>
+          )}
+        </div>
       </div>
 
       {events.length === 0 ? (

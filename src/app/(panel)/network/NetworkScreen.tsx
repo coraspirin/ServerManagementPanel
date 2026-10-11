@@ -133,7 +133,7 @@ export function NetworkScreen({
             onClick={() => setNotice(null)}
             className="shrink-0 text-xs text-subtle hover:text-ink"
           >
-            {t("proxy.dismiss")}
+            {t("common.dismiss")}
           </button>
         </p>
       )}
@@ -256,7 +256,7 @@ export function NetworkScreen({
                     if (!confirm(t("networkScreen.confirmDeleteDevice", { mac: device.mac }))) return;
                     await send(`/api/network?mac=${encodeURIComponent(device.mac)}`, "DELETE");
                   }}
-                  aria-label={t("proxy.deleteAria", { name: device.mac })}
+                  aria-label={t("common.deleteAria", { name: device.mac })}
                   className="rounded p-1 text-subtle hover:text-danger"
                 >
                   <Trash2 className="size-3.5" />
@@ -316,7 +316,7 @@ export function NetworkScreen({
                     if (!confirm(t("networkScreen.confirmDelete", { name: device.name }))) return;
                     await send(`/api/network/wol?id=${device.id}`, "DELETE");
                   }}
-                  aria-label={t("proxy.deleteAria", { name: device.name })}
+                  aria-label={t("common.deleteAria", { name: device.name })}
                   className="rounded p-1 text-subtle hover:text-danger"
                 >
                   <Trash2 className="size-3.5" />
@@ -384,7 +384,7 @@ export function NetworkScreen({
               />
             </label>
             <label className="block">
-              <span className="text-xs font-medium">{t("proxy.form.port")}</span>
+              <span className="text-xs font-medium">{t("common.port")}</span>
               <input
                 type="number"
                 value={wolModal.form.port}

@@ -315,6 +315,23 @@ export function pruneLogs(retentionDays: number, maxLines: number): PruneOutcome
   return { removed, bySize };
 }
 
+/**
+ * Seçili sunucunun TÜM log satırlarını siler ("Kayıtları temizle").
+ *
+ * İmleçler (`log_cursors`) BİLEREK korunuyor: sıfırlansalardı bir sonraki
+ * toplama turu container'ların eski loglarını yeniden çeker ve temizlik
+ * birkaç dakika içinde geri gelirdi. FTS indeksi tetikleyicilerle kendiliğinden
+ * güncelleniyor; optimize yalnızca silinenlerin bıraktığı tombstone'lar için.
+ */
+export function clearLogs(): number {
+  const db = getDb();
+  const removed = Number(
+    db.prepare("DELETE FROM log_lines WHERE host_id = ?").run(currentHostId()).changes,
+  );
+  if (removed > 0) db.exec("INSERT INTO log_fts(log_fts) VALUES ('optimize')");
+  return removed;
+}
+
 /* --- Desen kuralları --- */
 
 export function listPatterns(): LogPattern[] {

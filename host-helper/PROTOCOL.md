@@ -78,50 +78,6 @@ Hata: `{ "ok": false, "error": "eylem izinli değil: power.shutdown" }`
 `unit` argümanı whitelist'teki desenle eşleşmelidir; keyfi birim adı kabul
 edilmez.
 
-## Güvenlik duvarı eylemleri (M3.7 + M3.18)
-
-| Eylem | Argüman | Karşılığı |
-|---|---|---|
-| `ufw.status` | — | `ufw status numbered` |
-| `ufw.status_verbose` | — | `ufw status verbose` |
-| `ufw.allow` | `rule`, `comment?` | `ufw allow <kural> [comment <metin>]` |
-| `ufw.deny` | `rule`, `comment?` | `ufw deny <kural> [comment <metin>]` |
-| `ufw.delete` | `number` | `ufw --force delete <n>` |
-| `ufw.enable` | — | `ufw --force enable` |
-| `ufw.disable` | — | `ufw disable` |
-| `ufw.default` | `policy`, `direction` | `ufw default <policy> <direction>` |
-| `ufw.logging` | `level` | `ufw logging <level>` |
-| `ufw.app_list` | — | `ufw app list` |
-
-Her eylem izin listesinde **ayrı satırdır**. Bunun sebebi, en olağan isteğin
-"görebilsin ama değiştiremesin" ya da "kural ekleyebilsin ama güvenlik
-duvarını kapatamasın" olması; tek bir `ufw.*` izniyle bu ayrım ifade
-edilemezdi.
-
-`rule` serbest metin DEĞİLDİR; yalnızca iki kalıp kabul edilir:
-
-```
-<port>[/tcp|/udp]
-from <ip>[/<önek>] to any port <port> [proto tcp|udp]
-```
-
-Kural, desene uyduktan **sonra** boşluklardan bölünür ve argv parçaları olarak
-verilir. Tek argüman hâlinde geçirilen çok kelimelik bir kuralı ufw
-ayrıştıramaz — `shell=False` çalıştığımız için bölmeyi biz yapmak zorundayız.
-`comment` ayrı argümandır: boşluk içerdiği için kuralla birlikte bölünemez.
-
-`ufw.status verbose` ile `numbered` **birlikte verilemez** (ufw'nin kendi söz
-dizimi); varsayılan politikayı ve log seviyesini yalnızca `verbose` gösterdiği
-için ayrı bir eylem olarak duruyor. Varsayılanı "gelen: allow" olan bir
-güvenlik duvarı hiçbir şey korumaz ve bu, kural listesine bakan birinin
-göremeyeceği bir gerçektir.
-
-`ufw.enable` `--force` ile çağrılır: onaysız `ufw enable`, SSH bağlantısını
-keseceği uyarısını verip cevap bekler ve etkileşimsiz çalışan helper'da zaman
-aşımına düşerdi. **Onay panelde alınır** — panel, kural listesinde SSH'ın,
-kendi portunun ve Docker alt ağının bulunup bulunmadığına bakar ve eksikse
-kullanıcıya neyin kesileceğini adıyla söyler.
-
 ## Konsol eylemleri
 
 | Eylem | Argüman | Karşılığı |

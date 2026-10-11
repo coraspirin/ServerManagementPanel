@@ -26,31 +26,17 @@ services:
       # T4 — host-helper ile paylaşılan HMAC sırrı. Boşsa host işlemleri
       # (güç, systemd, compose) kapalıdır ve panel bunu açıkça söyler.
       HELPER_SECRET: ${HELPER_SECRET:-}
-      # M2.8 — Caddy'nin 443 ve 80'i host'ta hangi portlara bağlandığı.
-      #
-      # Panelin bunu BİLMESİ gerekiyor: yayınlanan adresi ekranda gösterirken
-      # portu da yazmalı. Yaşanmış olay — panel "pihole.myserver.local" yazdı,
-      # kullanıcı portsuz denedi ve bağlanamadı; oysa Caddy 5000'deydi.
-      # Yalnızca caddy servisinin `ports:` satırında durduğu sürece panelin
-      # bunu öğrenmesinin bir yolu yoktu.
-      #
-      # İKİSİ birden lazım: panelin kendisi ve TLS'i kapalı yayınlar 80'de,
-      # TLS'i açık yayınlar 443'te sunuluyor. Tek port bilinseydi adres
-      # "http://alan.adı:443" gibi çalışmayan bir şey olurdu.
-      #
-      # M3.45: panel artık 443'te DEĞİL, 80'de. HTTPS portu yalnızca
-      # yayınlanan siteler için duruyor.
-      PANEL_HTTPS_PORT: ${PANEL_HTTPS_PORT:-8443}
+      # Panelin host'ta yayınlandığı port — aşağıdaki `ports:` ile AYNI değer.
+      # Panel bunu yığın kurulumunda "bu port panelin kendisi" uyarısı için
+      # biliyor; yalnızca `ports:` satırında dursaydı öğrenmesinin yolu yoktu.
       PANEL_HTTP_PORT: ${PANEL_HTTP_PORT:-8080}
+      # Önüne TLS sonlandıran kendi vekilini koyduysan 1 yap: o vekilden gelen
+      # X-Forwarded-For / X-Forwarded-Proto korunur. Panel portu o vekilden
+      # başka hiçbir yere açık DEĞİLSE kullan (bkz. scripts/docker-entry.mjs).
+      PANEL_TRUST_PROXY: ${PANEL_TRUST_PROXY:-0}
     volumes:
       # Kalıcı panel verisi: sqlite.db, migration öncesi kopyalar, logolar (M0.3)
       - panel-data:/app/data
-
-      # M2.8 — panelin ürettiği Caddy yapılandırması.
-      # Panel YAZAR, caddy salt-okunur OKUR. Aynı named volume iki container'a
-      # farklı yetkiyle bağlanıyor: Caddy'nin bu dosyayı değiştirmesi için bir
-      # sebep yok ve yazma yetkisi vermemek en ucuz sınır.
-      - proxy-config:/app/proxy
 
       # Docker yönetimi (M1.6+).
       # ⚠️ GÜVENLİK: docker.sock erişimi pratikte host'ta root yetkisine eşittir.
@@ -86,13 +72,6 @@ services:
       #    dizin beklediğimiz için Docker'ın yaratması zararsız.
       - /run/panel-helper:/run/panel-helper
 
-      # M2.10 — tailscaled yerel API soketi (SALT-OKUNUR).
-      # Panel yalnızca GET yapıyor: durum ve peer listesi okunuyor, tailnet'e
-      # katılma/ayrılma gibi işlemler bilerek dışarıda (T4 — yerleri
-      # host-helper'ın izin listesi). Tailscale kurulu değilse bu satır
-      # yorumlanmalı, yoksa compose ayağa kalkmaz.
-      - /var/run/tailscale/tailscaled.sock:/run/tailscale/tailscaled.sock:ro
-
       # Host sistem metrikleri (M1.1) — container'ın kendi /proc'u değil,
       # host'unki okunmalı. Özellikle /proc/net/dev ağ namespace'ine tabidir:
       # mount olmadan container'ın eth0'ı ölçülürdü, sunucunun ağ kartı değil.
@@ -119,46 +98,16 @@ services:
       # Container'ın kendi UTS namespace'i kendi kimliğini döndürür; panelin
       # göstermesi gereken SUNUCU adı buradan okunur.
       - /etc/hostname:/host/etc/hostname:ro
-    expose:
-      - "3000"
-    # Dışarıya port AÇILMAZ: tek giriş noktası caddy.
-
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    depends_on:
-      - panel
     ports:
-      # PANELİN KENDİSİ burada (M3.45). TLS'i kapalı yayınlar da 80'de.
-      - "${PANEL_HTTP_PORT:-8080}:80"
-      # 443 yalnızca panelden YAYINLANAN, TLS kullanan siteler için duruyor.
-      # Panel bu portta sunulmuyor; kaldırılırsa yayınlarda `tls` seçeneği
-      # çalışmaz hale gelir.
-      - "${PANEL_HTTPS_PORT:-8443}:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      # M2.8 — panelin ürettiği yayınlama kuralları (salt-okunur).
-      - proxy-config:/etc/caddy/proxy:ro
-      # Yerel CA ve sertifikalar burada kalıcı olur; yoksa her yeniden
-      # başlatmada yeni sertifika üretilir.
-      - caddy-data:/data
-      - caddy-config:/config
-    environment:
-      TZ: ${TZ:-Europe/Istanbul}
-      # Panelin dinleyeceği adresler. Varsayılan `:80` bir yakalayıcı: hangi
-      # IP ya da host adıyla gelinirse gelinsin panel açılıyor.
-      #
-      # Adresleri tek tek saymak (ve `PANEL_DEFAULT_SNI` ayarı) yalnızca TLS
-      # varken zorunluydu — sertifikanın hangi isim için üretileceğini ve
-      # SNI'siz bağlantıda hangisinin sunulacağını bildirmek için. Panel düz
-      # HTTP'ye geçince ikisi de gereksizleşti (M3.45).
-      PANEL_SITE_ADDRESSES: ${PANEL_SITE_ADDRESSES:-:80}
+      # Panelin tek girişi (düz HTTP). Container içinde 3000'de ön katman
+      # dinliyor; Next yalnızca loopback'te (bkz. scripts/docker-entry.mjs).
+      # ⚠️ Trafik (parola, oturum çerezi, web terminal) yerel ağda ŞİFRESİZ
+      #    taşınır. Paneli internete açacaksan önüne TLS sonlandıran bir vekil
+      #    koy ve PANEL_TRUST_PROXY=1 yap.
+      - "${PANEL_HTTP_PORT:-8080}:3000"
 
 volumes:
   panel-data:
-  caddy-data:
-  caddy-config:
-  proxy-config:
 
 networks:
   default:

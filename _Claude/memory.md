@@ -12,6 +12,29 @@ Biçim:
 
 ---
 
+## 2026-10-11 20:35 — deploy.sh ZimaOS/CasaOS kurulumu için yeniden yazıldı
+- İkinci deploy denemesi `mkdir: cannot create directory '/home/coraspirin': Read-only file system` ile düştü. İnceleme (salt okunur, root SSH): sunucu artık ZimaOS 1.7.1 (CasaOS); panel CasaOS uygulaması `server-management-panel` (GHCR 1.13.0 imajı, port 8081, veri `/DATA/AppData/server-panel`, compose `/var/lib/casaos/apps/compose-75a5218c7cbc9fd0`). Caddy yok.
+- Kullanıcı seçimi (seçenek 1): kaynak `/DATA/AppData/server-panel-src`'ye, imaj sunucuda derlenir (`server-panel:local`), CasaOS compose'unda yalnız `image:` değişir (yedekli), `up -d --pull never`, sağlık kontrolü, önceki yerel imaj silinir. Önceki sürümdeki ilk kurulum/Caddy geçişi mantığı kaldırıldı (bu sunucuda gereksiz).
+- Doğrulama: `bash -n` (ana + 4 uzak blok); `image:` değiştirme bloğu CasaOS compose kopyasında denendi (yalnız o satır değişti); 0. adım gerçek sunucuda çalıştırıldı ve doğru çözümledi. Derleme/yeniden başlatma sunucuda ÇALIŞTIRILMADI.
+- Belgeler: `surum-deploy.md`, `test-dogrulama.md` (sunucu bilgileri), `kararlar.md`, `yapilacaklar.md`. Durum: commit edilmedi.
+
+## 2026-10-11 18:12 — deploy.sh yeni sisteme göre yeniden yazıldı
+- Kullanıcı deploy.sh'ı çalıştırdı: sunucuda `/home/coraspirin/docker/server-panel` yok → 3. adımda düştü. Sunucuyu incelemek için SSH denemesi önce `coraspirin` ile reddedildi (betik `~/.ssh/config` ile root kullanıyor), sonra sunucu bağlantıyı kapattı; incelenemedi.
+- deploy.sh: 0. adımda sunucu durumu (ilk kurulum / Caddy'li eski kurulum / güncelleme / docker yok); ilk kurulumda dizin + compose + `.env` (MASTER_KEY, DOCKER_GID üretilir) + `reports/`; Caddy'li kurulumda eski compose `.bak`, caddy durdurulup silinir, yeni compose yazılır; port kontrolü; `up -d --remove-orphans`; container adı `docker compose ps -q panel`'den; kurulum kodu ekrana; `PANEL_HOST`/`PANEL_DIR` ile hedef değiştirilebilir; yedek artık `dirname(PANEL_DIR)/panel-yedek-*.tgz` ve compose/.env/Caddyfile'ı da içeriyor.
+- Doğrulama: `bash -n` (ana betik + 4 uzak blok); yükleme bloğu yerelde sahte dizinle üç durumda çalıştırıldı (ilk kurulum dosyaları + .env, güncellemede compose korunuyor/eski src siliniyor/APP_VERSION tek satır, Caddy geçişinde .bak + `docker compose stop/rm caddy` + caddy'siz compose + .env temizliği). Sunucuda çalıştırılmadı.
+- Belgeler: `surum-deploy.md`, `yapilacaklar.md`. Durum: commit edilmedi.
+
+## 2026-10-11 17:36 — Panel sadeleştirme + log/olay temizleme
+- Kullanıcının isteğiyle tamamen kaldırıldı: Uygulamalar (kartlar, kategoriler, logo, keşif, Pi-hole widget'ı, yer imleri, hızlı bağlantılar), kiosk, herkese açık karşılama sayfası, yayınlama (proxy/Caddy/sertifika/DDNS/teşhis), Tailscale, güvenlik duvarı (ufw) ekranı + helper `ufw.*` eylemleri, dış API (`/api/v1`, API token'ları, `api.manage`, `/metrics`, `docs/API.md`, `docs/openapi.yaml`, `check:openapi`, CI adımları).
+- `/` artık yalnız yönlendirir: kurulum → `/kurulum`, oturum → `/panel`, yoksa `/login`. Logo `/panel`'e gider.
+- Caddy tamamen kalktı (kullanıcı kararı): compose'da `caddy` servisi/volume'leri ve tailscaled mount'u yok, panel `${PANEL_HTTP_PORT:-8080}:3000`. İstemci IP'si için `scripts/docker-entry.mjs`'e ön katman (`startFront`): Next 127.0.0.1:3001, ön katman `X-Real-IP`/`X-Forwarded-*`'ı soketten yazar; `PANEL_TRUST_PROXY=1` kendi TLS vekili için. `panelPorts()` `security/ports.ts`'e taşındı.
+- Migration `035_drop_removed_features.ts`: 9 tablo DROP + izin/ayar/iş/widget artıkları.
+- Yeni: `/logs` ve `/events`'e "Kayıtları temizle" — `DELETE /api/logs` (`settings.edit`, `clearLogs`, imleçler korunur) ve `DELETE /api/events` (`monitors.manage`, `clearEvents`); seçili sunucu, `confirm()`, audit `logs.clear`/`events.clear`.
+- Locale: ~590 anahtar silindi; paylaşılanlar `common.*`/`api.auth.*`'a taşındı (`proxy.form.port` → `common.port` vb.); kaldırılan özelliklerden bahseden yardım metinleri yeniden yazıldı. Ayar ekranındaki `container`/`richtext` tipleri ve `ContainerSelect`, `RichTextField`, `lib/richtext.ts` gitti.
+- Doğrulama: typecheck, eslint, i18n:check (3800/3800), i18n:scan, `npm test` 516/516 (apiv1/firewall testleri silindi), `npm run build`. MOCK dev: eski yerel DB kopyasında şema 25→35 sorunsuz, tablolar düştü, `apps.install` kaldı; boş DB'de kurulum → `/` → `/panel`, sayfalar 200, temizleme uçları (CSRF'siz 403, FTS boşaldı, imleçler kaldı, audit yazıldı). Standalone + ön katman: 0→35 migration, health 200, Next LAN'dan erişilemez, uydurma `X-Forwarded-For: 6.6.6.6` yok sayıldı (audit gerçek IP).
+- Belgeler: `_Claude/{README,_digerleri,hesap,host-helper,kararlar,network,panel,security,settings,surum-deploy,tarifler,test-dogrulama,veritabani-sema,logs,events,yapilacaklar}.md`, silindi `apps.md`/`proxy.md`/`firewall.md`; README.md, README_tr.md, screenshots/README.md.
+- Durum: commit edilmedi, deploy edilmedi. Açık: sunucuda Caddy'siz compose'a ELLE geçiş (`surum-deploy.md`), `.env.example` (okuma izni engelli) güncellenmedi.
+
 ## 2026-10-09 17:43 — İlk kurulum sihirbazı (/kurulum)
 - Önceden kullanıcı yoksa `bootstrap.ts` `admin`'i `ADMIN_PASSWORD` ile (yoksa loga rastgele parola) kendisi açıyordu; sihirbaz hiç yoktu. Kullanıcının isteğiyle yerine sihirbaz geldi: açılışta tek kullanımlık kurulum kodu loga basılıyor, `/kurulum` bu kodu isteyip ilk yöneticiyi oluşturuyor ve içeri alıyor. Kullanıcı yokken `/` ve `/login` sihirbaza yönlendiriyor.
 - Yeni: `src/lib/auth/setup.ts`, `src/app/api/auth/setup/route.ts`, `src/app/kurulum/{page,SetupForm}.tsx`. Silinen: `src/lib/auth/bootstrap.ts`. Değişen: `instrumentation.ts`, `middleware.ts`, `app/page.tsx`, `app/login/page.tsx`, locale'ler (`bootstrapLib.*` → `setup.*`, `auth.password.forcedNotice` artık loga atıf yapmıyor).

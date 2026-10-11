@@ -70,9 +70,9 @@ describe("checkCompose — engeller", () => {
 
   it("panelin kendi portunu ENGELLER, uyarıyla geçiştirmez", () => {
     // Bu portu vermek paneli erişilemez yapar; onayla geçilecek bir şey değil.
-    const bulgular = kontrol('services:\n  a:\n    image: x:1\n    ports:\n      - "8443:80"\n', {
+    const bulgular = kontrol('services:\n  a:\n    image: x:1\n    ports:\n      - "8080:80"\n', {
       ...EMPTY_CONTEXT,
-      panelPorts: [8443, 8080],
+      panelPorts: [8080],
     });
     assert.equal(baslik(bulgular, "panelin kendi portu")?.severity, "engel");
   });

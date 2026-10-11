@@ -5,8 +5,9 @@ const nextConfig: NextConfig = {
   // bir sunucu üretir (node_modules'ün tamamını kopyalamaya gerek kalmaz).
   output: "standalone",
 
-  // Panel reverse proxy (Caddy) arkasında çalışır; gerçek istemci IP'si
-  // X-Forwarded-* başlıklarından gelir — rate limit ve audit için gerekli (T6).
+  // Panel giriş noktasındaki ön katmanın arkasında çalışır
+  // (scripts/docker-entry.mjs); gerçek istemci IP'si X-Real-IP / X-Forwarded-*
+  // başlıklarından gelir — rate limit ve audit için gerekli (T6).
   poweredByHeader: false,
 };
 

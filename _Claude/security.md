@@ -1,8 +1,8 @@
 # Güvenlik — /security
-Son güncelleme: 2026-10-08 · commit 428d5e8
+Son güncelleme: 2026-10-11 · /firewall kartı kaldırıldı
 
 ## Ne yapar
-Güvenlik monitörleri: SSH yetkili anahtar denetimi, fail2ban ban listesi + başarısız girişler (ban kaldırma), UPnP port yönlendirme envanteri, Docker imaj CVE taraması (Trivy). Port haritası ve güvenlik duvarı ayrı sayfalara bağlantı verir.
+Güvenlik monitörleri: SSH yetkili anahtar denetimi, fail2ban ban listesi + başarısız girişler (ban kaldırma), UPnP port yönlendirme envanteri, Docker imaj CVE taraması (Trivy). Port haritasına bağlantı verir (güvenlik duvarı ekranı 2026-10-11'de kaldırıldı).
 
 ## Dosyalar
 - Sayfa: `src/app/(panel)/security/page.tsx` — `requirePermission("security.view")`, `pageHostId({ agent: true })`.

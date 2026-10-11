@@ -7,13 +7,9 @@ import { ConfigTransfer } from "@/components/settings/ConfigTransfer";
 import type { ResolvedSetting, SettingDef, SettingGroupDef } from "@/lib/settings/types";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import { CronEditor } from "@/components/settings/CronEditor";
-import {
-  ContainerMultiSelect,
-  ContainerSelect,
-} from "@/components/settings/ContainerSelect";
+import { ContainerMultiSelect } from "@/components/settings/ContainerSelect";
 import { DirListEditor, DirPicker } from "@/components/settings/DirPicker";
 import { OwnerSelect } from "@/components/settings/HostUserSelect";
-import { RichTextField } from "@/components/settings/RichTextField";
 import { settingDefs, settingGroups } from "@/settings.schema";
 import { useDict, useT } from "@/lib/i18n/client";
 import {
@@ -33,7 +29,7 @@ import type { LocaleInfo } from "@/locales";
  * listesi ya da container onay kutuları o dar sütuna sığmıyor ve sığdırmaya
  * çalışmak onları okunmaz yapıyordu.
  */
-const WIDE_TYPES = new Set(["cron", "containers", "dirs", "owner", "richtext"]);
+const WIDE_TYPES = new Set(["cron", "containers", "dirs", "owner"]);
 
 type DefWithSeed = SettingDef & { seededFromEnv?: boolean };
 type Section = { title: string | null; defs: DefWithSeed[] };
@@ -358,10 +354,6 @@ function SettingInput({
     yazım hatası kabul ediliyor, kaydediliyor ve İŞ SESSİZCE ÇALIŞMIYOR.
     Değerin biçimi değişmedi, yalnızca yanlış değer girmek zorlaştı.
   */
-  if (def.type === "container") {
-    return <ContainerSelect value={String(value)} disabled={disabled} onCommit={onCommit} />;
-  }
-
   if (def.type === "containers") {
     return (
       <ContainerMultiSelect
@@ -383,17 +375,6 @@ function SettingInput({
 
   if (def.type === "owner") {
     return <OwnerSelect value={String(value)} disabled={disabled} onCommit={onCommit} />;
-  }
-
-  if (def.type === "richtext") {
-    return (
-      <RichTextField
-        value={String(value)}
-        disabled={disabled}
-        onCommit={onCommit}
-        title={text?.label ?? def.key}
-      />
-    );
   }
 
   if (def.type === "bool") {

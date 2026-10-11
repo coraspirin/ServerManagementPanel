@@ -1,7 +1,5 @@
 import { getDb } from "@/lib/db/client";
-import { describeDiscovery, discoveryEnabled, runDiscovery } from "@/lib/apps/discovery";
 import { announce } from "@/lib/alerts/announce";
-import { pruneApiTokens } from "@/lib/auth/apitoken";
 import { pruneAudit } from "@/lib/auth/audit";
 import { pruneExpiredChallenges } from "@/lib/auth/twofactor";
 import { runDueBackups } from "@/lib/backup/scheduler";
@@ -19,12 +17,9 @@ import { getDockerProvider } from "@/lib/providers";
 import { refreshOui } from "@/lib/network/oui";
 import { runScan } from "@/lib/network/scan";
 import { pruneSpeedtests, runSpeedtest } from "@/lib/network/speedtest";
-import { checkCertificates } from "@/lib/proxy/certificates";
 import { pruneScans, scanAllImages } from "@/lib/security/vuln";
 import { scanListeningPorts } from "@/lib/security/ports";
 import { scanPortForwards } from "@/lib/security/upnp";
-import { tailscaleStatus } from "@/lib/tailscale/status";
-import { syncDdns } from "@/lib/proxy/ddns";
 import type { PruneScope } from "@/lib/providers/types";
 import { getBool, getNumber, getString } from "@/lib/settings";
 import { refreshImageUpdates } from "@/lib/updates";
@@ -209,19 +204,6 @@ export const jobDefinitions: JobDefinition[] = [
     }),
   },
   {
-    key: "apps.discover",
-    schedule: { kind: "cron", settingKey: "apps.discovery_cron" },
-    leaseSeconds: 120,
-    scope: "perHost",
-    async run() {
-      // Kapalıyken de iş kayıtlı kalıyor: kullanıcı Panel İşleri ekranında
-      // "bu iş var ama çalışmıyor" görebilmeli (docker.autoprune ile aynı).
-      if (!discoveryEnabled()) return { detail: serverT("jobs.detail.discoveryOff") };
-      // Kartlar sunucuya bağlı: her sunucu yalnızca kendi kartlarını yönetir.
-      return perHost(async () => ({ detail: describeDiscovery(await runDiscovery()) }))();
-    },
-  },
-  {
     key: "network.scan",
     schedule: { kind: "cron", settingKey: "network.scan_cron" },
     // Tarama /24 bir ağda dakikalar sürebiliyor; kira cömert olmalı yoksa
@@ -298,115 +280,6 @@ export const jobDefinitions: JobDefinition[] = [
     },
   },
   {
-    key: "proxy.certificates",
-    schedule: { kind: "cron", settingKey: "proxy.cert_check_cron" },
-    leaseSeconds: 300,
-    async run() {
-      const warnDays = getNumber("proxy.cert_warn_days");
-      const result = await checkCertificates(warnDays);
-      if (result.checked === 0) return { detail: serverT("jobs.detail.noDomains") };
-
-      // Alarm motoruna değil `announce`a gidiyor: motor "koşul sürüyor mu"
-      // defterini tutuyor, sertifika bitişi ise tek seferlik bir olay.
-      for (const entry of result.expiring) {
-        await announce({
-          alertKey: `cert:${entry.domain}`,
-          source: "proxy",
-          severity: entry.daysLeft <= 7 ? "critical" : "warning",
-          title: serverT("jobs.announce.certTitle", { domain: entry.domain }),
-          detail:
-            entry.daysLeft < 0
-              ? serverT("jobs.announce.certExpired", {
-                  domain: entry.domain,
-                  days: -entry.daysLeft,
-                })
-              : serverT("jobs.announce.certExpiring", {
-                  domain: entry.domain,
-                  days: entry.daysLeft,
-                }),
-        });
-      }
-
-      return {
-        detail:
-          serverT("jobs.detail.certs", { count: result.checked }) +
-          (result.expiring.length
-            ? serverT("jobs.detail.certsExpiring", { count: result.expiring.length })
-            : "") +
-          (result.failed.length
-            ? serverT("jobs.detail.certsUnreadable", { count: result.failed.length })
-            : ""),
-      };
-    },
-  },
-  {
-    key: "proxy.ddns",
-    schedule: { kind: "cron", settingKey: "proxy.ddns_cron" },
-    leaseSeconds: 120,
-    recordSuccessRuns: false,
-    async run() {
-      const result = await syncDdns();
-
-      // IP DEĞİŞİMİ olay kaydına düşüyor: dışarı açık bir servisin bir süre
-      // ulaşılamamış olmasının sebebi çoğu zaman budur ve sonradan bakınca
-      // zaman çizelgesinde görünmesi gerekir.
-      for (const entry of result.updated) {
-        await announce({
-          alertKey: "ddns:ip",
-          source: "ddns",
-          severity: "info",
-          title: serverT("jobs.announce.ipChangedTitle"),
-          detail: entry,
-        });
-      }
-
-      const parts: string[] = [];
-      if (result.updated.length)
-        parts.push(serverT("jobs.detail.ddnsUpdated", { count: result.updated.length }));
-      if (result.unchanged.length)
-        parts.push(serverT("jobs.detail.ddnsUnchanged", { count: result.unchanged.length }));
-      if (result.failed.length)
-        parts.push(serverT("jobs.detail.ddnsFailed", { count: result.failed.length }));
-
-      if (result.failed.length > 0) throw new Error(result.failed.join(" · "));
-      return { detail: parts.length ? parts.join(" · ") : serverT("jobs.detail.ddnsNone") };
-    },
-  },
-  {
-    key: "tailscale.keys",
-    schedule: { kind: "cron", settingKey: "tailscale.check_cron" },
-    leaseSeconds: 120,
-    async run() {
-      const status = await tailscaleStatus();
-      if (!status.available)
-        return { detail: status.error ?? serverT("jobs.detail.tailscaleUnavailable") };
-
-      for (const peer of status.expiring) {
-        await announce({
-          alertKey: `tailscale:${peer.id}`,
-          source: "tailscale",
-          severity: (peer.daysToExpiry ?? 0) <= 3 ? "critical" : "warning",
-          title: serverT("jobs.announce.tailscaleTitle", { host: peer.hostname }),
-          detail:
-            (peer.daysToExpiry ?? 0) < 0
-              ? serverT("jobs.announce.tailscaleExpired", { host: peer.hostname })
-              : serverT("jobs.announce.tailscaleExpiring", {
-                  host: peer.hostname,
-                  days: peer.daysToExpiry ?? 0,
-                }),
-        });
-      }
-
-      return {
-        detail:
-          serverT("jobs.detail.tailscaleNodes", { count: status.peers.length + 1 }) +
-          (status.expiring.length
-            ? serverT("jobs.detail.tailscaleExpiring", { count: status.expiring.length })
-            : ""),
-      };
-    },
-  },
-  {
     key: "events.prune",
     schedule: { kind: "cron", settingKey: "jobs.events_prune_cron" },
     leaseSeconds: 120,
@@ -437,18 +310,6 @@ export const jobDefinitions: JobDefinition[] = [
         detail:
           serverT("jobs.detail.sessionsPruned", { count: Number(changes) }) +
           (challenges > 0 ? serverT("jobs.detail.sessionsChallenges", { count: challenges }) : ""),
-      };
-    },
-  },
-  {
-    key: "api.tokens_prune",
-    schedule: { kind: "cron", settingKey: "jobs.api_tokens_prune_cron" },
-    leaseSeconds: 60,
-    async run() {
-      return {
-        detail: serverT("jobs.detail.tokensPruned", {
-          count: Number(pruneApiTokens(getNumber("api.token_retention_days"))),
-        }),
       };
     },
   },

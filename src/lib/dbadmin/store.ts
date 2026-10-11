@@ -115,7 +115,7 @@ export function validateConnection(input: ConnectionInput, id = 0): string | nul
     }
   } else {
     if (input.host.trim().length === 0) return serverT("dbStore.host");
-    if (input.port <= 0 || input.port > 65535) return serverT("proxyStore.portRange");
+    if (input.port <= 0 || input.port > 65535) return serverT("common.portRange");
   }
 
   return null;

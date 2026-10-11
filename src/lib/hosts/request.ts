@@ -67,7 +67,7 @@ export async function pageHostId(options: { agent?: boolean } = {}): Promise<num
 }
 
 /**
- * Yalnızca panelin kendi sunucusunda çalışan ekranlar (host cron, ufw, LAN
+ * Yalnızca panelin kendi sunucusunda çalışan ekranlar (host cron, LAN
  * taraması...). Uzak sunucu seçiliyken yerel sunucunun verisini göstermek
  * yanıltıcı olurdu.
  */

@@ -5,9 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Container,
   CornerDownLeft,
-  ExternalLink,
   HeartPulse,
-  LayoutGrid,
   Search,
   X,
   type LucideIcon,
@@ -23,7 +21,7 @@ import { useDynamicT, useT } from "@/lib/i18n/client";
  * İki kaynaktan besleniyor:
  *   1. SAYFALAR — `nav.ts`'ten, ağ isteği olmadan. Palet ilk tuşa basıldığı an
  *      kullanılabilir olmalı; en sık aranan şey zaten bir sayfadır.
- *   2. CANLI KAYITLAR — container/kart/monitör, `/api/palette`'ten. Yalnızca
+ *   2. CANLI KAYITLAR — container/monitör, `/api/palette`'ten. Yalnızca
  *      palet İLK KEZ açıldığında çekiliyor: her sayfa yüklemesinde container
  *      listesi istemek, hiç kullanılmayabilecek bir özellik için Docker'a
  *      sürekli soru sormak olurdu.
@@ -37,14 +35,12 @@ type Entry = {
   label: string;
   hint: string;
   href: string;
-  kind: "page" | "container" | "app" | "monitor";
-  external: boolean;
+  kind: "page" | "container" | "monitor";
 };
 
 const KIND_ICON: Record<Entry["kind"], LucideIcon> = {
   page: Search,
   container: Container,
-  app: LayoutGrid,
   monitor: HeartPulse,
 };
 
@@ -61,7 +57,6 @@ export function CommandPalette({ permissions }: { permissions: PermissionKey[] }
   const kindLabel: Record<Entry["kind"], string> = {
     page: t("shell.palette.kind.page"),
     container: t("shell.palette.kind.container"),
-    app: t("shell.palette.kind.app"),
     monitor: t("shell.palette.kind.monitor"),
   };
 
@@ -77,7 +72,6 @@ export function CommandPalette({ permissions }: { permissions: PermissionKey[] }
           hint: tk(group.titleKey),
           href: item.href,
           kind: "page",
-          external: false,
         });
         for (const child of item.children ?? []) {
           if (!permissions.includes(child.permission)) continue;
@@ -87,7 +81,6 @@ export function CommandPalette({ permissions }: { permissions: PermissionKey[] }
             hint: tk(group.titleKey),
             href: child.href,
             kind: "page",
-            external: false,
           });
         }
       }
@@ -158,11 +151,7 @@ export function CommandPalette({ permissions }: { permissions: PermissionKey[] }
   function choose(entry: Entry) {
     setOpen(false);
     setQuery("");
-    if (entry.external) {
-      window.open(entry.href, "_blank", "noopener,noreferrer");
-    } else {
-      router.push(entry.href);
-    }
+    router.push(entry.href);
   }
 
   // Telefonda 12vh üst boşluk, açılan klavyeyle birlikte paleti iyice eziyordu;
@@ -242,12 +231,8 @@ export function CommandPalette({ permissions }: { permissions: PermissionKey[] }
                       {kindLabel[entry.kind]} · {entry.hint}
                     </span>
                   </span>
-                  {entry.external ? (
-                    <ExternalLink className="size-3.5 shrink-0 text-subtle" aria-hidden />
-                  ) : (
-                    index === activeIndex && (
-                      <CornerDownLeft className="size-3.5 shrink-0 text-subtle" aria-hidden />
-                    )
+                  {index === activeIndex && (
+                    <CornerDownLeft className="size-3.5 shrink-0 text-subtle" aria-hidden />
                   )}
                 </button>
               </li>

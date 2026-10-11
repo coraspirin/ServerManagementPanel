@@ -25,25 +25,6 @@ export function layoutFor(userId: number, permissions: PermissionKey[]): WidgetP
   return resolveLayout(rows, permissions);
 }
 
-/**
- * Kiosk bağlantısının düzeni.
- *
- * Bağlantıya özel kayıt yoksa sahibin kendi düzeni — `custom: false` bunu
- * söylüyor ki düzenleyici "sahibin düzenini izliyor" diyebilsin. Görünen
- * widget'lar her iki durumda da SAHİBİN yetkileriyle sınırlı.
- */
-export function kioskLayoutFor(
-  tokenHash: string,
-  owner: { id: number; permissions: PermissionKey[] },
-): { layout: WidgetPlacement[]; custom: boolean } {
-  const rows = getDb()
-    .prepare("SELECT widget_key, position, visible, size FROM kiosk_widgets WHERE token_hash = ?")
-    .all(tokenHash) as Row[];
-  return rows.length > 0
-    ? { layout: resolveLayout(rows, owner.permissions), custom: true }
-    : { layout: layoutFor(owner.id, owner.permissions), custom: false };
-}
-
 function resolveLayout(rows: Row[], permissions: PermissionKey[]): WidgetPlacement[] {
   const saved = new Map(rows.map((row) => [row.widget_key, row]));
 
@@ -107,20 +88,11 @@ export function saveLayout(userId: number, input: LayoutInput, now: number): voi
   writeRows("dashboard_widgets", "user_id", userId, input, now);
 }
 
-export function saveKioskLayout(tokenHash: string, input: LayoutInput, now: number): void {
-  writeRows("kiosk_widgets", "token_hash", tokenHash, input, now);
-}
-
-/** Bağlantıya özel düzeni siler: kiosk yeniden sahibinin düzenini izler. */
-export function resetKioskLayout(tokenHash: string): void {
-  getDb().prepare("DELETE FROM kiosk_widgets WHERE token_hash = ?").run(tokenHash);
-}
-
-/** Tablo ve sütun adları sabit — çağıranlar yalnızca yukarıdaki iki işlev. */
+/** Tablo ve sütun adları sabit — çağıran yalnızca `saveLayout`. */
 function writeRows(
-  table: "dashboard_widgets" | "kiosk_widgets",
-  owner: "user_id" | "token_hash",
-  ownerValue: number | string,
+  table: "dashboard_widgets",
+  owner: "user_id",
+  ownerValue: number,
   input: LayoutInput,
   now: number,
 ): void {

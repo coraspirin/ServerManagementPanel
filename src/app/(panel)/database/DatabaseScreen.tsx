@@ -1047,7 +1047,7 @@ function ConnectionModal({
             <>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block text-sm">
-                  <span className="text-subtle">{t("proxy.form.port")}</span>
+                  <span className="text-subtle">{t("common.port")}</span>
                   <input
                     type="number"
                     value={form.port ?? 0}

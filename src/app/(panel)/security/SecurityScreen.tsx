@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ShieldCheck, Waypoints } from "lucide-react";
+import { Waypoints } from "lucide-react";
 import {
   ForwardsPanel,
   IntrusionPanel,
@@ -16,10 +16,8 @@ import { useT } from "@/lib/i18n/client";
 /**
  * M3.7 / M3.8 — güvenlik izleyicileri.
  *
- * Bu ekran M3.17 ve M3.18'de İKİ PARÇA KAYBETTİ: dinleyen port envanteri
- * `/ports`e, güvenlik duvarı `/firewall`e taşındı. İkisi de burada bir bölüm
- * olmaktan çıktı çünkü büyüdüler — port tarafında sahiplik çözümü ve boş port
- * bulucu, güvenlik duvarı tarafında açma/kapama ve varsayılan politika geldi.
+ * Dinleyen port envanteri M3.17'de `/ports`e taşındı (sahiplik çözümü ve boş
+ * port bulucuyla büyüdü). Güvenlik duvarı (ufw) ekranı panelden kaldırıldı.
  * Geriye kalanlar (zafiyet, fail2ban, UPnP, SSH) tek ortak özelliği "pahalı
  * olduğu için kendi düğmesiyle yüklenen izleyici" olan panellerdir.
  */
@@ -37,7 +35,7 @@ export function SecurityScreen({
   canManage: boolean;
   /**
    * Uzak sunucu (çoklu sunucu): yalnızca SSH denetimi o sunucuda çalışıyor;
-   * güvenlik duvarı, fail2ban, CVE ve UPnP yerel sunucuya özgü.
+   * fail2ban, CVE ve UPnP yerel sunucuya özgü.
    */
   remote?: boolean;
 }) {
@@ -65,12 +63,6 @@ export function SecurityScreen({
   return (
     <div className="space-y-5">
       <section className="grid gap-3 sm:grid-cols-2">
-        <NavCard
-          href="/firewall"
-          title={t("securityScreen.firewall")}
-          description={t("securityScreen.firewallDesc")}
-          icon={<ShieldCheck className="size-4 text-subtle" aria-hidden />}
-        />
         <NavCard
           href="/ports"
           title={t("securityScreen.ports")}

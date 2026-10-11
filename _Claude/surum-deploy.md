@@ -1,5 +1,5 @@
 # Sürüm çıkarma ve dağıtım
-Son güncelleme: 2026-10-09 · güncel sürüm 1.12.7
+Son güncelleme: 2026-10-11 · deploy.sh ZimaOS/CasaOS için yeniden yazıldı
 
 ## İki ayrı yol
 | Yol | Ne zaman | Komut |
@@ -7,22 +7,34 @@ Son güncelleme: 2026-10-09 · güncel sürüm 1.12.7
 | **Kullanıcının sunucusuna kaynaktan yükleme** | Her değişiklikten sonra deneme / canlıya alma | `bash deploy.sh` (repo kökünden, Git Bash) |
 | **Sürüm yayınlama** (GHCR imajı) | Uzak ajanların güncellenmesi gerektiğinde, ya da yeni sürüm | sürüm yükselt → tag → push |
 
-Merkez panel (192.168.61.114) kaynaktan derlenir (`image: server-panel:local`), GHCR imajını KULLANMAZ. Ajanlar (ör. 192.168.61.107) GHCR imajı kullanır → yeni ajan kodu (yeni op'lar, `runOnce` seçenekleri vb.) ancak sürüm yayınlanınca ajana ulaşır.
+Merkez panel (192.168.61.114) deploy.sh ile SUNUCUDA kaynaktan derlenir (`image: server-panel:local`); CasaOS'un ilk kurduğu GHCR imajı yerine geçer. Ajanlar (ör. 192.168.61.107) GHCR imajı kullanır → yeni ajan kodu ancak sürüm yayınlanınca ajana ulaşır.
 
 ## deploy.sh adımları
-1. Yerel denetimler: `npm run typecheck`, `npm test`, `npm run i18n:check`, `npm run i18n:scan` (biri düşerse durur).
+**Sunucu (2026-10-11 itibarıyla):** 192.168.61.114 artık **ZimaOS** (CasaOS tabanlı; kök dosya sistemi squashfs, SALT-OKUNUR — `/home` dahil; yazılabilir yerler `/DATA`, `/tmp`, `/opt`, `/var/lib/*`). SSH `~/.ssh/config` ile **root**. Panel bir CasaOS uygulaması:
+- container `server-management-panel`, servis `server-panel`, port `8081` → 3000
+- compose `/var/lib/casaos/apps/compose-75a5218c7cbc9fd0/docker-compose.yml` (dizin adı CasaOS'a özel; deploy.sh container etiketinden bulur)
+- veri `/DATA/AppData/server-panel` → `/app/data` (veritabanı, `backups/pre-migration-*.db`) — DOKUNULMAZ
+- kaynak (yalnız derleme) `/DATA/AppData/server-panel-src`, yerel imaj `server-panel:local`
+- Caddy yok; `HELPER_SECRET` ve host-helper soketi compose'da yok (host işlemleri kapalı). `/DATA/AppData/panel-helper` dizini var ama bağlı değil.
+
+Değiştirilebilir: `PANEL_HOST`, `PANEL_CONTAINER` (varsayılan `server-management-panel`), `PANEL_SRC` (varsayılan `/DATA/AppData/server-panel-src`).
+
+0. Yoklama (salt okunur): container var mı; compose dizini/servis adı `com.docker.compose.project.working_dir` / `com.docker.compose.service` etiketlerinden; şu anki imaj.
+1. Yerel denetimler: `npm run typecheck`, `npm test`, `npm run i18n:check`, `npm run i18n:scan`.
 2. Paket: `src scripts fixtures host-helper package.json package-lock.json Dockerfile .dockerignore next.config.ts tsconfig.json postcss.config.mjs`.
-3. Sunucuda yedek: `/home/coraspirin/panel-yedek-<damga>.tgz` (aynı parçalar + `.env`).
-4. Yükleme: `src`/`scripts` tamamen değiştirilir; `docker-compose.yml`, `Caddyfile` gibi sunucuya özel dosyalara DOKUNULMAZ; `.env`'de yalnız `APP_VERSION` güncellenir (tekrarlanan satırlar teke iner).
-5. `docker compose` ile derle + başlat (`/home/coraspirin/docker/server-panel`).
-6. Sağlık: container `healthy` + `APP_VERSION` eşleşmesi + 90 sn sonra son 2 dk loglarda `error|unhandled|ECONN|hata:` yok.
+3. `/tmp`'ye scp → `PANEL_SRC` her seferinde boşaltılıp yeniden açılır (silinen dosyalar kalmasın).
+4. Sunucuda `docker build --build-arg APP_VERSION=<sürüm> -t server-panel:local` (önceki yerel imajın kimliği not edilir).
+5. CasaOS compose'u `docker-compose.yml.deploy-<damga>.bak` olarak yedeklenir; YALNIZCA servis bloğundaki `image:` satırı `server-panel:local` yapılır (port, veri, MASTER_KEY, kaynak sınırları aynen kalır); `docker compose up -d --pull never <servis>`.
+6. Sağlık: `healthy` + `APP_VERSION` eşleşmesi + 90 sn sonra son 2 dk loglarda `error|unhandled|ECONN|hata:` yok; sonra bir önceki yerel imaj silinir (genel `prune` YOK — başka uygulamalara dokunmasın).
 
-Kurallar: yalnız repo kökünden çalışır (`.deploy-head/` eski bir anlık görüntü — oradan çalıştırma eski kodu yükler). PowerShell'deki `bash` WSL olabilir; betik Git Bash'e geçer. Commit edilmemiş değişiklikler de gider (çıktıda `dirty` görünür).
+Kurallar: yalnız repo kökünden çalışır. PowerShell'deki `bash` WSL olabilir; betik Git Bash'e geçer. Commit edilmemiş değişiklikler de gider (çıktıda `dirty` görünür).
 
-**Geri alma:** sunucuda `cd /home/coraspirin/docker/server-panel && tar -xzf /home/coraspirin/panel-yedek-<damga>.tgz && docker compose up -d --build`.
+**Geri alma:** sunucuda `cd <compose dizini> && cp docker-compose.yml.deploy-<damga>.bak docker-compose.yml && docker compose up -d server-panel`. ⚠️ Yeni sürüm migration çalıştırdıysa eski imaj yeni şemayla açılmayabilir → önce `/DATA/AppData/server-panel/backups/pre-migration-<n>.db`'yi `panel.db` yerine koy (container durdurulmuşken).
+
+**Dikkat:** CasaOS arayüzünden uygulamayı "güncellemek"/yeniden kurmak compose'u GHCR imajına geri çevirebilir; panelin kendi `/update` ekranı da GHCR'den çeker. Merkezde güncelleme deploy.sh ile yapılmalı.
 
 ## Sürüm yayınlama kontrol listesi
-1. Denetimler: `npm run typecheck && npm run lint && npm test && npm run i18n:check && npm run i18n:scan && npm run check:openapi && npm run build`.
+1. Denetimler: `npm run typecheck && npm run lint && npm test && npm run i18n:check && npm run i18n:scan && npm run build`.
 2. Sürümü yükselt — **`bash scripts/set-version.sh patch|minor|major`** (ya da `1.13.0`); `--commit` ile "chore: release X" commit'i + `vX` etiketi de atar. Betik şu yerleri birlikte değiştirir ve geride eski sürüm kalırsa uyarır: `package.json`, `package-lock.json`, `Dockerfile` (ARG), `docker-compose.yml` (varsayılanlar), `src/lib/env.ts`, `README.md`, `README_tr.md`, `screenshots/README.md`. PowerShell'den çağrılırsa Git Bash'e geçer (WSL'deki git kimliği yok).
 3. Ajan protokolü değiştiyse (`src/lib/agent/protocol.ts` `AGENT_PROTOCOL`, şu an 3): eski ajanlar "uyumsuz" görünür → mutlaka sürüm + ajan güncellemesi.
 4. `git push origin main --tags` (commit/etiket betikle atılmadıysa önce elle).
@@ -33,3 +45,6 @@ Kurallar: yalnız repo kökünden çalışır (`.deploy-head/` eski bir anlık g
 
 ## İlgili dosyalar
 `deploy.sh`, `agent-deploy.py`, `.github/workflows/docker-publish.yml`, `.github/workflows/ci.yml`, `src/lib/selfupdate/{index,plan}.ts` (panelin kendini güncellemesi, `/update` sayfası), `src/lib/hosts/agents.ts` (otomatik güncelleme, ajan compose'u), `scripts/docker-entry.mjs`.
+
+## Caddy'siz yapıya geçiş
+ZimaOS/CasaOS kurulumunda Caddy hiç yoktu (panel portu doğrudan yayınlanıyor) — geçiş gerekmiyor. Eski Debian kurulumundaki Caddy'li compose artık kullanılmıyor.

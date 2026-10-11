@@ -85,7 +85,7 @@ export function validateWol(input: WolInput): string | null {
     return serverT("wolLib.broadcast");
   }
   if (!Number.isInteger(input.port) || input.port < 1 || input.port > 65535) {
-    return serverT("proxyStore.portRange");
+    return serverT("common.portRange");
   }
   return null;
 }

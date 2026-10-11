@@ -28,8 +28,6 @@ import { LayoutEditor } from "./LayoutEditor";
 type Props = {
   layout: WidgetPlacement[];
   widgets: Record<string, ReactNode>;
-  /** Kiosk: düzenleme düğmesi yok — oturumsuz ekranın yazabileceği bir şey yok. */
-  readOnly?: boolean;
 };
 
 function readCsrfToken(): string {
@@ -37,7 +35,7 @@ function readCsrfToken(): string {
   return match ? decodeURIComponent(match[1]) : "";
 }
 
-export function DashboardGrid({ layout, widgets, readOnly = false }: Props) {
+export function DashboardGrid({ layout, widgets }: Props) {
   const t = useT();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -78,10 +76,6 @@ export function DashboardGrid({ layout, widgets, readOnly = false }: Props) {
 
   // Görünür ama gösterecek bir şeyi olmayan widget (null) ızgarada yer tutmasın.
   const shown = order.filter((entry) => entry.visible && widgets[entry.key] != null);
-
-  if (readOnly) {
-    return shown.length === 0 ? null : <Rendered order={shown} widgets={widgets} />;
-  }
 
   if (!editing) {
     return (

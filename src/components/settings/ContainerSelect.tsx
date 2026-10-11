@@ -9,9 +9,8 @@ import { useT } from "@/lib/i18n/client";
  * Docker container adı seçicileri (M3.45).
  *
  * Üç ayrı ekranda aynı hata yaşanıyordu: container adı ELLE yazılıyor,
- * yazım hatası sessizce yutuluyordu. `proxy.caddy_container` yanlışsa
- * yapılandırma yazılıyor ama reload hiç çalışmıyor; `logs.sources` yanlışsa
- * log toplama o kaynağı sessizce atlıyor.
+ * yazım hatası sessizce yutuluyordu. `logs.sources` yanlışsa log toplama o
+ * kaynağı sessizce atlıyor.
  *
  * Liste `/api/docker`den geliyor — panelin başka her yerde kullandığı uç.
  * `docker.view` izni yoksa (ya da Docker erişilemiyorsa) alan düz metin
@@ -57,63 +56,6 @@ export function useContainerNames(): { names: string[] | null; failed: boolean }
   }, []);
 
   return { names, failed };
-}
-
-/** Tek container adı (ör. Caddy container'ı). */
-export function ContainerSelect({
-  value,
-  disabled,
-  onCommit,
-  allowEmpty = false,
-}: {
-  value: string;
-  disabled: boolean;
-  onCommit: (value: string) => void;
-  allowEmpty?: boolean;
-}) {
-  const t = useT();
-  const { names, failed } = useContainerNames();
-
-  if (failed || (names && names.length === 0)) {
-    return (
-      <input
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onCommit(e.target.value)}
-        className={`${inputClass} font-mono sm:w-56`}
-      />
-    );
-  }
-
-  if (!names) {
-    return (
-      <span className={`${inputClass} text-subtle sm:w-56`}>{t("common.states.loadingInline")}</span>
-    );
-  }
-
-  // Kayıtlı ad listede yoksa seçenek olarak eklenir: container durdurulmuş
-  // olabilir ya da henüz kurulmamış olabilir; select'in onu sessizce başka
-  // bir container'a çevirmesi, reload'ın yanlış yere gitmesi demek.
-  const known = names.includes(value);
-
-  return (
-    <select
-      value={value}
-      disabled={disabled}
-      onChange={(e) => onCommit(e.target.value)}
-      className={`${inputClass} font-mono sm:w-56`}
-    >
-      {allowEmpty && <option value="">{t("containerSelect.notSelected")}</option>}
-      {!known && value !== "" && (
-        <option value={value}>{t("appForm.notInList", { name: value })}</option>
-      )}
-      {names.map((name) => (
-        <option key={name} value={name}>
-          {name}
-        </option>
-      ))}
-    </select>
-  );
 }
 
 /**

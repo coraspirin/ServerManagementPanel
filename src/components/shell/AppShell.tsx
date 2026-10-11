@@ -136,9 +136,9 @@ export function AppShell({ children, mode, version, user, languages }: Props) {
         }`}
       >
         <div className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-4">
-          {/* Marka karşılama sayfasına götürür — ev halkının uygulama kartları orada. */}
+          {/* Marka ana sayfaya (gösterge paneli) götürür. */}
           <Link
-            href="/"
+            href="/panel"
             onClick={() => setMenuOpen(false)}
             className="flex min-w-0 items-center gap-2 transition-colors hover:text-brand"
           >

@@ -238,10 +238,9 @@ function localDigestFor(repoDigests: string[], ref: Ref): string | null {
  *
  * ⚠️ EMNİYET KİLİDİ, ETİKETLE AÇILAMAZ. Panelin kendi container'ı otomatik
  * güncellenirse panel kendini durdurup yeniden yaratmayı dener: süreç
- * ortasında ölür, işlem yarım kalır ve panel erişilemez hâle gelir. Reverse
- * proxy için de aynısı geçerli — panele giden yolu kesip kendini kurtaramaz.
+ * ortasında ölür, işlem yarım kalır ve panel erişilemez hâle gelir.
  *
- * Bu ikisi elle, kullanıcının bildiği bir anda güncellenmeli. Etiket yalnızca
+ * Bu yüzden elle, kullanıcının bildiği bir anda güncellenmeli. Etiket yalnızca
  * DİĞER container'lar için bir tercih; burası tercih değil.
  */
 function updateEligibility(
@@ -252,14 +251,6 @@ function updateEligibility(
     return {
       updatable: false,
       skipReason: serverT("imageUpdates.skipSelf"),
-    };
-  }
-
-  const caddy = getString("proxy.caddy_container").trim();
-  if (caddy && name === caddy) {
-    return {
-      updatable: false,
-      skipReason: serverT("imageUpdates.skipProxy"),
     };
   }
 

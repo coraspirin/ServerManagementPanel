@@ -30,8 +30,7 @@ const TONE_ICON = { danger: CircleAlert, warn: AlertTriangle, info: Info } as co
 
 const ORDER: Record<StatusTone, number> = { danger: 0, warn: 1, info: 2 };
 
-/** `readOnly` (kiosk): öğeler bağlantı değil — dokunmatik ekranda yanlış dokunuş girişe atmasın. */
-export function StatusStrip({ items, readOnly = false }: { items: StatusItem[]; readOnly?: boolean }) {
+export function StatusStrip({ items }: { items: StatusItem[] }) {
   const t = getT();
   const problems = items.filter((item) => item.tone !== "info");
   const sorted = [...items].sort((a, b) => ORDER[a.tone] - ORDER[b.tone]);
@@ -56,11 +55,7 @@ export function StatusStrip({ items, readOnly = false }: { items: StatusItem[]; 
             {item.label}
           </>
         );
-        return readOnly ? (
-          <span key={item.key} className={className}>
-            {body}
-          </span>
-        ) : (
+        return (
           <Link key={item.key} href={item.href} className={`${className} transition-opacity hover:opacity-80`}>
             {body}
           </Link>

@@ -1,8 +1,8 @@
 # Ana sayfa (gösterge paneli) — /panel
-Son güncelleme: 2026-10-08 · commit 428d5e8
+Son güncelleme: 2026-10-11 · uygulama kartları/yer imleri/kiosk kaldırıldı
 
 ## Ne yapar
-Girişten sonraki ana sayfa: saat, hava, internet göstergesi, hızlı bağlantılar, uygulama kartları, yer imleri ve düzenlenebilir widget ızgarası (kaynak kartları, durum şeridi, container özeti, uptime, son olaylar, yedek durumu, filo kartı — tüm sunucular). Bakım bölümü: imaj güncellemeleri, OS güncellemeleri, yedek özeti.
+Girişten sonraki ana sayfa: saat, hava, internet göstergesi ve düzenlenebilir widget ızgarası (kaynak kartları, durum şeridi, container özeti, uptime, son olaylar, yedek durumu, filo kartı — tüm sunucular). Bakım bölümü: imaj güncellemeleri, OS güncellemeleri, yedek özeti.
 
 ## Dosyalar
 - Sayfa: `src/app/(panel)/panel/page.tsx` (58) — `requireSession()`, `pageHostId({ agent: true })`.
@@ -10,9 +10,9 @@ Girişten sonraki ana sayfa: saat, hava, internet göstergesi, hızlı bağlant�
 - Bakım: `src/components/maintenance/{MaintenanceSection,ImageUpdatePanel}.tsx`.
 - Kabuk: `src/components/shell/HostSelector.tsx` (sunucu seçici), `src/lib/nav.ts` (menü).
 - API: `src/app/api/dashboard/route.ts` GET/POST (`panel.view`; düzen kaydı), `api/updates/images` GET/POST (`docker.view`/`docker.action`), `api/events`, `api/metrics/{series,system}`, `api/docker/<id>/...` (güncelle).
-- lib: `src/lib/dashboard/{catalog,store,summary}.ts` (widget katalogu; özetler mümkün olduğunca DB'den), `src/lib/home/{weather,internet,bookmarks}.ts`, `src/lib/updates/{images,os,normalize,index}.ts`, `src/lib/backup/{overview,watch}.ts`.
+- lib: `src/lib/dashboard/{catalog,store,summary}.ts` (widget katalogu; özetler mümkün olduğunca DB'den), `src/lib/home/{weather,internet}.ts`, `src/lib/updates/{images,os,normalize,index}.ts`, `src/lib/backup/{overview,watch}.ts`.
 - Ajan op'ları: `updates.osReport`, `backup.scanDir`.
-- Tablolar: `dashboard_widgets` (`020`, `031`), ayrıca `apps`, `events`, `monitors`, `backup_*`, `metrics_raw` okunur.
+- Tablolar: `dashboard_widgets` (`020`, `031`), ayrıca `events`, `monitors`, `backup_*`, `metrics_raw` okunur.
 - Locale: `home.*`, `dashboard.*`, `maintenance.*`, `overview.*`.
 
 ## Önemli kararlar ve tuzaklar
@@ -20,3 +20,6 @@ Girişten sonraki ana sayfa: saat, hava, internet göstergesi, hızlı bağlant�
 - Uzak sunucuya canlı istek yalnız container durumu için ve süre sınırlı (çevrimdışı ajan ana sayfayı bekletmesin).
 - Hava: Open-Meteo (anahtarsız), 15 dk önbellek. OS güncelleme raporu host'ta `scripts/os-updates.sh` üretir, panel yalnız okur.
 - Güncelleme önbelleği eski sürümün yazdığı satırları okuyabilir → `normalize.ts` (yaşanmış çökme).
+- `/` doğrudan buraya yönlendirir (oturum varsa). `panel.dashboard` yetkisi olmayanların sade görünümü yalnız internet göstergesi + saat/hava (kartlar kaldırıldı).
+- Kiosk kalktığı için widget'larda `readOnly`/`live` dalları ve `buildDashboard`'un `layout`/`readOnly` parametreleri yok; "servis düştü" çipi `/uptime`'a gider.
+- Eski `apps`/`quicklinks` widget satırları 035'te silindi.

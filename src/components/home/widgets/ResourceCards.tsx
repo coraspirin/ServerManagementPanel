@@ -41,11 +41,6 @@ type Props = {
   thresholds: Thresholds;
   /** En dolu diskin dolmasına kalan gün (tahmin yoksa null), bağlama noktasına göre. */
   diskForecast: Record<string, number | null>;
-  /**
-   * false (kiosk): API yoklanmaz — uçlar oturum istiyor ve kiosk sayfası
-   * kendini zaten periyodik olarak yeniliyor. Kartlar bağlantı da olmaz.
-   */
-  live?: boolean;
 };
 
 /** Birden çok etiketin (arayüz) aynı andaki değerlerini toplar. */
@@ -70,7 +65,6 @@ export function ResourceCards({
   refreshSeconds,
   thresholds,
   diskForecast,
-  live = true,
 }: Props) {
   const t = useT();
   const f = useFormat();
@@ -78,7 +72,6 @@ export function ResourceCards({
   const [data, setData] = useState(initialSeries);
 
   useEffect(() => {
-    if (!live) return;
     const controller = new AbortController();
     const loadSnapshot = async () => {
       try {
@@ -110,7 +103,7 @@ export function ResourceCards({
       clearInterval(snapshotTimer);
       clearInterval(seriesTimer);
     };
-  }, [refreshSeconds, live]);
+  }, [refreshSeconds]);
 
   const worstDisk = snapshot.disks.reduce<Snapshot["disks"][number] | null>(
     (worst, disk) => (worst === null || disk.usedPct > worst.usedPct ? disk : worst),
@@ -133,7 +126,7 @@ export function ResourceCards({
   return (
     <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
       <Tile
-        link={live}
+        link
         icon={Cpu}
         title={t("dashboard.resources.cpu")}
         value={pctValue(snapshot.cpuPct)}
@@ -148,7 +141,7 @@ export function ResourceCards({
         format={(v) => f.pct(v, 0)}
       />
       <Tile
-        link={live}
+        link
         icon={MemoryStick}
         title={t("dashboard.resources.memory")}
         value={pctValue(snapshot.memUsedPct)}
@@ -163,7 +156,7 @@ export function ResourceCards({
         format={(v) => f.pct(v, 0)}
       />
       <Tile
-        link={live}
+        link
         icon={HardDrive}
         title={worstDisk ? t("dashboard.resources.diskAt", { mount: worstDisk.mount }) : t("dashboard.resources.disk")}
         value={pctValue(worstDisk?.usedPct ?? null)}
@@ -183,7 +176,7 @@ export function ResourceCards({
         format={(v) => f.pct(v, 1)}
       />
       <Tile
-        link={live}
+        link
         icon={Network}
         title={t("dashboard.resources.network")}
         value={`↓ ${formatBps(rx)}`}

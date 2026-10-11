@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  *
  * SSE seçildi, WebSocket değil: akış tek yönlü (sunucudan tarayıcıya), tarayıcı
  * `EventSource` ile kopan bağlantıyı kendiliğinden yeniden kuruyor ve normal
- * HTTP olduğu için Caddy'nin arkasında ek yapılandırma gerekmiyor. WebSocket
+ * HTTP olduğu için bir ters vekilin arkasında ek yapılandırma gerekmiyor. WebSocket
  * yalnızca web terminalde (M1.9) gerekli olacak — orada iki yönlü akış var.
  *
  * İstemci sekmeyi kapattığında `request.signal` iptal olur ve Docker soketine
@@ -70,7 +70,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       "content-type": "text/event-stream; charset=utf-8",
       "cache-control": "no-cache, no-transform",
       connection: "keep-alive",
-      // Caddy/nginx ara belleklemesi canlı akışı geciktirmesin.
+      // Ters vekil (nginx vb.) ara belleklemesi canlı akışı geciktirmesin.
       "x-accel-buffering": "no",
     },
   });

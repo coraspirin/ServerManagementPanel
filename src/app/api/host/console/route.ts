@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     return Response.json(
       {
         error:
-          serverT("apiv1.helperMissing"),
+          serverT("api.helperMissing"),
       },
       { status: 503 },
     );

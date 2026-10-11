@@ -295,3 +295,12 @@ async function containerFacts(): Promise<ContainerFacts[]> {
     return [];
   }
 }
+
+/**
+ * Panelin host'ta yayınlandığı port — compose bunu env'den okuyor, sabit
+ * değil. Yığın kurulumunda port çakışması uyarısı için kullanılıyor.
+ */
+export function panelPorts(): number[] {
+  const http = Number(process.env.PANEL_HTTP_PORT ?? 8080);
+  return Number.isFinite(http) && http > 0 ? [http] : [];
+}

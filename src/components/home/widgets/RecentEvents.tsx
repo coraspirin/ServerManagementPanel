@@ -16,12 +16,9 @@ const SEVERITY_STYLE: Record<Severity, string> = {
 export function RecentEvents({
   events,
   canAck,
-  readOnly = false,
 }: {
   events: EventRow[];
   canAck: boolean;
-  /** Kiosk: bağlantı yok. */
-  readOnly?: boolean;
 }) {
   const t = getT();
   const dict = getActiveDictionary();
@@ -33,9 +30,9 @@ export function RecentEvents({
     <WidgetCard
       title={t("dashboard.events.title")}
       icon={Bell}
-      href={readOnly ? undefined : "/events"}
+      href="/events"
       linkLabel={t("dashboard.all")}
-      aside={canAck && !readOnly ? <AckButton ids={unread} /> : undefined}
+      aside={canAck ? <AckButton ids={unread} /> : undefined}
     >
       {events.length === 0 ? (
         <WidgetEmpty>{t("dashboard.events.empty")}</WidgetEmpty>

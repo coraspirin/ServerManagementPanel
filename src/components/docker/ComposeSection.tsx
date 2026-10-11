@@ -672,13 +672,8 @@ export function ComposeSection({
       {!only && (
       <p className="mt-3 text-xs text-subtle">
         <Rich
-          text={t("docker.compose.firewallNote")}
+          text={t("docker.compose.portsNote")}
           values={{
-            firewall: (
-              <Link href="/firewall" className="underline underline-offset-2">
-                {t("docker.compose.firewallLink")}
-              </Link>
-            ),
             ports: (
               <Link href="/ports" className="underline underline-offset-2">
                 {t("docker.compose.portsLink")}

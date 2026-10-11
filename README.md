@@ -1,6 +1,6 @@
 # Server Management Panel
 
-A self-hosted management panel written for a single Linux + Docker server. It brings monitoring, alerting, Docker and compose management, quick access to services, backups, firewall, file and database management together in one interface.
+A self-hosted management panel written for a single Linux + Docker server. It brings monitoring, alerting, Docker and compose management, backups, file and database management together in one interface.
 
 Designed at home-server (homelab) scale: a single container, embedded SQLite, no external database or queue. The interface and all text are in Turkish.
 
@@ -20,7 +20,7 @@ Designed at home-server (homelab) scale: a single container, embedded SQLite, no
 - [Environment variables](#environment-variables)
 - [Updating and rolling back](#updating-and-rolling-back)
 - [Docker labels](#docker-labels)
-- [External API, Prometheus, and MQTT](#external-api-prometheus-and-mqtt)
+- [MQTT](#mqtt)
 - [Languages](#languages)
 - [Development](#development)
 - [Project structure](#project-structure)
@@ -33,9 +33,7 @@ Designed at home-server (homelab) scale: a single container, embedded SQLite, no
 
 ### General
 
-- **Overview:** live CPU, memory, disk and network usage, container count, open alerts, OS and image updates, time of the last backup, and cards you choose to pin.
-- **Applications:** a card board for reaching services on the server with a single click. Categories, ordering, logo upload, and a live status dot tied to each card. Cards are auto-discovered via Docker labels. Services like Pi-hole show a widget on top of the card.
-- **Home screen and kiosk:** a search box that searches cards and bookmarks together, a clock, weather (Open-Meteo, no key required), and an "is the internet working?" indicator. There's also a session-less, read-only, token-based kiosk address (`/kiosk/<token>`) for a wall-mounted tablet.
+- **Overview:** live CPU, memory, disk and network usage, container count, open alerts, OS and image updates, and time of the last backup, as a widget grid you can rearrange. A clock, weather (Open-Meteo, no key required), and an "is the internet working?" indicator. The root address (`/`) opens this page.
 - **Command palette:** reach any screen or action quickly with `Ctrl+K` / `Cmd+K`.
 
 ### Monitoring
@@ -44,7 +42,7 @@ Designed at home-server (homelab) scale: a single container, embedded SQLite, no
 - **Hardware health:** sensor temperatures, mdraid, S.M.A.R.T, and ZFS pool status. On a virtual machine the panel doesn't show an empty box — it states the reason.
 - **Service Status:** HTTP, TCP, ping, DNS, and container probes. Includes a 60-day uptime strip and maintenance windows.
 - **Events and notifications:** Telegram, Home Assistant, ntfy, Discord, and email channels, each with its own severity filter. Flap protection, repeat suppression, quiet hours, and re-reminders for unresolved critical alerts are applied to prevent a storm of false alarms. The **Timeline** merges the audit log, events, and metric spikes into a single feed ("this setting changed at 22:00, this container crashed at 22:05").
-- **Logs:** container logs and journald are collected in one place and searched with SQLite FTS5. Accent-insensitive: typing "olcum" finds "ölçüm". Alert rules can be defined based on log patterns.
+- **Logs:** container logs and journald are collected in one place and searched with SQLite FTS5. Accent-insensitive: typing "olcum" finds "ölçüm". Alert rules can be defined based on log patterns. Logs and events of the selected server can be cleared with one button.
 
 ### Management
 
@@ -63,10 +61,8 @@ Designed at home-server (homelab) scale: a single container, embedded SQLite, no
 
 ### Network and Security
 
-- **Proxy:** point a domain to a service on the server (Caddy, Let's Encrypt, or a local CA). Certificate expiry tracking and dynamic DNS (Cloudflare, DuckDNS) live here too.
-- **Network:** local network device discovery and inventory (with MAC→vendor mapping), notifications for new unknown devices, Wake-on-LAN, speed test history, and Tailscale peer status.
+- **Network:** local network device discovery and inventory (with MAC→vendor mapping), notifications for new unknown devices, Wake-on-LAN, and speed test history.
 - **Port Map:** which port is held by which container or system service, and which ports are free to assign to a new container.
-- **Firewall:** view, add, and delete ufw rules, and change the default policy.
 - **Security:** open ports, SSH keys, fail2ban and failed login attempts, UPnP port mappings, and known-vulnerability (CVE) scanning of images with Trivy.
 
 ### System
@@ -167,18 +163,16 @@ Panel-managed and host crontab tasks side by side.
 
 ```mermaid
 flowchart LR
-    B[Browser] -->|"HTTP :8080"| C[Caddy]
-    C -->|reverse proxy| P["Panel<br/>Next.js :3000"]
-    C -.->|published sites| S[Other services]
+    B[Browser] -->|"HTTP :8080"| P["Panel<br/>front layer :3000 → Next.js"]
     P --> DB[("SQLite<br/>panel-data volume")]
     P -->|docker.sock| D[Docker Engine]
     P -->|"HMAC-signed request<br/>/run/panel-helper"| H["host-helper<br/>(on host, root)"]
-    H -->|allow-listed actions| OS["systemd · ufw · compose · power"]
+    H -->|allow-listed actions| OS["systemd · compose · power"]
     P -->|read-only| M["/proc · /sys · /<br/>reports/*.json"]
     CR["Host cron<br/>hardware.sh · os-updates.sh"] --> M
 ```
 
-- **Caddy is the single entry point.** The panel container does not expose any port externally. Caddy serves the panel itself on the HTTP port. Sites published from the panel exit through the same Caddy instance with their own TLS settings. The panel writes its publishing rules to a separate file and `reload`s Caddy without restarting it. That way a bad rule can't break the panel's own entry point.
+- **The panel publishes its own port; there is no reverse proxy.** Inside the container a small front layer (`scripts/docker-entry.mjs`) listens on 3000 and Next.js only on loopback. The front layer overwrites `X-Real-IP` / `X-Forwarded-*` with the real socket address, so the client IP used for rate limiting and the audit log cannot be forged.
 - **Operations that need host-level privilege are not done by giving the container root.** A small Python daemon (`host-helper`) running on the host accepts HMAC-SHA256–signed requests over a Unix socket. Which action is allowed to run is decided by `/etc/panel-helper/allow.conf` on the host. This file is not mounted into the container. The container does not send command text — only an action name and written arguments.
 - **Data requiring raw disk access is produced on the host.** S.M.A.R.T/ZFS and OS update reports are written as JSON by scripts running in the host's cron. The panel only reads these files.
 - **The database is embedded.** Node's built-in `node:sqlite` module is used in WAL mode; no native compilation is needed. Migrations are forward-only, and an automatic copy of the database is taken before each migration.
@@ -192,7 +186,7 @@ flowchart LR
 Read this section before installing. The panel exists to manage a server, and doing that job requires high privilege.
 
 > [!WARNING]
-> **The panel serves plain HTTP only.** Passwords, session cookies, and web terminal traffic travel **unencrypted** on the local network. Do not expose the panel directly to the internet. Use a VPN such as Tailscale for remote access. If you need HTTPS, it's enough to uncomment the panel block in the `Caddyfile` with `https://` addresses and a `tls` line — no other code change is required, since the session cookie's `secure` flag is read from the request scheme.
+> **The panel serves plain HTTP only.** Passwords, session cookies, and web terminal traffic travel **unencrypted** on the local network. Do not expose the panel directly to the internet; use a VPN for remote access. If you need HTTPS, put your own TLS-terminating reverse proxy in front of the panel and set `PANEL_TRUST_PROXY=1` — the session cookie's `secure` flag is read from the forwarded scheme. Only do this if the panel port is reachable from nowhere but that proxy.
 
 > [!WARNING]
 > **Access to `docker.sock` is effectively root on the host.** The panel container has access to the Docker socket. The `:ro` flag does not prevent this, because API calls made through the socket cannot be made read-only. Anyone who compromises the panel has compromised the server. Use strong passwords and enable two-factor authentication.
@@ -205,7 +199,7 @@ Measures taken to limit this risk:
 | Audit log | Every action that makes a change is logged with who did it and when. Secret values are masked. |
 | Session security | Login rate limiting, account lockout, CSRF protection on all mutating endpoints (double-submit cookie), session renewal after login, TOTP 2FA. |
 | host-helper allow list | **Installed empty by default**, meaning the install grants the panel no host privileges at all. You decide which actions to enable. The panel-side permission and the host-side allow list are two separate gates; even if the panel is compromised, the second one still holds. |
-| Protected containers | The panel's own container and the reverse-proxy container cannot be selected in bulk operations and are excluded from auto-update. |
+| Protected container | The panel's own container cannot be selected in bulk operations and is excluded from auto-update. |
 | Secret encryption | Secret values in settings are encrypted with AES-256-GCM. `MASTER_KEY` is deliberately not included in backups. |
 
 **Store `MASTER_KEY` somewhere separate from the panel.** If you lose it, encrypted settings (tokens, passwords) cannot be recovered. If you put it in the same backup as the database, the encryption's protection is void.
@@ -220,7 +214,6 @@ Measures taken to limit this risk:
 | Docker Engine + Compose v2 | The `docker compose` command. |
 | Python 3 (on the host) | Only for host-helper. No dependencies outside the standard library. |
 | `smartmontools` | Optional. For the S.M.A.R.T report. |
-| Tailscale | Optional. If not installed, a line in the compose file must be commented out (see below). |
 
 ---
 
@@ -256,23 +249,15 @@ MASTER_KEY=<openssl output>
 DOCKER_GID=<getent output>
 ```
 
-Pick ports on the server that aren't already in use. Defaults are `8080` (panel) and `8443` (TLS sites published from the panel):
+Pick a port on the server that isn't already in use. The default is `8080`:
 
 ```bash
-ss -lntp | grep -E ':(8080|8443) '
+ss -lntp | grep -E ':8080 '
 ```
 
 See the [Environment variables](#environment-variables) section for the other variables.
 
-### 3. If Tailscale is not installed
-
-Comment out the following line in `docker-compose.yml`. Otherwise compose will fail to start:
-
-```yaml
-      # - /var/run/tailscale/tailscaled.sock:/run/tailscale/tailscaled.sock:ro
-```
-
-### 4. Start
+### 3. Start
 
 ```bash
 docker compose up -d --build
@@ -292,11 +277,11 @@ On first launch, the database schema is created. No user account exists yet; ins
 docker compose logs panel | grep -A3 KURULUM
 ```
 
-### 5. Create the administrator
+### 4. Create the administrator
 
 Open `http://<server-address>:8080` in a browser. As long as there are no users, the panel redirects to the setup wizard (`/kurulum`). Enter the setup code from the log, choose a username and password, and the wizard creates the first administrator and logs you in. The code changes on every restart, and the wizard closes for good once the first account exists.
 
-At this point the panel is functional for monitoring, Docker management, application cards, and notifications. Features that operate on the host (power, systemd, compose, firewall, server console, host cron) remain disabled until host-helper is installed, and the panel states this clearly on screen.
+At this point the panel is functional for monitoring, Docker management, and notifications. Features that operate on the host (power, systemd, compose, server console, host cron) remain disabled until host-helper is installed, and the panel states this clearly on screen.
 
 ---
 
@@ -304,7 +289,7 @@ At this point the panel is functional for monitoring, Docker management, applica
 
 ### host-helper
 
-Required for compose stacks, systemd services, power operations, ufw, host crontab, journald reading, and the server console.
+Required for compose stacks, systemd services, power operations, host crontab, journald reading, and the server console.
 
 ```bash
 sudo host-helper/install.sh
@@ -385,8 +370,7 @@ These are **deployment parameters**. Anything that can be changed from within th
 | `MASTER_KEY` | ✅ | — | Secret encryption key, 64 hex characters. The panel won't start without it. |
 | `DOCKER_GID` | ✅ | — | GID of the host's `docker` group. The panel runs as a non-root user (uid 1001). |
 | `PANEL_HTTP_PORT` | | `8080` | The panel's port on the host. Set to `80` if you want a portless address. |
-| `PANEL_HTTPS_PORT` | | `8443` | Only for TLS sites published from the panel. The panel itself is not served on this port. |
-| `PANEL_SITE_ADDRESSES` | | `:80` | Addresses the panel will respond to. If left empty, it opens on every IP and hostname. Uncomment the line to restrict; don't give an empty value. |
+| `PANEL_TRUST_PROXY` | | `0` | Set to `1` only if your own TLS reverse proxy sits in front of the panel: its `X-Forwarded-For` / `X-Forwarded-Proto` are then kept. |
 | `HELPER_SECRET` | | — | host-helper's shared secret. If blank, host operations remain disabled. |
 | `PANEL_SUBNET` | | `172.28.0.0/16` | The fixed subnet of the panel's container network. Kept fixed because ufw rules are written against it. |
 | `PANEL_REPORTS_DIR` | | `./reports` | The directory where host cron scripts drop JSON output. |
@@ -423,23 +407,6 @@ python agent-deploy.py pi@192.168.1.21 --version 1.12.7 --sudo
 
 The panel's behavior can be configured via labels written on containers or in the compose file. An unrecognized value falls back to the default, so a typo doesn't silently hide a container.
 
-**Application card discovery** is opt-in. Only containers carrying `panel.enable=true` become a card:
-
-```yaml
-services:
-  pihole:
-    image: pihole/pihole
-    labels:
-      panel.enable: "true"
-      panel.name: "Pi-hole"
-      panel.port: "8081"
-      panel.path: "/admin"
-      panel.category: "Network"
-      panel.description: "Ad-blocking DNS"
-```
-
-Available fields: `panel.name`, `.url`, `.port`, `.scheme`, `.path`, `.description`, `.category`, `.icon`, `.internal_url`. If no address is given, the first TCP port published by the container is used. If you edit a discovered card from the panel, the card becomes yours and discovery no longer touches it.
-
 **Behavior labels:**
 
 | Label | Effect |
@@ -454,11 +421,9 @@ Available fields: `panel.name`, `.url`, `.port`, `.scheme`, `.path`, `.descripti
 
 ---
 
-## External API, Prometheus, and MQTT
+## MQTT
 
-- **`/api/v1`:** a versioned HTTP API, authenticated with `Authorization: Bearer`, for calling from your own scripts, Home Assistant, or n8n. **Disabled by default;** every endpoint returns `404` while disabled. Enable it under **Settings → External API**, and generate a key under **My Account → API Keys**. A key is tied to a user and carries a subset of that user's permissions. Details are in [`docs/API.md`](docs/API.md), with the machine-readable schema in [`docs/openapi.yaml`](docs/openapi.yaml).
-- **Prometheus:** the `/metrics` endpoint exposes system metrics and, optionally, container metrics (**Settings → External Integration**).
-- **MQTT:** metrics and events can be published to an MQTT broker. Home Assistant MQTT Discovery is supported; sensors appear automatically in Home Assistant.
+Metrics and events can be published to an MQTT broker (**Settings → External Integration**). Home Assistant MQTT Discovery is supported; sensors appear automatically in Home Assistant.
 
 ---
 
@@ -503,7 +468,7 @@ Each language is a single JSON file under `src/locales/`. Keys are flat and cont
 
 ## Development
 
-The entire panel can be developed on Windows or macOS without touching the server. With `MOCK_MODE=1`, the Docker, metrics, hardware, Tailscale, and host-helper providers all use fake data from `fixtures/`.
+The entire panel can be developed on Windows or macOS without touching the server. With `MOCK_MODE=1`, the Docker, metrics, hardware, and host-helper providers all use fake data from `fixtures/`.
 
 **Requirement:** Node.js 24 (for the built-in `node:sqlite` module).
 
@@ -523,9 +488,8 @@ The panel opens at `http://localhost:3000`. The database is created under `./dat
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
 | `npm test` | Unit tests (`node --test`, `src/**/*.test.ts`) |
-| `npm run check:openapi` | Checks that the OpenAPI schema matches the route tree |
 
-On every push, GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs type checking, lint, tests, OpenAPI validation, and the build. It then builds the Docker image, brings up the container, and verifies that the `/api/health` endpoint responds.
+On every push, GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs type checking, lint, tests, translation checks, and the build. It then builds the Docker image, brings up the container, and verifies that the `/api/health` endpoint responds.
 
 > [!NOTE]
 > The project uses **Next.js 16**. APIs, conventions, and file structure may differ from earlier versions in this release. Check the relevant guide under `node_modules/next/dist/docs/` before writing code.
@@ -542,24 +506,22 @@ On every push, GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci
 ## Project structure
 
 ```
-├── Caddyfile                # Entry point; imports the publishing rules the panel generates
 ├── Dockerfile                # Multi-stage build, Debian slim, non-root user, healthcheck
-├── docker-compose.yml        # panel + caddy, mounts and their rationale
+├── docker-compose.yml        # panel service, mounts and their rationale
 ├── .env.example               # Deployment parameters
-├── docs/                     # API.md + openapi.yaml
 ├── fixtures/                  # MOCK_MODE fake data
 ├── host-helper/               # panel-helper.py, install.sh, PROTOCOL.md
-├── scripts/                   # hardware.sh, os-updates.sh (host cron), check-openapi.mjs
+├── scripts/                   # hardware.sh, os-updates.sh (host cron), docker-entry.mjs (container entry + front layer)
 └── src/
-    ├── instrumentation.ts    # Startup: MASTER_KEY check, migration, initial admin
+    ├── instrumentation.ts    # Startup: MASTER_KEY check, migration, setup code
     ├── settings.schema.ts    # Single source of truth for all settings
     ├── app/
     │   ├── (panel)/           # Screens requiring a session (docker, monitoring, backup, …)
-    │   ├── api/                # Internal API endpoints + api/v1 (external API)
-    │   ├── login/ kiosk/ metrics/
+    │   ├── api/                # Internal API endpoints
+    │   ├── login/ kurulum/
     ├── components/             # Screen components (docker, settings, shell, …)
     └── lib/                    # Business logic: auth, db, docker, compose, jobs, alerts,
-                                # notify, backup, proxy, network, security, providers, …
+                                # notify, backup, network, security, providers, …
 ```
 
 ---
@@ -580,6 +542,4 @@ On every push, GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci
 | Document | Content |
 |---|---|
 | [`PLAN.md`](PLAN.md) | Roadmap, architectural decisions (T1–T14), and the rationale for each milestone |
-| [`docs/API.md`](docs/API.md) | External API guide: keys, permission model, curl, Prometheus, and Home Assistant examples |
-| [`docs/openapi.yaml`](docs/openapi.yaml) | OpenAPI schema for `/api/v1` |
 | [`host-helper/PROTOCOL.md`](host-helper/PROTOCOL.md) | host-helper protocol: transport, signing, request/response format |

@@ -7,13 +7,10 @@ import {
   Container,
   Database,
   FileClock,
-  Flame,
   FolderTree,
   HeartPulse,
   LayoutDashboard,
-  LayoutGrid,
   ListChecks,
-  Globe,
   Network,
   ScrollText,
   Send,
@@ -49,8 +46,8 @@ export type NavItem = {
   /** Alt maddeler — yalnızca üst madde etkinken açılır (bkz. Ayarlar). */
   children?: NavItem[];
   /**
-   * Çoklu sunucu: ekran yalnızca panelin kendi sunucusunda çalışıyor (ufw,
-   * LAN taraması, host cron...). Uzak sunucu seçiliyken menüde gizlenir.
+   * Çoklu sunucu: ekran yalnızca panelin kendi sunucusunda çalışıyor (LAN
+   * taraması, host cron...). Uzak sunucu seçiliyken menüde gizlenir.
    */
   localOnly?: boolean;
 };
@@ -70,9 +67,6 @@ const SETTINGS_GROUP_ICONS: Record<string, LucideIcon> = {
   docker: Container,
   home: LayoutDashboard,
   network: Network,
-  tailscale: Network,
-  proxy: Globe,
-  apps: LayoutGrid,
   hardware: Thermometer,
   notify: Send,
   updates: Archive,
@@ -104,7 +98,6 @@ export const navGroups: NavGroup[] = [
     titleKey: "nav.groups.general",
     items: [
       { href: "/panel", labelKey: "nav.items.overview", icon: LayoutDashboard, permission: "panel.view" },
-      { href: "/apps", labelKey: "nav.items.apps", icon: LayoutGrid, permission: "panel.view" },
     ],
   },
   {
@@ -134,13 +127,6 @@ export const navGroups: NavGroup[] = [
     titleKey: "nav.groups.networkSecurity",
     items: [
       {
-        href: "/proxy",
-        labelKey: "nav.items.proxy",
-        icon: Globe,
-        permission: "proxy.manage",
-        localOnly: true,
-      },
-      {
         href: "/network",
         labelKey: "nav.items.network",
         icon: Network,
@@ -152,13 +138,6 @@ export const navGroups: NavGroup[] = [
         labelKey: "nav.items.ports",
         icon: Waypoints,
         permission: "security.view",
-      },
-      {
-        href: "/firewall",
-        labelKey: "nav.items.firewall",
-        icon: Flame,
-        permission: "security.view",
-        localOnly: true,
       },
       {
         href: "/security",

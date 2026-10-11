@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     userId: guard.session.user.id,
     username: guard.session.user.username,
     action: "config.export",
-    detail: serverT("api.backup.exportSummary", { settings: data.settings.length, apps: data.apps.length, monitors: data.monitors.length }),
+    detail: serverT("api.backup.exportSummary", { settings: data.settings.length, monitors: data.monitors.length }),
     result: "ok",
   });
 

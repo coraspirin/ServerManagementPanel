@@ -21,15 +21,11 @@ export const settingGroups: SettingGroupDef[] = [
   { key: "hardware" },
   { key: "home" },
   { key: "network" },
-  { key: "tailscale" },
-  { key: "proxy" },
-  { key: "apps" },
   { key: "notify" },
   { key: "updates" },
   { key: "files" },
   { key: "logs" },
   { key: "security" },
-  { key: "api" },
   { key: "integration" },
   { key: "jobs" },
 ];
@@ -637,85 +633,6 @@ export const settingDefs: SettingDef[] = [
     default: true,
   },
 
-  // ---------- Tailscale (M2.10) ----------
-  {
-    key: "tailscale.key_warn_days",
-    group: "tailscale",
-    type: "int",
-    default: 14,
-    min: 1,
-    max: 180,
-  },
-  {
-    key: "tailscale.check_cron",
-    group: "tailscale",
-    type: "cron",
-    default: "45 4 * * *",
-  },
-
-  // ---------- Yayınlama & DDNS (M2.8) ----------
-  {
-    key: "proxy.caddy_container",
-    group: "proxy",
-    section: "reverseProxy",
-    type: "container",
-    default: "server-panel-caddy-1",
-  },
-  {
-    key: "proxy.default_tls",
-    group: "proxy",
-    section: "reverseProxy",
-    type: "enum",
-    default: "auto",
-    options: ["auto", "internal", "off"],
-  },
-  {
-    key: "proxy.diagnose_timeout_seconds",
-    group: "proxy",
-    section: "reverseProxy",
-    type: "int",
-    default: 5,
-    min: 2,
-    max: 60,
-  },
-  {
-    key: "proxy.diagnose_dns_server",
-    group: "proxy",
-    section: "reverseProxy",
-    type: "string",
-    default: "",
-  },
-  {
-    key: "proxy.cert_check_cron",
-    group: "proxy",
-    section: "certificates",
-    type: "cron",
-    default: "30 4 * * *",
-  },
-  {
-    key: "proxy.cert_warn_days",
-    group: "proxy",
-    section: "certificates",
-    type: "int",
-    default: 21,
-    min: 1,
-    max: 180,
-  },
-  {
-    key: "proxy.ddns_cron",
-    group: "proxy",
-    section: "ddns",
-    type: "cron",
-    default: "*/15 * * * *",
-  },
-  {
-    key: "proxy.public_ip_url",
-    group: "proxy",
-    section: "ddns",
-    type: "string",
-    default: "https://api.ipify.org",
-  },
-
   // ---------- Ana sayfa (M2.7) ----------
   {
     key: "home.latitude",
@@ -748,84 +665,6 @@ export const settingDefs: SettingDef[] = [
     section: "internetIndicator",
     type: "string",
     default: "https://1.1.1.1",
-  },
-  {
-    key: "home.kiosk_refresh",
-    group: "home",
-    section: "kiosk",
-    type: "int",
-    default: 60,
-    min: 10,
-    max: 3600,
-  },
-
-  // ---------- Uygulamalar (M2.1, M2.5) ----------
-  {
-    key: "apps.server_host",
-    hostScoped: true,
-    group: "apps",
-    section: "addressResolution",
-    type: "string",
-    default: "",
-  },
-  {
-    key: "apps.widget_ttl",
-    group: "apps",
-    section: "serviceWidgets",
-    type: "int",
-    default: 30,
-    min: 5,
-    max: 600,
-  },
-  {
-    key: "apps.discovery_enabled",
-    group: "apps",
-    section: "cardDiscovery",
-    type: "bool",
-    default: true,
-  },
-  {
-    key: "apps.discovery_cron",
-    group: "apps",
-    section: "cardDiscovery",
-    type: "cron",
-    default: "*/10 * * * *",
-  },
-  {
-    key: "apps.label_prefix",
-    group: "apps",
-    section: "cardDiscovery",
-    type: "string",
-    default: "panel",
-  },
-  /*
-    Anahtar `apps.login_screen` olarak KALIYOR, adı artık sayfayı tam
-    karşılamasa da. Yeniden adlandırmak, kullanıcının kapattığı listeyi
-    yükseltme sırasında sessizce yeniden açardı — `appstore.*` anahtarları da
-    aynı gerekçeyle bırakılmıştı. Aynı şey `apps.show_on_login` sütunu için
-    de geçerli.
-  */
-  {
-    key: "apps.login_screen",
-    group: "apps",
-    section: "welcomePage",
-    type: "bool",
-    default: true,
-  },
-  {
-    key: "welcome.notice",
-    group: "apps",
-    section: "welcomePage",
-    type: "richtext",
-    default: "",
-  },
-  {
-    key: "welcome.notice_level",
-    group: "apps",
-    section: "welcomePage",
-    type: "enum",
-    default: "info",
-    options: ["info", "warn"],
   },
 
   // ---------- Donanım (M1.4) ----------
@@ -1397,12 +1236,6 @@ export const settingDefs: SettingDef[] = [
     default: "30 * * * *",
   },
   {
-    key: "jobs.api_tokens_prune_cron",
-    group: "jobs",
-    type: "cron",
-    default: "45 4 * * *",
-  },
-  {
     key: "jobs.audit_prune_cron",
     group: "jobs",
     type: "cron",
@@ -1551,105 +1384,6 @@ export const settingDefs: SettingDef[] = [
     section: "mqtt",
     type: "string",
     default: "homeassistant",
-  },
-
-  // ---------- Prometheus (T12) ----------
-  // 022'de otomasyonla birlikte silinmişlerdi: anahtar üretecek arayüz
-  // kalmayınca /metrics kullanılamaz hâle gelmişti. Arayüz geldi, ayarlar da
-  // geri geliyor.
-  {
-    key: "integration.prometheus.enabled",
-    group: "integration",
-    section: "prometheus",
-    type: "bool",
-    default: false,
-  },
-  {
-    key: "integration.prometheus.include_containers",
-    group: "integration",
-    section: "prometheus",
-    type: "bool",
-    default: false,
-  },
-
-  // ---------- Dış API (T12) ----------
-  {
-    key: "api.enabled",
-    group: "api",
-    type: "bool",
-    default: false,
-  },
-  {
-    key: "api.rate_limit_per_minute",
-    group: "api",
-    type: "int",
-    default: 120,
-    min: 1,
-    max: 10000,
-  },
-  {
-    key: "api.auth_rate_limit_per_minute",
-    group: "api",
-    type: "int",
-    default: 10,
-    min: 1,
-    max: 1000,
-  },
-  {
-    key: "api.token_default_ttl_days",
-    group: "api",
-    type: "int",
-    default: 90,
-    min: 0,
-    max: 3650,
-  },
-  {
-    key: "api.device_token_ttl_days",
-    group: "api",
-    type: "int",
-    default: 30,
-    min: 1,
-    max: 365,
-  },
-  {
-    key: "api.max_tokens_per_user",
-    group: "api",
-    type: "int",
-    default: 20,
-    min: 1,
-    max: 200,
-  },
-  {
-    key: "api.max_body_bytes",
-    group: "api",
-    type: "int",
-    default: 65536,
-    min: 1024,
-    max: 10485760,
-  },
-  {
-    key: "api.last_used_write_interval",
-    group: "api",
-    type: "int",
-    default: 60,
-    min: 0,
-    max: 3600,
-  },
-  {
-    key: "api.idempotency_window_seconds",
-    group: "api",
-    type: "int",
-    default: 300,
-    min: 30,
-    max: 3600,
-  },
-  {
-    key: "api.token_retention_days",
-    group: "api",
-    type: "int",
-    default: 180,
-    min: 0,
-    max: 3650,
   },
 ];
 

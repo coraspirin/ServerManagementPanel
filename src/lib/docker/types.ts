@@ -25,16 +25,15 @@ export type ContainerView = ContainerSummary & {
   /**
    * Panelin emniyet kilidi altındaki container (M3.30).
    *
-   * Panelin kendisi ve reverse proxy: ikisi de panelin çalışmasını taşıyor.
-   * Panel kendini durdurursa işlem süreç ortasında ölür, proxy durursa panele
-   * ulaşan yol kapanır — ikisi de tek tıkla verilecek kararlar değil.
+   * Panelin kendisi: kendini durdurursa işlem süreç ortasında ölür ve panele
+   * ulaşan yol kapanır — tek tıkla verilecek bir karar değil.
    *
    * Toplu işlemde işaretlenemiyorlar; tek tek işlemler açık kalıyor, çünkü
    * orada niyet açık ve onay metni container'ın adını söylüyor. Kilitlenen
    * asıl şey, kalabalık bir seçimin içinde kazara sürüklenmek.
    *
-   * SUNUCUDA hesaplanıyor: ad `PANEL_CONTAINER_NAME` ortam değişkeninden ve
-   * `proxy.caddy_container` ayarından geliyor, ikisi de istemcide yok.
+   * SUNUCUDA hesaplanıyor: ad `PANEL_CONTAINER_NAME` ortam değişkeninden
+   * geliyor, istemcide yok.
    */
   locked: boolean;
 };
