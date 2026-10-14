@@ -1,5 +1,5 @@
 # Tarifler — sık yapılan değişiklikler adım adım
-Son güncelleme: 2026-10-09
+Son güncelleme: 2026-10-13
 
 Her tarifin sonunda: `npm run typecheck && npm run lint && npm test && npm run i18n:check && npm run i18n:scan` + ilgili `_Claude/<sayfa>.md` ve `memory.md` güncellemesi.
 
@@ -8,7 +8,16 @@ Her tarifin sonunda: `npm run typecheck && npm run lint && npm test && npm run i
 2. `src/app/(panel)/<ad>/<Ad>Screen.tsx` — `"use client"`; metin `useT()`, biçim `useFormat()`; API çağrıları `fetch` + CSRF başlığı (örnek `src/app/(panel)/database/api.ts`). Host başlığını genel fetch sarmalayıcısı ekler.
 3. Menü: `src/lib/nav.ts` → ilgili gruba `{ href, labelKey: "nav.items.<ad>", icon, permission }`; yalnız yerelse `localOnly: true`.
 4. Locale: `nav.items.<ad>`, ekran metinleri `<ad>Screen.*`, yardım `help./<ad>.amac|nasil|dikkat` (`src/lib/help.ts`).
-5. `_Claude/<ad>.md` oluştur, `_Claude/README.md` tablosuna ekle.
+5. **Katalog satırı ekle** (aşağıda) — sayfa sunucuda bir yeteneğe (Docker, /host/proc, /host/root, host-helper) dayanıyorsa.
+6. Etkin sunucu yokken de açılması gereken bir sayfaysa (sunucu verisi göstermiyorsa) `src/app/(panel)/layout.tsx` → `NO_HOST_PATHS`'e ekle; yoksa "İlk sunucunu ekle"ye yönlenir.
+7. `_Claude/<ad>.md` oluştur, `_Claude/README.md` tablosuna ekle.
+
+## Katalog satırı ekle (yetki/yetenek yönergesi, D6)
+1. `src/lib/permissions/catalog.ts` → `FEATURE_CATALOG`'a `{ key, route, permission, requires?, optional?, helperActions?, localOnly? }`. `requires` eksikse 🔴, `optional` eksikse 🟡; helper eylemleri izin listesinde olmalı (panel göremez → 🟡 "doğrulanamadı" + eklenecek satırlar).
+2. Locale `permissions.feature.<key>`.
+3. Bu satır `/yetki-yok` ("bu izin şu ekranları açar") ve `/hosts` yetki yoklamasında kendiliğinden görünür; `catalog.test.ts` anahtar benzersizliğini sınar.
+4. Yeni bir eksiklik türü gerekiyorsa `src/lib/permissions/hint.ts` → `PermissionHintCode` + `hostCommands()` (sunucuya özel komutlar: yerel = panel compose'u, ajan = ajan compose'u) + locale `permissions.hint.<kod>`; `hint.test.ts`'e durum ekle.
+5. API'de kullanıcıya düzeltme gösterilecek hata: mevcut `error` metnini KORU, yanıta `hint: hintFor("<kod>", { ... })` (`@/lib/permissions/hint.server`) ekle; istemcide `<HintBox hint={…} />` (`src/components/permissions/HintBox.tsx`).
 
 ## Yeni API ucu
 1. `src/app/api/<yol>/route.ts`, `export const dynamic = "force-dynamic"`.
@@ -29,6 +38,7 @@ Her tarifin sonunda: `npm run typecheck && npm run lint && npm test && npm run i
 3. Uzakta çalışsın: `src/lib/agent/protocol.ts` → `DOCKER_CALLS` (ya da akışsa `DOCKER_STREAMS`); `remote.ts` genelde değişmez (uzun süreliyse zaman aşımı `agent/client.ts`).
 4. Var olan metoda opsiyonel parametre eklemek geriye uyumlu ama eski ajan yok sayar → yeni alanın gelmediğini tespit et (örnek: `runOnce` `{env}` + `ExecResult.stdout` kontrolü, `dbadmin/exec/runner.ts`).
 5. Protokol kırılıyorsa `AGENT_PROTOCOL`'ü artır (eski ajanlar "uyumsuz" olur).
+6. Yeni bir Engine API yolu/yöntemi kullanıyorsan `src/lib/agent/docker-api-policy.ts` `RULES`'a satır ekle (tünel kapalı listedir; eklenmezse uzakta `docker-api-denied`), `scripts/protocol-vectors.ts`'e örnek ekleyip `npm run protocol:vectors` çalıştır (`protocol/vectors-v3.json` Go ajanın da test girdisi). Soketi ASLA doğrudan açma: `dockerTransport()` (`src/lib/docker/transport.ts`).
 
 ## Migration
 1. `src/lib/db/migrations/NNN_ad.ts` → `export const migrationNNN: Migration = { version: NNN, name: "ad", up: \`…SQL…\` }`; başına NEDEN yorumu.
@@ -45,7 +55,7 @@ Her tarifin sonunda: `npm run typecheck && npm run lint && npm test && npm run i
 1. `src/lib/auth/types.ts` → `PermissionKey` birleşimine ekle.
 2. Migration: `INSERT INTO permissions (key, description)` + varsayılan rollere `INSERT INTO role_permissions` (örnek `013_users.ts`).
 3. Kullanıcılar ekranındaki grup eşlemesi (`UsersScreen.tsx` `users.group.*`) ve locale etiketi.
-4. Token'a hiç verilmemesi gereken izinse `src/lib/apiv1/guard.ts` → `TOKEN_FORBIDDEN`; riskli olarak işaretlenecekse locale `account.tokens.risky.<izin>`.
+4. İzin bir ekranı açıyorsa katalogdaki satırın `permission` alanı (yukarıda); `/yetki-yok` izni olan rolleri ve açtığı ekranları buradan gösterir.
 
 ## Locale anahtarı
 - `src/locales/tr.json` KAYNAK; `en.json`, `de.json`'a da aynı anahtar. Dosyalar düz anahtarlı, aynı önekli son anahtarın ARKASINA ekle; JSON'u `indent=2`, `ensure_ascii=False`, sonda `\n` ile yaz.

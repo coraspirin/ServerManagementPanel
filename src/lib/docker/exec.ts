@@ -1,6 +1,5 @@
 import { serverT } from "@/lib/i18n/runtime";
-import http from "node:http";
-import type { Duplex } from "node:stream";
+import { localDockerTransport } from "./transport";
 import { randomBytes } from "node:crypto";
 import { agentCall, agentStream } from "@/lib/agent/client";
 import { currentHostId, LOCAL_HOST_ID } from "@/lib/hosts/context";
@@ -41,7 +40,7 @@ import { getNumber, getString } from "@/lib/settings";
  * tarafında aynı modülü yerel oturumla kullanır.
  */
 
-const SOCKET_PATH = process.env.DOCKER_SOCKET ?? "/var/run/docker.sock";
+const localDocker = localDockerTransport();
 
 /** Ajanda açılan oturumların sahibi: merkezdeki kullanıcı merkezde denetleniyor. */
 export const AGENT_EXEC_USER = "agent";
@@ -95,43 +94,27 @@ function startReaper() {
   reaper.unref?.();
 }
 
-function dockerJson<T>(
+async function dockerJson<T>(
   path: string,
   method: "GET" | "POST",
   body?: unknown,
 ): Promise<{ status: number; data: T | null; raw: string }> {
-  return new Promise((resolve, reject) => {
-    const payload = body === undefined ? null : JSON.stringify(body);
-    const req = http.request(
-      {
-        socketPath: SOCKET_PATH,
-        path,
-        method,
-        timeout: 10_000,
-        headers: payload
-          ? { "content-type": "application/json", "content-length": Buffer.byteLength(payload) }
-          : undefined,
-      },
-      (res) => {
-        let text = "";
-        res.setEncoding("utf8");
-        res.on("data", (chunk) => (text += chunk));
-        res.on("end", () => {
-          let data: T | null = null;
-          try {
-            data = JSON.parse(text) as T;
-          } catch {
-            // Gövde boş ya da JSON değil.
-          }
-          resolve({ status: res.statusCode ?? 0, data, raw: text });
-        });
-      },
-    );
-    req.on("timeout", () => req.destroy(new Error(serverT("execLib.socketTimeout"))));
-    req.on("error", reject);
-    if (payload) req.write(payload);
-    req.end();
+  // Etkileşimli terminal her zaman BU makinenin Docker'ı: uzak sunucuda
+  // oturum ajanda açılır (`exec.*` op'ları), tünel iki yönlü akış taşımaz.
+  const reply = await localDocker.request({
+    method,
+    path,
+    timeoutMs: 10_000,
+    ...(body === undefined ? {} : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
   });
+  const raw = reply.body.toString("utf8");
+  let data: T | null = null;
+  try {
+    data = JSON.parse(raw) as T;
+  } catch {
+    // Gövde boş ya da JSON değil.
+  }
+  return { status: reply.status, data, raw };
 }
 
 export type StartExecOptions = {
@@ -327,27 +310,12 @@ async function startLocal(options: StartExecOptions): Promise<Session> {
   const execId = created.data.Id;
 
   // `/exec/{id}/start` hijack edilmiş bir sokete dönüşür: yanıt gövdesi yerine
-  // ham iki yönlü akış. `node:http`'nin `upgrade` olayı bunu veriyor.
-  const socket = await new Promise<Duplex>((resolve, reject) => {
-    const payload = JSON.stringify({ Detach: false, Tty: true });
-    const req = http.request({
-      socketPath: SOCKET_PATH,
-      path: `/exec/${execId}/start`,
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "content-length": Buffer.byteLength(payload),
-        Connection: "Upgrade",
-        Upgrade: "tcp",
-      },
-    });
-
-    req.on("upgrade", (_res, upgraded) => resolve(upgraded));
-    // Docker bazı sürümlerde yükseltme yapmadan doğrudan akışa geçer.
-    req.on("response", (res) => resolve(res as unknown as Duplex));
-    req.on("error", reject);
-    req.write(payload);
-    req.end();
+  // ham iki yönlü akış (yerel taşımanın `hijack`'i, bkz. docker/transport.ts).
+  const socket = await localDocker.hijack!({
+    method: "POST",
+    path: `/exec/${execId}/start`,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ Detach: false, Tty: true }),
   });
 
   const session = newSession(options, LOCAL_HOST_ID, {

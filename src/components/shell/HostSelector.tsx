@@ -56,11 +56,11 @@ export function HostSelector() {
     };
   }, [open]);
 
-  if (!multi) return null;
+  if (!multi || !current) return null;
 
   function select(id: number) {
     setOpen(false);
-    if (id === current.id) return;
+    if (id === current?.id) return;
     writeHostCookie(id);
     startTransition(() => router.refresh());
   }

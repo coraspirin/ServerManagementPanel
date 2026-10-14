@@ -35,8 +35,10 @@ export function AppShell({ children, mode, version, user, languages }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const trail = findNavTrail(pathname);
-  const { current: currentHost, multi } = useHosts();
-  const groups = visibleNavGroups(user.permissions, { remoteHost: multi && !currentHost.isLocal });
+  const { current: currentHost } = useHosts();
+  // Yerel devre dışıyken tek bir uzak sunucu da olabilir (D1): yalnız yerel
+  // menüler sunucu sayısına değil seçili sunucunun kendisine göre gizlenir.
+  const groups = visibleNavGroups(user.permissions, { remoteHost: currentHost !== null && !currentHost.isLocal });
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const canUpdate = user.permissions.includes("panel.update");
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
@@ -370,7 +372,7 @@ export function AppShell({ children, mode, version, user, languages }: Props) {
           yeni sunucunun verisini görmüyordu (Loglar, Olaylar… eski sunucuda
           kalıyordu). Anahtar, istemci durumunu seçimle birlikte sıfırlar.
         */}
-        <main key={currentHost.id} className="pad-main min-w-0 flex-1">
+        <main key={currentHost?.id ?? 0} className="pad-main min-w-0 flex-1">
           {children}
         </main>
       </div>

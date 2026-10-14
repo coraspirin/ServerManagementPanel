@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE } from "@/lib/auth/types";
+import { PATH_HEADER, SESSION_COOKIE } from "@/lib/auth/types";
 
 /**
  * Ucuz ön kontrol: oturum çerezi yoksa doğrudan /login'e yolla.
@@ -64,7 +64,10 @@ export function middleware(request: NextRequest) {
   }
 
   if (request.cookies.has(SESSION_COOKIE)) {
-    return NextResponse.next();
+    if (pathname.startsWith("/api/")) return NextResponse.next();
+    const headers = new Headers(request.headers);
+    headers.set(PATH_HEADER, pathname);
+    return NextResponse.next({ request: { headers } });
   }
 
   // API isteklerini yönlendirmek yerine 401 döndür.

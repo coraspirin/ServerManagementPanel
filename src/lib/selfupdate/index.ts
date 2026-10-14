@@ -7,9 +7,8 @@ import path from "node:path";
 import { dataDir } from "@/lib/db/client";
 import { appVersion, isAgent, isMockMode } from "@/lib/env";
 import { panelContainerName } from "@/lib/host/self";
-import { LOCAL_HOST_ID } from "@/lib/hosts/context";
 import { serverT } from "@/lib/i18n/runtime";
-import { providersFor } from "@/lib/providers";
+import { localProviders } from "@/lib/providers";
 import {
   IMAGE_UPDATER_SCRIPT,
   UPDATER_SCRIPT,
@@ -64,8 +63,9 @@ function updaterName(): string {
   return `${panelContainerName()}-updater`;
 }
 
+/** Panelin kendi container'ı — yerel sunucu satırı devre dışı olsa da (D1). */
 function docker() {
-  return providersFor(LOCAL_HOST_ID).docker;
+  return localProviders().docker;
 }
 
 // --- sürüm kontrolü ---------------------------------------------------------

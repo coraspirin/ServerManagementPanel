@@ -1,5 +1,5 @@
 # Test ve doğrulama
-Son güncelleme: 2026-10-09
+Son güncelleme: 2026-10-13
 
 ## 1. Yerel denetimler (her değişiklikten sonra)
 ```bash
@@ -22,8 +22,18 @@ npm run build          # standalone derleme
 - Sağlayıcılar `fixtures/*.json`'dan sahte veri döner (`docker`, `metrics`, `hardware`, `system`, `os-updates`). Mock `runOnce` komutu çalıştırmaz (stdout boş).
 - Ekran görüntüsü: headless Chrome + CDP betiği (`node shot.mjs <url> <png> [genişlik] [yükseklik] [js]`; Chrome `C:/Program Files/Google/Chrome/Application/chrome.exe`). Betik oturum scratchpad'inde tutuluyor, repoda yok — gerekirse yeniden yaz ya da `scripts/`e taşı.
 
+- **Boş başlangıç / yetki yönergesi (2026-10-13)**: `MOCK_MODE=1 MOCK_HOSTS=2 DATA_DIR=<geçici>` ile; `PATCH /api/hosts/1 {"enabled":false}` (MOCK'ta mount denetimi yok) → varsayılan mock-2; mock-2'yi de kapat → sunucu isteyen sayfalar `/ilk-sunucu`'ya 307, `/api/docker` 409 `noHost`. Sayfa İÇİNDEKİ `redirect()` akış başladıktan sonra 200 + `NEXT_REDIRECT` döner (curl'de gövdeye bak). İzinsiz kullanıcı: hazır `izleyici` rolü (id 3) `users.manage`'siz → `/users` → `/yetki-yok?need=users.manage`, `GET /api/users` 403 `need`. Mount yoklaması yalnız `local-probe.test.ts` ile sınanır.
+
 ## 4. Çoklu sunucu (ajan) uçtan uca — yerelde
 Merkez `:3123` (ayrı DATA_DIR) + ajan `PANEL_ROLE=agent` `:7443`; ajan tarafında `DOCKER_SOCKET` sahte Docker daemon'una (named pipe) yönlendirilir. Kullanılan yardımcılar (`runagent.mjs`, `fakedocker.mjs`) önceki oturumların scratchpad'indeydi, repoda değil. Locale'ler HEAD sürümünde olmalı.
+
+## 4b. docker.api tünelini Pi'de doğrulama (Faz B adım 2)
+Ön koşul: merkez yeni kodla (deploy.sh) ve Pi'deki Node ajanı aynı sürümle (yayın + `agent-deploy.py`) — ikisi de kullanıcı onayıyla. Pi'ye bu bilgisayardan `ssh root@192.168.61.107` (anahtar 2026-10-13'te eklendi).
+1. `/hosts` → Pi'nin yetenekleri: `GET /api/hosts` yanıtında `capabilities.dockerApi: true`.
+2. Ayarlar → Güncellemeler → Ajanlar → "Uzak Docker erişim yolu" = **Ham API tüneli**, kapsam yalnız Pi.
+3. Pi seçiliyken: Docker listesi + istatistik, container detay/inspect, log (takip dahil), başlat/durdur, imaj çek (akış), imaj geçmişi, volume/ağ listesi, `system df`, temizlik, dosya arşivi oku/yaz, veritabanı envanteri (runOnce = exec create/start), yedekleme geçici container'ı (runThrowawayStream), olaylar (bir container'ı yeniden başlat → /events'te kayıt), terminal (exec.* — tünelden bağımsız).
+4. Pi'de ölç (baz: 142 MB RSS, ~%12 CPU): `ps -eo pid,rss,pcpu,etime,args --sort=-rss | head -5`, 3× `docker stats --no-stream`, ağ sayaçları. Merkez günlüğünde `docker-api-denied` olmamalı (olursa `docker-api-policy.ts`'e eksik kural).
+5. Geri dönüş: ayarı **Ajandaki sağlayıcı** yap (anında, yeniden başlatma yok).
 
 ## 5. Sunucuda deneme (192.168.61.114, ZimaOS)
 **Sunucu (2026-10-11 itibarıyla):** 192.168.61.114 artık **ZimaOS** (CasaOS tabanlı; kök dosya sistemi squashfs, SALT-OKUNUR — `/home` dahil; yazılabilir yerler `/DATA`, `/tmp`, `/opt`, `/var/lib/*`). SSH `~/.ssh/config` ile **root**. Panel bir CasaOS uygulaması:

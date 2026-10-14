@@ -18,10 +18,15 @@ export async function requireSession(returnTo?: string): Promise<ActiveSession> 
   return session;
 }
 
+/**
+ * Sayfalar için: izin yoksa yetki yönergesine (`/yetki-yok`) yollar — eksik
+ * izni, ona sahip rolleri ve (users.manage varsa) rol düzenleme bağlantısını
+ * gösterir (kararlar.md D6).
+ */
 export async function requirePermission(permission: PermissionKey): Promise<ActiveSession> {
   const session = await requireSession();
   if (!hasPermission(session.user, permission)) {
-    redirect("/?forbidden=1");
+    redirect(`/yetki-yok?need=${encodeURIComponent(permission)}`);
   }
   return session;
 }

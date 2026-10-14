@@ -5,6 +5,7 @@ import { listHosts } from "@/lib/hosts/store";
 import { toHostView } from "@/lib/hosts/view";
 import { serverT } from "@/lib/i18n/runtime";
 import { clientIp } from "@/lib/request";
+import { hostFeatures } from "@/lib/permissions/features.server";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
   const guard = await guardApi(request, "hosts.view");
   if (!guard.ok) return guard.response;
 
-  return Response.json({ hosts: listHosts().map(toHostView) });
+  return Response.json({ hosts: listHosts().map((host) => ({ ...toHostView(host), features: hostFeatures(host) })) });
 }
 
 /**

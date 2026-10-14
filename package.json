@@ -1,6 +1,6 @@
 {
   "name": "server-panel",
-  "version": "1.13.0",
+  "version": "1.13.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -11,7 +11,8 @@
     "test": "node --test --disable-warning=MODULE_TYPELESS_PACKAGE_JSON \"src/**/*.test.ts\"",
     "i18n:check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/i18n-check.mjs",
     "i18n:new": "node scripts/i18n-new.mjs",
-    "i18n:scan": "node scripts/i18n-scan.mjs"
+    "i18n:scan": "node scripts/i18n-scan.mjs",
+    "protocol:vectors": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/protocol-vectors.ts"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

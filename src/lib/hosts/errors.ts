@@ -14,7 +14,9 @@ export type HostErrorCode =
   /** TLS parmak izi kayıttakiyle eşleşmedi. */
   | "pinMismatch"
   /** İmza/sır reddedildi. */
-  | "authFailed";
+  | "authFailed"
+  /** Etkin hiçbir sunucu yok (yerel devre dışı, ajan eklenmemiş). */
+  | "noHost";
 
 export class HostError extends Error {
   readonly code: HostErrorCode;
@@ -38,4 +40,5 @@ export const HOST_ERROR_STATUS: Record<HostErrorCode, number> = {
   unsupported: 501,
   pinMismatch: 502,
   authFailed: 502,
+  noHost: 409,
 };

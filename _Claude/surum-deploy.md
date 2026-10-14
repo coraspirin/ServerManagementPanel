@@ -1,5 +1,5 @@
 # Sürüm çıkarma ve dağıtım
-Son güncelleme: 2026-10-11 · deploy.sh ZimaOS/CasaOS için yeniden yazıldı
+Son güncelleme: 2026-10-14 · commit/yayın olmadan Pi ajanına yerel imaj
 
 ## İki ayrı yol
 | Yol | Ne zaman | Komut |
@@ -42,6 +42,15 @@ Kurallar: yalnız repo kökünden çalışır. PowerShell'deki `bash` WSL olabil
 6. Merkezi `bash deploy.sh` ile güncelle.
 7. Ajanlar: panelde **Sunucular → güncelle / hepsini güncelle** (`agent.update` op'u), ya da `agents.auto_update` açıksa heartbeat'te kendiliğinden (etiket başına bir kez). Eski (kendini güncelleyemeyen) ajanlar ya da panelden olmuyorsa: `python agent-deploy.py 192.168.61.107` (ssh, GHCR çeker, `.env` `AGENT_IMAGE` değiştirir, doğrulamazsa geri alır).
 8. `_Claude/memory.md`'ye kayıt.
+
+## Yayın olmadan ajanı güncellemek (Pi, armv7) — 2026-10-14'te uygulandı
+Commit/etiket/GHCR olmadan merkezdeki kod ajana böyle taşındı (Next standalone saf JS, mimariden bağımsız):
+1. Merkez `bash deploy.sh` ile güncellenir (`server-panel:local`, amd64).
+2. Merkezde: `ID=$(docker create server-panel:local); docker cp $ID:/app - | gzip -1 > /tmp/panel-app-X.tgz; docker rm $ID`.
+3. Pi'ye kopyala, `/root/panel-agent-build-X/`'te aç (`app/`), Dockerfile:
+   `FROM ghcr.io/coraspirin/servermanagementpanel:1.13.0` → `USER root` → `/app`'i (data hariç) sil → `COPY --chown=1001:1001 app/ /app/` → `ENV APP_VERSION=X` → `USER panel`. `docker build -t panel-agent-local:X .` (Pi 2B'de ~4 dk).
+4. `/root/panel-agent/.env` yedeklenir (`.env.manual-X-<damga>`), `AGENT_IMAGE=panel-agent-local:X`, `docker compose -p panel-agent up -d --force-recreate --pull never panel-agent`; 2,5 dk içinde healthy değilse yedek geri konur.
+⚠️ Ajan yerel imajdayken merkezin otomatik güncellemesi (`agents.auto_update`) bir sonraki merkez sürümünde GHCR'den o etiketi çekmeye çalışır; etiket yayınlanmadıysa "pull" adımında durur (zararsız, etiket başına bir kez). Kalıcı çözüm: sürümü yayınlayıp normal yola dönmek.
 
 ## İlgili dosyalar
 `deploy.sh`, `agent-deploy.py`, `.github/workflows/docker-publish.yml`, `.github/workflows/ci.yml`, `src/lib/selfupdate/{index,plan}.ts` (panelin kendini güncellemesi, `/update` sayfası), `src/lib/hosts/agents.ts` (otomatik güncelleme, ajan compose'u), `scripts/docker-entry.mjs`.

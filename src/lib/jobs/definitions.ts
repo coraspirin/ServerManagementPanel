@@ -26,7 +26,8 @@ import { refreshImageUpdates } from "@/lib/updates";
 import { serverT } from "@/lib/i18n/runtime";
 import { fanOut, summarizeOutcomes } from "@/lib/hosts/fanout";
 import { heartbeatAgents } from "@/lib/hosts/agents";
-import { activeHosts, listHosts } from "@/lib/hosts/store";
+import { activeHosts, getHost, listHosts } from "@/lib/hosts/store";
+import { LOCAL_HOST_ID, runWithHost } from "@/lib/hosts/context";
 import { syncRemoteEventWatchers } from "@/lib/docker/events";
 import type { JobDefinition, JobResult } from "./types";
 
@@ -437,6 +438,29 @@ export const jobDefinitions: JobDefinition[] = [
     },
   },
 ];
+
+/**
+ * Yalnızca panelin kendi sunucusunda anlamlı merkezi işler (LAN, hız testi,
+ * zafiyet/UPnP taraması, MQTT ile yerel metrik yayını). Açıkça yerel
+ * bağlamda çalışırlar — bağlamsız kod artık varsayılan sunucuya (bir ajana
+ * olabilir) düşüyor — ve yerel devre dışıysa atlanırlar (kararlar.md D1).
+ */
+const LOCAL_ONLY_JOBS = new Set([
+  "network.scan",
+  "network.speedtest",
+  "security.vuln_scan",
+  "security.upnp_scan",
+  "mqtt.publish",
+]);
+
+for (const job of jobDefinitions) {
+  if (!LOCAL_ONLY_JOBS.has(job.key)) continue;
+  const run = job.run;
+  job.run = async () => {
+    if (getHost(LOCAL_HOST_ID)?.enabled !== true) return { detail: serverT("jobs.detail.localDisabled") };
+    return runWithHost(LOCAL_HOST_ID, run);
+  };
+}
 
 const byKey = new Map(jobDefinitions.map((job) => [job.key, job]));
 

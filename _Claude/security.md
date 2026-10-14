@@ -1,5 +1,5 @@
 # Güvenlik — /security
-Son güncelleme: 2026-10-11 · /firewall kartı kaldırıldı
+Son güncelleme: 2026-10-13 · fail2ban yönergesi (commit edilmedi)
 
 ## Ne yapar
 Güvenlik monitörleri: SSH yetkili anahtar denetimi, fail2ban ban listesi + başarısız girişler (ban kaldırma), UPnP port yönlendirme envanteri, Docker imaj CVE taraması (Trivy). Port haritasına bağlantı verir (güvenlik duvarı ekranı 2026-10-11'de kaldırıldı).
@@ -13,6 +13,9 @@ Güvenlik monitörleri: SSH yetkili anahtar denetimi, fail2ban ban listesi + ba�
 - lib: `src/lib/security/sshkeys.ts`, `fail2ban.ts` (helper), `upnp.ts` (IGD sorgusu), `vuln.ts` (Trivy geçici container; DB `panel-trivy-cache` volume'ünde).
 - Tablolar: `port_forwards`, `vuln_scans` (`017_security.ts`).
 - Locale: `secmon.*`, `securityScreen.*`.
+
+## Yetki yönergesi (D6, 2026-10-13)
+- `fail2ban.ts` `Fail2banState.hint`: helper yok → `helperMissing`; eylem kapalı → `helperUnverified` (3 fail2ban satırı); eski helper → `helperOutdated`. `setupHint` eski istemciler için duruyor; `SecurityMonitors.tsx` önce `hint`'i (`HintBox`) gösterir.
 
 ## Çoklu sunucu
 Uzak sunucuda yalnız SSH anahtar denetimi çalışır; diğerleri yerel (karar: P5).

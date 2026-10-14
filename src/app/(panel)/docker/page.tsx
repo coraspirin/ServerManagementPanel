@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/guard";
 import { hasPermission } from "@/lib/auth/session";
 import { dockerOverview } from "@/lib/docker/view";
 import { getBool, getHostOnlyString, getNumber, getString } from "@/lib/settings";
+import { hintFor } from "@/lib/permissions/hint.server";
 import { DockerScreen } from "./DockerScreen";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,7 @@ export default async function DockerPage({
       canExec={hasPermission(session.user, "docker.exec")}
       canInstall={hasPermission(session.user, "apps.install")}
       canService={hasPermission(session.user, "host.service")}
+      socketHint={hintFor("dockerMissing", { hostId, feature: "docker" })}
     />
   );
 }

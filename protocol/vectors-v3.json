@@ -1,0 +1,773 @@
+{
+  "$comment": "panel-agent protokol v3 test vektörleri. ÜRETİLİR: npm run protocol:vectors (scripts/protocol-vectors.ts). Elle düzenleme.",
+  "protocol": 3,
+  "headers": {
+    "ts": "x-agent-ts",
+    "nonce": "x-agent-nonce",
+    "sig": "x-agent-sig"
+  },
+  "clockSkewSeconds": 60,
+  "sign": [
+    {
+      "name": "rpc",
+      "method": "POST",
+      "path": "/api/agent/rpc",
+      "nonce": "a1b2c3d4e5f60718a1b2c3d4e5f60718",
+      "body": "{\"op\":\"agent.hello\",\"args\":[],\"settings\":{}}",
+      "secret": "vektor-paylasilan-sir-0123456789abcdef0123456789abcdef",
+      "ts": "1800000000",
+      "bodySha256": "8674aea49d6af31aec34cf60cd7dc7005faf94c46adbb415bd134a4bfe65f3af",
+      "canonical": "POST\n/api/agent/rpc\n1800000000\na1b2c3d4e5f60718a1b2c3d4e5f60718\n8674aea49d6af31aec34cf60cd7dc7005faf94c46adbb415bd134a4bfe65f3af",
+      "sig": "452dacf9524e332caba39b78c24d30be0408df0c7a0b932c07966f26ffd3bd56"
+    },
+    {
+      "name": "stream",
+      "method": "POST",
+      "path": "/api/agent/stream",
+      "nonce": "00112233445566778899aabbccddeeff",
+      "body": "{\"op\":\"docker.apiStream\",\"args\":[{\"method\":\"GET\",\"path\":\"/events\"}],\"settings\":{}}",
+      "secret": "vektor-paylasilan-sir-0123456789abcdef0123456789abcdef",
+      "ts": "1800000000",
+      "bodySha256": "405b374e57a68ff4a62ed61367a49c9d15109eaa8159f9a77b786d3dec97659c",
+      "canonical": "POST\n/api/agent/stream\n1800000000\n00112233445566778899aabbccddeeff\n405b374e57a68ff4a62ed61367a49c9d15109eaa8159f9a77b786d3dec97659c",
+      "sig": "1fadefbd158fd28312612239a4a5fcce486f3c36e99ab37951e7394a39f12373"
+    },
+    {
+      "name": "empty-body",
+      "method": "POST",
+      "path": "/api/agent/enroll",
+      "nonce": "ffeeddccbbaa99887766554433221100",
+      "body": "",
+      "secret": "vektor-paylasilan-sir-0123456789abcdef0123456789abcdef",
+      "ts": "1800000000",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": "POST\n/api/agent/enroll\n1800000000\nffeeddccbbaa99887766554433221100\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sig": "b86d6a181b258f834c3e7bd23838be0053fda4ba5286bb8d6f03f66ad15b512b"
+    },
+    {
+      "name": "unicode-body",
+      "method": "post",
+      "path": "/api/agent/rpc",
+      "nonce": "0123456789abcdef",
+      "body": "{\"op\":\"files.read\",\"args\":[\"/srv/şarkı ğüşıöç.txt\"],\"settings\":{}}",
+      "secret": "vektor-paylasilan-sir-0123456789abcdef0123456789abcdef",
+      "ts": "1800000000",
+      "bodySha256": "b331c3f0060cdb11083aedfdaa2c0e29b8fe72b43ee97632e0ab70481ac2b29a",
+      "canonical": "POST\n/api/agent/rpc\n1800000000\n0123456789abcdef\nb331c3f0060cdb11083aedfdaa2c0e29b8fe72b43ee97632e0ab70481ac2b29a",
+      "sig": "6804a897691b69d78d76578f35ef731b11bb784691ad87c3f6454df8849b2673"
+    }
+  ],
+  "verify": [
+    {
+      "name": "ok",
+      "secret": "vektor-paylasilan-sir-0123456789abcdef0123456789abcdef",
+      "method": "POST",
+      "path": "/api/agent/rpc",
+      "ts": "1800000000",
+      "nonce": "a1b2c3d4e5f60718a1b2c3d4e5f60718",
+      "sig": "452dacf9524e332caba39b78c24d30be0408df0c7a0b932c07966f26ffd3bd56",
+      "body": "{\"op\":\"agent.hello\",\"args\":[],\"settings\":{}}",
+      "now": 1800000000,
+      "expect": "ok"
+    },
+    {
+      "name": "skew-inside",
+      "secret": "vektor-paylasilan-sir-0123456789abcdef0123456789abcdef",
+      "method": "POST",
+      "path": "/api/agent/rpc",
+      "ts": "1800000000",
+      "nonce": "a1b2c3d4e5f60718a1b2c3d4e5f60718",
+      "sig": "452dacf9524e332caba39b78c24d30be0408df0c7a0b932c07966f26ffd3bd56",
+      "body": "{\"op\":\"agent.hello\",\"args\":[],\"settings\":{}}",
+      "now": 1800000060,
+      "expect": "ok"
+    },
+    {
+      "name": "skew-outside",
+      "secret": "vektor-paylasilan-sir-0123456789abcdef0123456789abcdef",
+      "method": "POST",
+      "path": "/api/agent/rpc",
+      "ts": "1800000000",
+      "nonce": "a1b2c3d4e5f60718a1b2c3d4e5f60718",
+      "sig": "452dacf9524e332caba39b78c24d30be0408df0c7a0b932c07966f26ffd3bd56",
+      "body": "{\"op\":\"agent.hello\",\"args\":[],\"settings\":{}}",
+      "now": 1800000061,
+      "expect": "clock"
+    },
+    {
+      "name": "tampered-body",
+      "secret": "vektor-paylasilan-sir-0123456789abcdef0123456789abcdef",
+      "method": "POST",
+      "path": "/api/agent/rpc",
+      "ts": "1800000000",
+      "nonce": "a1b2c3d4e5f60718a1b2c3d4e5f60718",
+      "sig": "452dacf9524e332caba39b78c24d30be0408df0c7a0b932c07966f26ffd3bd56",
+      "body": "{\"op\":\"agent.image\",\"args\":[],\"settings\":{}}",
+      "now": 1800000000,
+      "expect": "signature"
+    },
+    {
+      "name": "other-path",
+      "secret": "vektor-paylasilan-sir-0123456789abcdef0123456789abcdef",
+      "method": "POST",
+      "path": "/api/agent/stream",
+      "ts": "1800000000",
+      "nonce": "a1b2c3d4e5f60718a1b2c3d4e5f60718",
+      "sig": "452dacf9524e332caba39b78c24d30be0408df0c7a0b932c07966f26ffd3bd56",
+      "body": "{\"op\":\"agent.hello\",\"args\":[],\"settings\":{}}",
+      "now": 1800000000,
+      "expect": "signature"
+    },
+    {
+      "name": "wrong-secret",
+      "secret": "baska-bir-sir",
+      "method": "POST",
+      "path": "/api/agent/rpc",
+      "ts": "1800000000",
+      "nonce": "a1b2c3d4e5f60718a1b2c3d4e5f60718",
+      "sig": "452dacf9524e332caba39b78c24d30be0408df0c7a0b932c07966f26ffd3bd56",
+      "body": "{\"op\":\"agent.hello\",\"args\":[],\"settings\":{}}",
+      "now": 1800000000,
+      "expect": "signature"
+    },
+    {
+      "name": "bad-nonce",
+      "secret": "vektor-paylasilan-sir-0123456789abcdef0123456789abcdef",
+      "method": "POST",
+      "path": "/api/agent/rpc",
+      "ts": "1800000000",
+      "nonce": "xyz",
+      "sig": "452dacf9524e332caba39b78c24d30be0408df0c7a0b932c07966f26ffd3bd56",
+      "body": "{\"op\":\"agent.hello\",\"args\":[],\"settings\":{}}",
+      "now": 1800000000,
+      "expect": "missing"
+    },
+    {
+      "name": "missing-sig",
+      "secret": "vektor-paylasilan-sir-0123456789abcdef0123456789abcdef",
+      "method": "POST",
+      "path": "/api/agent/rpc",
+      "ts": "1800000000",
+      "nonce": "a1b2c3d4e5f60718a1b2c3d4e5f60718",
+      "sig": "",
+      "body": "{\"op\":\"agent.hello\",\"args\":[],\"settings\":{}}",
+      "now": 1800000000,
+      "expect": "missing"
+    }
+  ],
+  "fingerprint": [
+    {
+      "input": "AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89",
+      "normalized": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+    },
+    {
+      "input": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+      "normalized": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+    },
+    {
+      "input": " Ab-Cd ef ",
+      "normalized": "abcdef"
+    }
+  ],
+  "enroll": [
+    {
+      "secret": "vektor-paylasilan-sir-0123456789abcdef0123456789abcdef",
+      "nonce": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+      "fingerprint": "AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89",
+      "proof": "4ef3bb732b445a99f081decb559fbfc1f89e64c5004a6a06e1e2902dc2266c8f"
+    }
+  ],
+  "codec": [
+    {
+      "name": "plain",
+      "wire": "{\"a\":1,\"b\":\"iki\",\"c\":[true,null]}",
+      "decoded": {
+        "a": 1,
+        "b": "iki",
+        "c": [
+          true,
+          null
+        ]
+      }
+    },
+    {
+      "name": "buffer",
+      "wire": "{\"$t\":\"buf\",\"v\":\"bWVyaGFiYSAAw78gZMO8bnlh\"}",
+      "decoded": {
+        "$bytesHex": "6d6572686162612000c3bf2064c3bc6e7961"
+      }
+    },
+    {
+      "name": "nested-buffer",
+      "wire": "{\"status\":200,\"headers\":{\"content-type\":\"application/json\"},\"body\":{\"$t\":\"buf\",\"v\":\"eyJJZCI6ImFiYyJ9\"}}",
+      "decoded": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "$bytesHex": "7b224964223a22616263227d"
+        }
+      }
+    },
+    {
+      "name": "date",
+      "wire": "{\"$t\":\"date\",\"v\":\"2026-10-13T12:34:56.789Z\"}",
+      "decoded": {
+        "$dateIso": "2026-10-13T12:34:56.789Z"
+      }
+    },
+    {
+      "name": "undefined-top",
+      "wire": "{\"$t\":\"undef\"}",
+      "decoded": {
+        "$undefined": true
+      }
+    },
+    {
+      "name": "undefined-in-array",
+      "wire": "[1,{\"$t\":\"undef\"},3]",
+      "decoded": [
+        1,
+        {
+          "$undefined": true
+        },
+        3
+      ]
+    },
+    {
+      "name": "undefined-in-object-dropped",
+      "wire": "{\"a\":1}",
+      "decoded": {
+        "a": 1
+      }
+    },
+    {
+      "name": "empty-buffer",
+      "wire": "{\"$t\":\"buf\",\"v\":\"\"}",
+      "decoded": {
+        "$bytesHex": ""
+      }
+    }
+  ],
+  "dockerApi": {
+    "check": [
+      {
+        "method": "GET",
+        "path": "/_ping",
+        "expect": {
+          "ok": true,
+          "method": "GET",
+          "path": "/_ping"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/v1.43/containers/json?all=1",
+        "expect": {
+          "ok": true,
+          "method": "GET",
+          "path": "/containers/json?all=1"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/containers/json?all=1",
+        "expect": {
+          "ok": true,
+          "method": "GET",
+          "path": "/containers/json?all=1"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/containers/create?name=web",
+        "expect": {
+          "ok": true,
+          "method": "POST",
+          "path": "/containers/create?name=web"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/containers/abc123/json",
+        "expect": {
+          "ok": true,
+          "method": "GET",
+          "path": "/containers/abc123/json"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/containers/%2Fweb/json",
+        "expect": {
+          "ok": true,
+          "method": "GET",
+          "path": "/containers/%2Fweb/json"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/containers/abc123/logs?stdout=1&stderr=1&follow=1",
+        "expect": {
+          "ok": true,
+          "method": "GET",
+          "path": "/containers/abc123/logs?stdout=1&stderr=1&follow=1"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/containers/abc123/restart",
+        "expect": {
+          "ok": true,
+          "method": "POST",
+          "path": "/containers/abc123/restart"
+        }
+      },
+      {
+        "method": "DELETE",
+        "path": "/containers/abc123?force=1&v=1",
+        "expect": {
+          "ok": true,
+          "method": "DELETE",
+          "path": "/containers/abc123?force=1&v=1"
+        }
+      },
+      {
+        "method": "PUT",
+        "path": "/containers/abc123/archive?path=%2Fetc",
+        "expect": {
+          "ok": true,
+          "method": "PUT",
+          "path": "/containers/abc123/archive?path=%2Fetc"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/containers/abc123/attach",
+        "expect": {
+          "ok": false,
+          "reason": "denied"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/containers/abc123/export",
+        "expect": {
+          "ok": false,
+          "reason": "denied"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/images/ghcr.io%2Fcoraspirin%2Fservermanagementpanel%3A1.13.0/json",
+        "expect": {
+          "ok": true,
+          "method": "GET",
+          "path": "/images/ghcr.io%2Fcoraspirin%2Fservermanagementpanel%3A1.13.0/json"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/images/sha256%3Aabc/history",
+        "expect": {
+          "ok": true,
+          "method": "GET",
+          "path": "/images/sha256%3Aabc/history"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/images/create?fromImage=nginx&tag=latest",
+        "expect": {
+          "ok": true,
+          "method": "POST",
+          "path": "/images/create?fromImage=nginx&tag=latest"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/images/nginx%3Alatest/tag?repo=x&tag=y",
+        "expect": {
+          "ok": true,
+          "method": "POST",
+          "path": "/images/nginx%3Alatest/tag?repo=x&tag=y"
+        }
+      },
+      {
+        "method": "DELETE",
+        "path": "/images/nginx%3Alatest?force=0",
+        "expect": {
+          "ok": true,
+          "method": "DELETE",
+          "path": "/images/nginx%3Alatest?force=0"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/images/load",
+        "expect": {
+          "ok": false,
+          "reason": "denied"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/images/search?term=x",
+        "expect": {
+          "ok": false,
+          "reason": "denied"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/images/nginx/push",
+        "expect": {
+          "ok": false,
+          "reason": "denied"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/images/get?names=nginx",
+        "expect": {
+          "ok": false,
+          "reason": "denied"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/volumes",
+        "expect": {
+          "ok": true,
+          "method": "GET",
+          "path": "/volumes"
+        }
+      },
+      {
+        "method": "DELETE",
+        "path": "/volumes/data_db",
+        "expect": {
+          "ok": true,
+          "method": "DELETE",
+          "path": "/volumes/data_db"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/volumes/create",
+        "expect": {
+          "ok": true,
+          "method": "POST",
+          "path": "/volumes/create"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/networks/net1/connect",
+        "expect": {
+          "ok": true,
+          "method": "POST",
+          "path": "/networks/net1/connect"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/exec/e1/start",
+        "expect": {
+          "ok": true,
+          "method": "POST",
+          "path": "/exec/e1/start"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/exec/e1/resize?h=24&w=80",
+        "expect": {
+          "ok": true,
+          "method": "POST",
+          "path": "/exec/e1/resize?h=24&w=80"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/events?filters=%7B%22type%22%3A%5B%22container%22%5D%7D",
+        "expect": {
+          "ok": true,
+          "method": "GET",
+          "path": "/events?filters=%7B%22type%22%3A%5B%22container%22%5D%7D"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/system/df",
+        "expect": {
+          "ok": true,
+          "method": "GET",
+          "path": "/system/df"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/build/prune",
+        "expect": {
+          "ok": true,
+          "method": "POST",
+          "path": "/build/prune"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/build",
+        "expect": {
+          "ok": false,
+          "reason": "denied"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/swarm",
+        "expect": {
+          "ok": false,
+          "reason": "denied"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/secrets",
+        "expect": {
+          "ok": false,
+          "reason": "denied"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/plugins",
+        "expect": {
+          "ok": false,
+          "reason": "denied"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/session",
+        "expect": {
+          "ok": false,
+          "reason": "denied"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/services",
+        "expect": {
+          "ok": false,
+          "reason": "denied"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/nodes",
+        "expect": {
+          "ok": false,
+          "reason": "denied"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/commit?container=abc",
+        "expect": {
+          "ok": false,
+          "reason": "denied"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/info",
+        "expect": {
+          "ok": false,
+          "reason": "denied"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/containers/../swarm",
+        "expect": {
+          "ok": false,
+          "reason": "path"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/containers/%2e%2e/json",
+        "expect": {
+          "ok": false,
+          "reason": "path"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/containers/abc//json",
+        "expect": {
+          "ok": false,
+          "reason": "path"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/containers/abc/json\r\nX: y",
+        "expect": {
+          "ok": false,
+          "reason": "path"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/containers/abc/json#x",
+        "expect": {
+          "ok": false,
+          "reason": "path"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "containers/json",
+        "expect": {
+          "ok": false,
+          "reason": "path"
+        }
+      },
+      {
+        "method": "PATCH",
+        "path": "/containers/json",
+        "expect": {
+          "ok": false,
+          "reason": "method"
+        }
+      },
+      {
+        "method": "OPTIONS",
+        "path": "/_ping",
+        "expect": {
+          "ok": false,
+          "reason": "method"
+        }
+      }
+    ],
+    "prepare": [
+      {
+        "name": "json-body",
+        "mode": "call",
+        "wire": "{\"method\":\"POST\",\"path\":\"/containers/create?name=x\",\"headers\":{\"Content-Type\":\"application/json\",\"Connection\":\"Upgrade\",\"Upgrade\":\"tcp\",\"X-Registry-Auth\":\"e30=\"},\"body\":{\"$t\":\"buf\",\"v\":\"eyJJbWFnZSI6Im5naW54In0=\"},\"timeoutMs\":30000}",
+        "expect": {
+          "ok": true,
+          "request": {
+            "method": "POST",
+            "path": "/containers/create?name=x",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "body": {
+              "$bytesHex": "7b22496d616765223a226e67696e78227d"
+            },
+            "timeoutMs": 30000
+          }
+        }
+      },
+      {
+        "name": "default-timeout",
+        "mode": "call",
+        "wire": "{\"method\":\"GET\",\"path\":\"/containers/json\"}",
+        "expect": {
+          "ok": true,
+          "request": {
+            "method": "GET",
+            "path": "/containers/json",
+            "headers": {},
+            "timeoutMs": 21600000
+          }
+        }
+      },
+      {
+        "name": "timeout-clamped",
+        "mode": "call",
+        "wire": "{\"method\":\"POST\",\"path\":\"/containers/abc/wait\",\"timeoutMs\":999999999}",
+        "expect": {
+          "ok": true,
+          "request": {
+            "method": "POST",
+            "path": "/containers/abc/wait",
+            "headers": {},
+            "timeoutMs": 21600000
+          }
+        }
+      },
+      {
+        "name": "stream-no-timeout",
+        "mode": "stream",
+        "wire": "{\"method\":\"GET\",\"path\":\"/events\",\"timeoutMs\":5000}",
+        "expect": {
+          "ok": true,
+          "request": {
+            "method": "GET",
+            "path": "/events",
+            "headers": {},
+            "timeoutMs": 0
+          }
+        }
+      },
+      {
+        "name": "denied",
+        "mode": "call",
+        "wire": "{\"method\":\"GET\",\"path\":\"/swarm\"}",
+        "expect": {
+          "ok": false,
+          "reason": "denied"
+        }
+      },
+      {
+        "name": "bad-shape",
+        "mode": "call",
+        "wire": "{\"method\":1,\"path\":\"/_ping\"}",
+        "expect": {
+          "ok": false,
+          "reason": "shape"
+        }
+      },
+      {
+        "name": "body-not-bytes",
+        "mode": "call",
+        "wire": "{\"method\":\"POST\",\"path\":\"/containers/create\",\"body\":\"metin\"}",
+        "expect": {
+          "ok": false,
+          "reason": "shape"
+        }
+      },
+      {
+        "name": "header-injection",
+        "mode": "call",
+        "wire": "{\"method\":\"GET\",\"path\":\"/_ping\",\"headers\":{\"content-type\":\"a\\r\\nb: c\"}}",
+        "expect": {
+          "ok": true,
+          "request": {
+            "method": "GET",
+            "path": "/_ping",
+            "headers": {},
+            "timeoutMs": 21600000
+          }
+        }
+      }
+    ]
+  },
+  "rpc": {
+    "request": "{\"op\":\"docker.api\",\"args\":[{\"method\":\"GET\",\"path\":\"/containers/json?all=1\",\"timeoutMs\":5000}],\"settings\":{}}",
+    "response": "{\"ok\":true,\"value\":{\"status\":200,\"headers\":{\"content-type\":\"application/json\"},\"body\":{\"$t\":\"buf\",\"v\":\"W10=\"}}}",
+    "error": "{\"ok\":false,\"error\":{\"message\":\"docker-api-denied:denied\",\"code\":\"docker-api-denied\"}}",
+    "streamRequest": "{\"op\":\"docker.apiStream\",\"args\":[{\"method\":\"GET\",\"path\":\"/events\"}],\"settings\":{}}",
+    "streamFrames": [
+      "{\"t\":\"d\",\"d\":{\"status\":200,\"headers\":{\"content-type\":\"application/json\"}}}",
+      "{\"t\":\"d\",\"d\":{\"$t\":\"buf\",\"v\":\"eyJUeXBlIjoiY29udGFpbmVyIiwiQWN0aW9uIjoic3RhcnQifQo=\"}}",
+      "{\"t\":\"end\"}"
+    ],
+    "streamError": "{\"t\":\"err\",\"e\":{\"message\":\"boom\"}}"
+  }
+}

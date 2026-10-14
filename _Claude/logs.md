@@ -1,5 +1,5 @@
 # Loglar — /logs
-Son güncelleme: 2026-10-11 · "Kayıtları temizle" eklendi (commit edilmedi)
+Son güncelleme: 2026-10-14 · container log toplama düzeltildi (`tail=0`)
 
 ## Ne yapar
 Container ve sistem (journald) loglarını periyodik toplayıp SQLite FTS5'te saklar; geçmişte arama, önem derecesi filtresi, indirme ve "kalıp" kuralları (ör. şu metin geçerse önem=hata) sunar.
@@ -20,3 +20,6 @@ Container ve sistem (journald) loglarını periyodik toplayıp SQLite FTS5'te sa
 - Arama metni FTS5 sorgusu ya da düz metin; store güvenli biçime çevirir.
 - journald okuma host-helper üzerinden (`journal_*` action'ları, `host-helper/panel-helper.py`); uzak sunucuda helper gerekir.
 - "Kayıtları temizle" (`clearLogs`) `log_cursors`'a DOKUNMAZ: sıfırlansaydı sonraki toplama eski logları geri çekerdi. FTS tetikleyicilerle senkron; silmeden sonra `optimize`. Buton `canClear` (`settings.edit`) ile görünür, onay `confirm()`.
+
+## Bilinen hata (düzeltildi 2026-10-14)
+- `lib/logs/collect.ts` imleç varken Docker'a `tail=0` gönderiyordu; Docker (API 1.47) bunu "hiç satır" sayıyor → 2026-10-12 08:21'den itibaren hiçbir container satırı toplanmadı. Artık her turda `tail = logs.max_lines_per_source`. Düzeltmeden sonraki ilk tur birikmiş satırları kaynak başına bu sınırla aldı.

@@ -86,3 +86,10 @@ export type ActiveSession = {
 export const SESSION_COOKIE = "panel_sid";
 export const CSRF_COOKIE = "panel_xsrf";
 export const CSRF_HEADER = "x-csrf-token";
+
+/**
+ * Middleware'in oturumlu sayfa isteklerine eklediği yol başlığı. Layout'lar
+ * yolu bilmez; "İlk sunucunu ekle" yönlendirmesinin muafiyet listesi
+ * (`(panel)/layout.tsx`) bunu okur. Güvenlik kararı DEĞİL, yalnız görünüm.
+ */
+export const PATH_HEADER = "x-panel-path";

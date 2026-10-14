@@ -1,11 +1,13 @@
 # Kullanıcılar ve roller — /users
-Son güncelleme: 2026-10-08 · commit 428d5e8
+Son güncelleme: 2026-10-13 · /yetki-yok + `?tab=&role=` (commit edilmedi)
 
 ## Ne yapar
 Panel kullanıcılarını (ekle, düzenle, kilitle, parola sıfırla), rolleri ve rol izinlerini, aktif oturumları yönetir. Üç sekme: kullanıcılar / roller / oturumlar.
 
 ## Dosyalar
-- Sayfa: `src/app/(panel)/users/page.tsx` — `requirePermission("users.manage")`; host kapsamı yok (merkezi).
+- Sayfa: `src/app/(panel)/users/page.tsx` — `requirePermission("users.manage")`; host kapsamı yok (merkezi). `?tab=users|roles|sessions` sekmeyi, `?role=<id>` rol kartına kaydırıp vurgular (yetki yönergesindeki "Rolü düzenle").
+- **Yetki yönergesi** `src/app/(panel)/yetki-yok/page.tsx` (oturum yeter): `requirePermission` izin eksikse `/yetki-yok?need=<izin>`'e yollar (eskiden `/?forbidden=1`, hiçbir yerde okunmuyordu). `need` `listPermissions()` ile beyaz listeden geçer; gösterilenler: izin + açıklaması, açtığı ekranlar (`permissions/catalog.ts` `featuresForPermission`), bu izne sahip roller (`listRoles()` süzülür), `users.manage` sahibine "Rolü düzenle". Locale `permissions.denied.*`.
+- API 403 gövdesi: `{ error, code: "forbidden", need }` (`forbiddenResponse`, `src/lib/auth/api.ts`); CSRF 403'ü `code: "csrf"`. `error` metni aynı (istemci/mobil uyumu).
 - Ekran: `src/app/(panel)/users/UsersScreen.tsx` (826).
 - API (hepsi `users.manage`):
   - `src/app/api/users/route.ts` GET, POST — liste / oluştur

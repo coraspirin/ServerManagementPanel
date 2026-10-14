@@ -3,6 +3,7 @@ import { pageHostId } from "@/lib/hosts/request";
 import { requirePermission } from "@/lib/auth/guard";
 import { hasPermission } from "@/lib/auth/session";
 import { helperConfigured } from "@/lib/host/helper";
+import { hintFor } from "@/lib/permissions/hint.server";
 import { getNumber } from "@/lib/settings";
 import { HostScreen } from "./HostScreen";
 
@@ -12,10 +13,12 @@ export const dynamic = "force-dynamic";
 export default async function HostPage() {
   const session = await requirePermission("host.service");
   enterHost(await pageHostId({ agent: true }));
+  const helperReady = helperConfigured();
 
   return (
     <HostScreen
-      helperReady={helperConfigured()}
+      helperReady={helperReady}
+      helperHint={helperReady ? null : hintFor("helperMissing", { feature: "hostServices" })}
       canPower={hasPermission(session.user, "host.power")}
       canService={hasPermission(session.user, "host.service")}
       canShell={hasPermission(session.user, "host.shell")}

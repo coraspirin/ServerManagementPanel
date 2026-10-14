@@ -3,6 +3,7 @@ import { enterHost, guardHostApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { callHelper, helperConfigured, type HelperAction } from "@/lib/host/helper";
 import { getDockerProvider } from "@/lib/providers";
+import { hintFor } from "@/lib/permissions/hint.server";
 
 export const dynamic = "force-dynamic";
 
@@ -126,6 +127,7 @@ export async function POST(request: Request) {
       {
         error:
           serverT("api.host.helperMissingCompose"),
+        hint: hintFor("helperMissing"),
       },
       { status: 503 },
     );
@@ -151,7 +153,7 @@ export async function POST(request: Request) {
 
   if (!response.ok) {
     return Response.json(
-      { error: response.error ?? response.stderr ?? serverT("api.host.commandFailed") },
+      { error: response.error ?? response.stderr ?? serverT("api.host.commandFailed"), hint: response.hint },
       { status: 502 },
     );
   }

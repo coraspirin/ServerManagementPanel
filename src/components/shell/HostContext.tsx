@@ -15,7 +15,8 @@ export type HostSummary = {
 
 type HostContextValue = {
   hosts: HostSummary[];
-  current: HostSummary;
+  /** Etkin sunucu yoksa null (yerel devre dışı, ajan eklenmemiş — D1). */
+  current: HostSummary | null;
   /** Birden fazla sunucu var mı — seçici ve sunucu adları yalnızca o zaman görünür. */
   multi: boolean;
 };
@@ -30,17 +31,17 @@ export function HostProvider({
   children,
 }: {
   hosts: HostSummary[];
-  currentId: number;
+  currentId: number | null;
   children: React.ReactNode;
 }) {
   const value = useMemo<HostContextValue>(() => {
-    const current = hosts.find((host) => host.id === currentId) ?? hosts[0];
+    const current = hosts.find((host) => host.id === currentId) ?? hosts[0] ?? null;
     return { hosts, current, multi: hosts.length > 1 };
   }, [hosts, currentId]);
 
   // Render sırasında: çocukların ilk efektlerindeki istekler de doğru başlığı
   // taşısın. Tek sunucuda başlık hiç eklenmez — istekler eskisiyle aynı.
-  setClientHost(value.multi ? value.current.id : null);
+  setClientHost(value.multi && value.current ? value.current.id : null);
 
   return <HostContext.Provider value={value}>{children}</HostContext.Provider>;
 }

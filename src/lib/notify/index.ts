@@ -2,7 +2,7 @@ import "server-only";
 import { serverT } from "@/lib/i18n/runtime";
 
 import { SEVERITY_ORDER, isSeverity, type ChannelStatus, type Severity } from "@/lib/alerts/types";
-import { currentHostId } from "@/lib/hosts/context";
+import { currentHostIdOrNull } from "@/lib/hosts/context";
 import { getHost, listHosts } from "@/lib/hosts/store";
 import { getBool, getString } from "@/lib/settings";
 import { findChannel, notifyChannels } from "./channels";
@@ -59,7 +59,8 @@ export function hasUsableChannel(severity: Severity): boolean {
  */
 function withHostName(message: NotifyMessage): NotifyMessage {
   if (listHosts().length < 2) return message;
-  const name = getHost(currentHostId())?.name;
+  const hostId = currentHostIdOrNull();
+  const name = hostId === null ? null : getHost(hostId)?.name;
   return name ? { ...message, title: `[${name}] ${message.title}` } : message;
 }
 

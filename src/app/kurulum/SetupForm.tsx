@@ -82,12 +82,18 @@ export function SetupForm() {
           className={`${INPUT} font-mono uppercase tracking-wider`}
         />
       </label>
-      <p className="mt-1.5 text-xs text-subtle">
-        {t("setup.codeHint")}
-        <code className="mt-1 block rounded bg-canvas px-2 py-1 font-mono text-[11px]">
-          docker compose logs panel | grep -A3 KURULUM
+      {/* Kurulum kodu nerede (kararlar.md 2026-10-13): log satırı lib/auth/setup.ts'te "Kurulum kodu : ...". */}
+      <div className="mt-1.5 space-y-1 text-xs text-subtle">
+        <p>{t("setup.codeHint")}</p>
+        <code className="block select-all rounded bg-canvas px-2 py-1 font-mono text-[11px]">
+          {'docker logs <container> 2>&1 | grep "Kurulum kodu"' /* i18n-ignore — log satırıyla birebir aynı olmalı */}
         </code>
-      </p>
+        <p>{t("setup.codeContainer")}</p>
+        <code className="block select-all rounded bg-canvas px-2 py-1 font-mono text-[11px]">
+          {"docker ps --format '{{.Names}}'"}
+        </code>
+        <p>{t("setup.codeZima")}</p>
+      </div>
 
       <label className="mt-4 block text-sm">
         <span className="text-subtle">{t("setup.username")}</span>

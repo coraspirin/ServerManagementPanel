@@ -9,6 +9,8 @@ import { serverT } from "@/lib/i18n/runtime";
 // ters yönde bir import ESM döngüsü açardı (bu projede daha önce yaşandı:
 // döngü çökmeden yükleniyor ama bağlantılardan biri undefined kalıyor).
 import { allowLinesFor, stacksRoot } from "./install";
+import type { PermissionHint } from "@/lib/permissions/hint";
+import { hintFor } from "@/lib/permissions/hint.server";
 
 /**
  * M3.10 düzeltmesi — "Kur" düğmesine basmadan önce çalışacak mı?
@@ -42,6 +44,8 @@ export type PreflightResult = {
   detail: string;
   /** Engelliyken host'a yapıştırılacak izin listesi satırları; yoksa boş. */
   allowLines: string;
+  /** Birleşik yönerge (kararlar.md D6) — sorun yoksa yok. */
+  hint?: PermissionHint;
 };
 
 export async function composePreflight(actor: {
@@ -56,6 +60,7 @@ export async function composePreflight(actor: {
       directory: root,
       detail: serverT("preflight.helperMissing"),
       allowLines: "",
+      hint: hintFor("helperMissing"),
     };
   }
 
@@ -84,6 +89,7 @@ export async function composePreflight(actor: {
       directory: root,
       detail: serverT("preflight.blocked", { root }),
       allowLines: allowLinesFor(root),
+      hint: hintFor("patternDenied", { directory: root, allowLines: allowLinesFor(root).split("\n") }),
     };
   }
 
@@ -93,6 +99,9 @@ export async function composePreflight(actor: {
       directory: root,
       detail: serverT("preflight.untested"),
       allowLines: allowLinesFor(root),
+      hint: hintFor(error.includes("bilinmeyen eylem") ? "helperOutdated" : "helperUnverified", { // i18n-ignore — host-helper protokol metni
+        allowLines: allowLinesFor(root).split("\n"),
+      }),
     };
   }
 

@@ -16,6 +16,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { Modal } from "@/components/Modal";
+import { HintBox } from "@/components/permissions/HintBox";
+import type { FeatureState } from "@/lib/permissions/catalog";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import type { HostView } from "@/lib/hosts/view";
 import { formatDateTime } from "@/lib/i18n/format";
@@ -62,23 +64,27 @@ type Dialog =
   | { kind: "kit"; host: HostView; kit: InstallKit }
   | { kind: "enroll"; host: HostView }
   | { kind: "remove"; host: HostView }
-  | { kind: "update"; host: HostView };
+  | { kind: "update"; host: HostView }
+  | { kind: "features"; host: HostView };
 
 export function HostsScreen({
   initial,
   canManage,
   canUpdate,
+  openAdd = false,
 }: {
   initial: HostView[];
   canManage: boolean;
   canUpdate: boolean;
+  /** `/hosts?ekle=1` — "İlk sunucunu ekle" ekranından gelindi. */
+  openAdd?: boolean;
 }) {
   const t = useT();
   const tk = useDynamicT();
   const dict = useDict();
   const router = useRouter();
   const [hosts, setHosts] = useState(initial);
-  const [dialog, setDialog] = useState<Dialog | null>(null);
+  const [dialog, setDialog] = useState<Dialog | null>(openAdd && canManage ? { kind: "add" } : null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -173,6 +179,7 @@ export function HostsScreen({
                       {host.name}
                     </div>
                     <div className="text-xs text-subtle">{tk(`hosts.agentType.${host.agentType}`)}</div>
+                    <FeatureSummary host={host} onOpen={() => setDialog({ kind: "features", host })} />
                     {host.lastError && host.status !== "online" && (
                       <div className="mt-1 max-w-xs break-words text-xs text-danger">{host.lastError}</div>
                     )}
@@ -207,6 +214,27 @@ export function HostsScreen({
                   </td>
                   {(canManage || canUpdate) && (
                     <td data-label="" className="px-4 py-3">
+                      {/* Yerel sunucu isteğe bağlı (D1): yalnızca açılıp kapatılabilir. */}
+                      {canManage && host.agentType === "local" && (
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            type="button"
+                            title={host.enabled ? t("hosts.screen.disable") : t("hosts.screen.enable")}
+                            aria-label={host.enabled ? t("hosts.screen.disable") : t("hosts.screen.enable")}
+                            className={ICON_BTN}
+                            disabled={busy}
+                            onClick={() => {
+                              if (host.enabled && !window.confirm(t("hosts.screen.disableLocalConfirm"))) return;
+                              void run(
+                                () => call(`/api/hosts/${host.id}`, "PATCH", { enabled: !host.enabled }),
+                                () => close(),
+                              );
+                            }}
+                          >
+                            <Power className="size-3.5" />
+                          </button>
+                        </div>
+                      )}
                       {remote && (
                         <div className="flex justify-end gap-1.5">
                           {canUpdate && host.pinned && (
@@ -331,6 +359,10 @@ export function HostsScreen({
       )}
 
       {dialog?.kind === "update" && <UpdateDialog host={dialog.host} onClose={close} />}
+
+      {dialog?.kind === "features" && (
+        <FeaturesDialog host={hosts.find((item) => item.id === dialog.host.id) ?? dialog.host} onClose={close} />
+      )}
 
       {dialog?.kind === "remove" && (
         <RemoveDialog
@@ -670,6 +702,59 @@ function UpdateDialog({ host, onClose }: { host: HostView; onClose: () => void }
           <p className="text-sm text-subtle">{info.error}</p>
         ))}
       </div>
+    </Modal>
+  );
+}
+
+const STATE_STYLE: Record<FeatureState, string> = {
+  ok: "bg-ok/15 text-ok",
+  partial: "bg-warn/15 text-warn",
+  off: "bg-danger/15 text-danger",
+};
+
+const STATE_MARK: Record<FeatureState, string> = { ok: "✅", partial: "🟡", off: "🔴" }; // i18n-ignore — simge
+
+/** Satırdaki kısa yoklama özeti: ✅ n · 🟡 n · 🔴 n (kararlar.md D6). */
+function FeatureSummary({ host, onOpen }: { host: HostView; onOpen: () => void }) {
+  const t = useT();
+  if (!host.features) return null;
+  const count = (state: FeatureState) => host.features?.filter((item) => item.state === state).length ?? 0;
+  return (
+    <button type="button" onClick={onOpen} className="mt-1 text-xs text-subtle hover:text-brand">
+      {t("hosts.features.show")}: {(["ok", "partial", "off"] as const).map((state) => `${STATE_MARK[state]} ${count(state)}`).join(" · ")}
+    </button>
+  );
+}
+
+function FeaturesDialog({ host, onClose }: { host: HostView; onClose: () => void }) {
+  const t = useT();
+  const tk = useDynamicT();
+  return (
+    <Modal open title={t("hosts.features.title", { host: host.name })} onClose={onClose} wide>
+      <p className="text-sm text-subtle">{t("hosts.features.intro")}</p>
+      {!host.features ? (
+        <p className="mt-3 text-sm">{t("hosts.features.pending")}</p>
+      ) : (
+        <ul className="mt-3 divide-y divide-line">
+          {host.features.map((feature) => (
+            <li key={feature.key} className="py-2.5">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span>{tk(`permissions.feature.${feature.key}`)}</span>
+                <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${STATE_STYLE[feature.state]}`}>
+                  {STATE_MARK[feature.state]} {tk(`permissions.state.${feature.state}`)}
+                </span>
+              </div>
+              {feature.hints.length > 0 && (
+                <div className="mt-2 space-y-2">
+                  {feature.hints.map((hint) => (
+                    <HintBox key={hint.code} hint={hint} compact />
+                  ))}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </Modal>
   );
 }

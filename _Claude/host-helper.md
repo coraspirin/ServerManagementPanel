@@ -1,5 +1,5 @@
 # host-helper
-Son güncelleme: 2026-10-09
+Son güncelleme: 2026-10-13
 
 ## Ne
 Host'ta root olarak çalışan küçük Python daemon (`host-helper/panel-helper.py`, yalnız stdlib). Panel container'ı root değil; host'ta komut gerekirse Unix soketi üzerinden helper'dan **rica eder**. Ne çalışacağına host karar verir. Protokol ayrıntısı: `host-helper/PROTOCOL.md`.
@@ -40,6 +40,8 @@ Host cron YAZMA'sı helper'ı kullanmaz (geçici container, `/etc/cron.d/panel-*
 - `src/lib/host/presets.ts` — preset ANAHTAR + etiketleri (komut değil). Yeni preset = burada etiket + `panel-helper.py` `PRESETS`'te argv.
 - `docker-compose.yml` — `/run/panel-helper:/run/panel-helper` mount'u + `HELPER_SECRET` env.
 - Eski helper'da olmayan eylem → panel "helper eski / izinli değil" mesajı verir (ör. `fail2ban.helperOutdated`); `allow.conf`'a eklenecek satır ekranda gösterilir.
+
+- **Yönerge (D6, 2026-10-13)**: `HelperResponse.hintCode` (soket ENOENT/EACCES/ECONNREFUSED, secret yok, uzakta desteklenmeyen eylem; ajan da doldurur) + `hint`. `callHelper` başarısız yanıtta ipucunu SEÇİLİ sunucu için merkezde yeniden kurar (`withHint`): kod `hintCode`'dan ya da helper'ın sabit metninden (`helperErrorCode`: "desene uymuyor" / "izinli değil" / "bilinmeyen eylem"). `/api/host`, `/api/host/console`, `/api/host/compose` yanıtlarında `hint`; `HostScreen` gösterir. Helper'ın Türkçe hata metinleri bu yüzden protokolün parçası — değiştirme.
 
 ## Kurulum
 `sudo host-helper/install.sh` (host'ta): helper'ı `/usr/local/lib/panel-helper/`'a kopyalar, secret üretir (0600), boş `allow.conf` oluşturur, systemd birimini kurar, `.env`'e yazılacak `HELPER_SECRET`'ı basar. Uzak sunucuda da aynı kurulum + ajanın `.env`'inde `HELPER_SECRET` gerekir.

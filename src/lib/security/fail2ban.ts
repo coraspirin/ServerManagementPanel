@@ -3,6 +3,8 @@ import "server-only";
 import { getDb } from "@/lib/db/client";
 import { callHelper, helperConfigured } from "@/lib/host/helper";
 import { serverT } from "@/lib/i18n/runtime";
+import type { PermissionHint } from "@/lib/permissions/hint";
+import { hintFor } from "@/lib/permissions/hint.server";
 
 /**
  * M3.8 — fail2ban durumu ve başarısız giriş özeti.
@@ -28,8 +30,12 @@ export type Fail2banState = {
   available: boolean;
   message: string;
   setupHint: string | null;
+  /** Birleşik yönerge (kararlar.md D6); `setupHint` eski istemciler için kalır. */
+  hint?: PermissionHint;
   jails: Jail[];
 };
+
+const FAIL2BAN_ACTIONS = ["fail2ban.status", "fail2ban.jail", "fail2ban.unban"];
 
 const setupHint = () =>
   serverT("fail2ban.setupHint") +
@@ -98,6 +104,7 @@ export async function fail2banState(): Promise<Fail2banState> {
       available: false,
       message: serverT("fail2ban.noHelper"),
       setupHint: null,
+      hint: hintFor("helperMissing", { feature: "fail2ban" }),
       jails: [],
     };
   }
@@ -109,6 +116,12 @@ export async function fail2banState(): Promise<Fail2banState> {
       available: false,
       message: classified.message,
       setupHint: classified.hint,
+      hint: classified.hint
+        ? hintFor(status.hint?.code === "helperOutdated" ? "helperOutdated" : "helperUnverified", {
+            feature: "fail2ban",
+            allowLines: FAIL2BAN_ACTIONS,
+          })
+        : status.hint,
       jails: [],
     };
   }

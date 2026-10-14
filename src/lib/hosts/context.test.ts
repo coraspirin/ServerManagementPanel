@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { currentHostId, hasHostContext, hostSettingsOverlay, runWithHost } from "./context.ts";
+import {
+  currentHostId,
+  hasHostContext,
+  hostSettingsOverlay,
+  runWithHost,
+  setDefaultHostResolver,
+} from "./context.ts";
+import { isHostError } from "./errors.ts";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 1));
 
 describe("host bağlamı", () => {
-  it("bağlam yokken yerel sunucu", () => {
+  it("bağlam ve çözücü yokken yerel sunucu (ajan süreci, testler)", () => {
     assert.equal(currentHostId(), 1);
     assert.equal(hasHostContext(), false);
   });
@@ -41,5 +48,25 @@ describe("host bağlamı", () => {
       settings: { "files.roots": "/srv" },
     });
     runWithHost(3, () => assert.equal(hostSettingsOverlay(), undefined));
+  });
+
+  it("bağlam yokken kayıtlı çözücü kullanılır", () => {
+    setDefaultHostResolver(() => 5);
+    try {
+      assert.equal(currentHostId(), 5);
+      runWithHost(2, () => assert.equal(currentHostId(), 2));
+    } finally {
+      setDefaultHostResolver(null);
+    }
+  });
+
+  it("etkin sunucu yoksa noHost fırlatır, yerele düşmez", () => {
+    setDefaultHostResolver(() => null);
+    try {
+      assert.throws(currentHostId, (error) => isHostError(error) && error.code === "noHost");
+    } finally {
+      setDefaultHostResolver(null);
+    }
+    assert.equal(currentHostId(), 1);
   });
 });

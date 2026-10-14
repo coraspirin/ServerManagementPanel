@@ -1,6 +1,8 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/shell/AppShell";
 import { requireSession } from "@/lib/auth/guard";
+import { PATH_HEADER } from "@/lib/auth/types";
 import { appVersion, isMockMode } from "@/lib/env";
 import { HostProvider, type HostSummary } from "@/components/shell/HostContext";
 import { resolvePageHost } from "@/lib/hosts/request";
@@ -9,6 +11,27 @@ import { defaultLocale, personalLocale } from "@/lib/i18n/server";
 import { availableLocales } from "@/locales";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Etkin sunucu yokken de açılan sayfalar (kararlar.md D1): sunucu eklemek,
+ * kullanıcı/rol, hesap, ayarlar, denetim, işler, güncelleme ve yetki
+ * yönergesi. Geri kalan her sayfa "İlk sunucunu ekle"ye gider.
+ */
+const NO_HOST_PATHS = [
+  "/ilk-sunucu",
+  "/hosts",
+  "/users",
+  "/hesap",
+  "/settings",
+  "/audit",
+  "/jobs",
+  "/update",
+  "/yetki-yok",
+];
+
+function allowedWithoutHost(path: string): boolean {
+  return NO_HOST_PATHS.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+}
 
 /**
  * Korumalı alan. Oturum burada gerçekten doğrulanır (middleware yalnızca
@@ -37,9 +60,15 @@ export default async function PanelLayout({
       color: host.color,
     }));
   const current = await resolvePageHost();
+  // Sayfaların kendisi de `pageHostId`/`withPageHost` ile yönlendirir (istemci
+  // tarafı gezinmede layout yeniden çalışmaz); burası tam yüklemeyi yakalar.
+  if (!current) {
+    const path = (await headers()).get(PATH_HEADER) ?? "";
+    if (path && !allowedWithoutHost(path)) redirect("/ilk-sunucu");
+  }
 
   return (
-    <HostProvider hosts={hosts} currentId={current.id}>
+    <HostProvider hosts={hosts} currentId={current?.id ?? null}>
       <AppShell
         mode={isMockMode() ? "mock" : "live"}
         version={appVersion()}

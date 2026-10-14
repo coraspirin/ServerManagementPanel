@@ -8,6 +8,8 @@ import type { InstalledStack } from "@/lib/appstore/install";
 import type { PreflightResult } from "@/lib/appstore/preflight";
 import { useT } from "@/lib/i18n/client";
 import { Rich } from "@/lib/i18n/rich";
+import { HintBox } from "@/components/permissions/HintBox";
+import type { PermissionHint } from "@/lib/permissions/hint";
 
 /**
  * Compose yığınları.
@@ -86,6 +88,7 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [hint, setHint] = useState<PermissionHint | null>(null);
   const [findings, setFindings] = useState<Finding[] | null>(null);
   const [checking, setChecking] = useState(false);
 
@@ -151,6 +154,7 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
     setBusy(true);
     setError(null);
     setNotice(null);
+    setHint(null);
     try {
       const response = await fetch("/api/appstore", {
         method: "POST",
@@ -161,6 +165,7 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
         ok?: boolean;
         error?: string;
         message?: string;
+        hint?: PermissionHint;
       };
 
       setData((prev) =>
@@ -178,6 +183,7 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
 
       if (!response.ok || payload.ok === false) {
         setError(payload.error ?? t("common.errors.actionFailed"));
+        setHint(payload.hint ?? null);
         return false;
       }
       setNotice(payload.message ?? t("docker.installer.ok"));
@@ -234,6 +240,7 @@ export function StackInstaller({ onInstalled }: { onInstalled: () => void }) {
           {error}
         </p>
       )}
+      {hint && <HintBox hint={hint} />}
       {notice && (
         <p className="whitespace-pre-wrap rounded-lg bg-ok/10 px-4 py-2.5 text-sm text-ok">
           {notice}
@@ -423,7 +430,11 @@ function PreflightBanner({ result }: { result: PreflightResult }) {
       <p className="mt-1.5 whitespace-pre-wrap text-xs leading-relaxed text-subtle">
         {result.detail}
       </p>
-      {result.allowLines && (
+      {result.hint ? (
+        <div className="mt-2">
+          <HintBox hint={result.hint} compact />
+        </div>
+      ) : result.allowLines && (
         <>
           <p className="mt-2 text-[11px] text-subtle">
             <Rich

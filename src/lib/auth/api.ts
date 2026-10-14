@@ -8,6 +8,7 @@ import { enterHost, runWithHost } from "@/lib/hosts/context";
 import { HOST_ERROR_STATUS, isHostError } from "@/lib/hosts/errors";
 import { resolveRequestHost } from "@/lib/hosts/request";
 import { getHost, isLocalHost, listHosts } from "@/lib/hosts/store";
+import { hintFor } from "@/lib/permissions/hint.server";
 
 /**
  * Route handler'lar için yetki kapısı.
@@ -15,6 +16,18 @@ import { getHost, isLocalHost, listHosts } from "@/lib/hosts/store";
  * Başarısızlıkta hazır bir `Response` döndürür; çağıran taraf onu doğrudan
  * return eder. Böylece her uçta aynı kontrolleri tekrar yazmak gerekmez.
  */
+/**
+ * İzin eksik — 403. `error` metni eskisiyle aynı (istemci/mobil uyumu);
+ * `code` ve `need` eklendi: istemci eksik izni gösterip `/yetki-yok`'a
+ * bağlantı verebilsin (kararlar.md D6).
+ */
+export function forbiddenResponse(permission: PermissionKey): Response {
+  return Response.json(
+    { error: serverT("api.auth.forbidden"), code: "forbidden", need: permission },
+    { status: 403 },
+  );
+}
+
 export type ApiGuardResult =
   | { ok: true; session: ActiveSession }
   | { ok: false; response: Response };
@@ -41,16 +54,13 @@ export async function guardApi(
     if (!header || !safeEquals(header, session.csrfToken)) {
       return {
         ok: false,
-        response: Response.json({ error: serverT("api.auth.csrfFailed") }, { status: 403 }),
+        response: Response.json({ error: serverT("api.auth.csrfFailed"), code: "csrf" }, { status: 403 }),
       };
     }
   }
 
   if (!hasPermission(session.user, permission)) {
-    return {
-      ok: false,
-      response: Response.json({ error: serverT("api.auth.forbidden") }, { status: 403 }),
-    };
+    return { ok: false, response: forbiddenResponse(permission) };
   }
 
   return { ok: true, session };
@@ -87,6 +97,17 @@ export async function guardHostApi(
   if (!guard.ok) return guard;
 
   const pick = resolveRequestHost(request);
+  // Etkin sunucu yok (yerel devre dışı, ajan eklenmemiş — D1): yerele
+  // sessizce düşülmez, istemci "İlk sunucunu ekle"yi gösterebilsin diye kod.
+  if (!pick.ok && pick.reason === "none") {
+    return {
+      ok: false,
+      response: Response.json(
+        { error: serverT("hosts.errors.noHost"), code: "noHost", hint: hintFor("noHost", { hostId: null }) },
+        { status: 409 },
+      ),
+    };
+  }
   if (!pick.ok) {
     const key = pick.reason === "disabled" ? "hosts.errors.disabled" : "hosts.errors.unknown";
     return {
@@ -95,7 +116,11 @@ export async function guardHostApi(
     };
   }
 
-  if (!SAFE_METHODS.has(request.method) && !pick.explicit && listHosts().length > 1) {
+  if (
+    !SAFE_METHODS.has(request.method) &&
+    !pick.explicit &&
+    listHosts().filter((host) => host.enabled).length > 1
+  ) {
     return {
       ok: false,
       response: Response.json({ error: serverT("hosts.errors.hostRequired") }, { status: 409 }),
@@ -122,7 +147,11 @@ export async function guardHostApi(
     return {
       ok: false,
       response: Response.json(
-        { error: serverT("hosts.errors.unsupported"), code: "unsupported" },
+        {
+          error: serverT("hosts.errors.unsupported"),
+          code: "unsupported",
+          hint: hintFor("unsupported", { hostId: pick.hostId }),
+        },
         { status: 501 },
       ),
     };
@@ -160,7 +189,13 @@ export async function withHost(
   } catch (error) {
     if (!isHostError(error)) throw error;
     return Response.json(
-      { error: serverT(`hosts.errors.${error.code}`), code: error.code },
+      {
+        error: serverT(`hosts.errors.${error.code}`),
+        code: error.code,
+        ...(error.code === "unsupported" || error.code === "noHost"
+          ? { hint: hintFor(error.code, { hostId: error.code === "noHost" ? null : error.hostId }) }
+          : {}),
+      },
       { status: HOST_ERROR_STATUS[error.code] },
     );
   }

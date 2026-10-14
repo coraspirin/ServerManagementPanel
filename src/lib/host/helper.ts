@@ -5,6 +5,8 @@ import { createHmac, randomBytes } from "node:crypto";
 import { serverT } from "@/lib/i18n/runtime";
 import { currentHostId } from "@/lib/hosts/context";
 import { getHost, isLocalHost } from "@/lib/hosts/store";
+import { helperErrorAction, helperErrorCode, type PermissionHint, type PermissionHintCode } from "@/lib/permissions/hint";
+import { hintFor } from "@/lib/permissions/hint.server";
 
 /**
  * host-helper istemcisi (T4 / M1.13).
@@ -64,6 +66,13 @@ export type HelperResponse = {
   stderr?: string;
   durationMs?: number;
   error?: string;
+  /**
+   * Hatanın yönerge kodu (soket/secret hataları). Ajan da doldurur; merkez
+   * `hint`'i bu koddan SEÇİLİ sunucu için yeniden kurar (bkz. callHelper).
+   */
+  hintCode?: PermissionHintCode;
+  /** Birleşik yönerge (kararlar.md D6) — yalnız merkez doldurur. */
+  hint?: PermissionHint;
 };
 
 export function helperConfigured(): boolean {
@@ -104,7 +113,7 @@ async function callRemoteHelper(
 ): Promise<HelperResponse> {
   const host = getHost(hostId);
   if (!host || host.agentType !== "agent" || !remoteHelperAllowed(action)) {
-    return { ok: false, error: serverT("hosts.errors.unsupported") };
+    return { ok: false, error: serverT("hosts.errors.unsupported"), hintCode: "unsupported" };
   }
   const { agentCall } = await import("@/lib/agent/client");
   try {
@@ -148,24 +157,41 @@ function canonical(payload: Record<string, unknown>): string {
  * Unix soketinde ECONNREFUSED tek bir şey demek: dosya VAR ama dinleyen yok.
  * (Dosya olmasaydı ENOENT gelirdi.) İki sebebi olabilir ve ikisi de yazılıyor.
  */
-function explainSocketError(error: Error): string {
+function explainSocketError(error: Error): { error: string; hintCode?: PermissionHintCode } {
   const code = (error as NodeJS.ErrnoException).code;
 
   if (code === "ENOENT") {
-    return serverT("helper.socketMissing", { path: SOCKET_PATH });
+    return { error: serverT("helper.socketMissing", { path: SOCKET_PATH }), hintCode: "socketMissing" };
   }
 
   if (code === "EACCES") {
-    return serverT("helper.socketDenied");
+    return { error: serverT("helper.socketDenied"), hintCode: "socketDenied" };
   }
 
   if (code === "ECONNREFUSED") {
     // Şablon dizesi kullanılıyor: satır sonları mesajın bir parçası ve
     // kaçış dizisi yerine gerçek satır sonu yazmak okunaklı tutuyor.
-    return serverT("helper.socketStale", { path: SOCKET_PATH });
+    return { error: serverT("helper.socketStale", { path: SOCKET_PATH }), hintCode: "socketStale" };
   }
 
-  return error.message;
+  return { error: error.message };
+}
+
+/**
+ * Başarısız yanıta seçili sunucu için yönerge ekler. Kod yanıtın kendisinden
+ * (soket/secret) ya da helper'ın sabit hata metninden (izin listesi) gelir;
+ * eski ajanlar `hintCode` göndermez, metin eşlemesi onları da kapsar.
+ */
+function withHint(response: HelperResponse, action: HelperAction, hostId: number): HelperResponse {
+  if (response.ok || !response.error) return response;
+  const code = response.hintCode ?? helperErrorCode(response.error);
+  if (!code) return response;
+  const hint = hintFor(code, {
+    hostId,
+    action: code === "actionDisabled" ? (helperErrorAction(response.error) ?? action) : action,
+    socketPath: SOCKET_PATH,
+  });
+  return { ...response, hint };
 }
 
 export async function callHelper(
@@ -188,8 +214,10 @@ export async function callHelper(
   requestId?: string,
 ): Promise<HelperResponse> {
   const hostId = currentHostId();
-  if (!isLocalHost(hostId)) return callRemoteHelper(hostId, action, args, actor, timeoutMs, requestId);
-  return callLocalHelper(action, args, actor, timeoutMs, requestId);
+  const response = isLocalHost(hostId)
+    ? await callLocalHelper(action, args, actor, timeoutMs, requestId)
+    : await callRemoteHelper(hostId, action, args, actor, timeoutMs, requestId);
+  return withHint(response, action, hostId);
 }
 
 /** Bu makinedeki helper soketine doğrudan istek (ajan da bunu kullanır). */
@@ -205,6 +233,7 @@ export async function callLocalHelper(
     return {
       ok: false,
       error: serverT("helper.noSecret"),
+      hintCode: "helperMissing",
     };
   }
 
@@ -252,7 +281,7 @@ export async function callLocalHelper(
     });
 
     socket.on("error", (error) => {
-      finish({ ok: false, error: explainSocketError(error) });
+      finish({ ok: false, ...explainSocketError(error) });
     });
 
     // Bağlantı yanıt gelmeden kapanırsa sessizce beklememek gerekir.

@@ -24,6 +24,8 @@ import type { ContainerAction, ResourceKind } from "@/lib/providers/types";
 import { useFormat, useT } from "@/lib/i18n/client";
 import { Rich } from "@/lib/i18n/rich";
 import type { MessageKey } from "@/lib/i18n/translate";
+import { HintBox } from "@/components/permissions/HintBox";
+import type { PermissionHint } from "@/lib/permissions/hint";
 
 type Tab = "containers" | "stack" | ResourceKind | "cleanup";
 
@@ -102,6 +104,7 @@ export function DockerScreen({
   canExec,
   canInstall,
   canService,
+  socketHint,
 }: {
   initial: DockerOverview;
   /** Adresten gelen sekme (`?tab=`); geçersizse Container açılır. */
@@ -117,6 +120,8 @@ export function DockerScreen({
   canInstall: boolean;
   /** `host.service` — yığın compose komutları bu izne bağlı (M3.37). */
   canService: boolean;
+  /** Docker'a ulaşılamazsa gösterilecek, sunucuya özel yönerge (D6). */
+  socketHint?: PermissionHint;
 }) {
   const t = useT();
   const f = useFormat();
@@ -407,15 +412,21 @@ export function DockerScreen({
     return (
       <div className="rounded-lg border border-danger/40 bg-surface px-5 py-4">
         <p className="text-sm text-danger">{data.error}</p>
-        <p className="mt-2 text-xs text-subtle">
-          <Rich
-            text={t("docker.screen.socketHint")}
-            values={{
-              sock: <code className="font-mono">/var/run/docker.sock</code>,
-              gid: <code className="font-mono">DOCKER_GID</code>,
-            }}
-          />
-        </p>
+        {socketHint ? (
+          <div className="mt-3">
+            <HintBox hint={socketHint} />
+          </div>
+        ) : (
+          <p className="mt-2 text-xs text-subtle">
+            <Rich
+              text={t("docker.screen.socketHint")}
+              values={{
+                sock: <code className="font-mono">/var/run/docker.sock</code>,
+                gid: <code className="font-mono">DOCKER_GID</code>,
+              }}
+            />
+          </p>
+        )}
       </div>
     );
   }

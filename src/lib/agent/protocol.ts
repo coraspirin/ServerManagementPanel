@@ -145,6 +145,35 @@ export const DOCKER_CALLS = [
 /** Akış döndüren Docker metotları (`AsyncGenerator`). */
 export const DOCKER_STREAMS = ["pullImage", "logs", "runThrowawayStream"] as const;
 
+/**
+ * Ham Engine API tüneli (kararlar.md K2). Merkez Docker'ı kendisi konuşur,
+ * ajan izinli istekleri (`docker-api-policy.ts`) docker.sock'a iletir.
+ * Protokole EKLEME: `AGENT_PROTOCOL` değişmez; ajan desteklediğini hello'da
+ * `capabilities.dockerApi` ile bildirir. Native (Go) ajan yalnız bunu
+ * konuşur ve `capabilities.dockerRpc: false` der (`DOCKER_CALLS` yok).
+ *
+ *  - `docker.api` (rpc): args `[DockerApiRequest]` → `DockerApiResponse`
+ *  - `docker.apiStream` (stream): args `[DockerApiRequest]` → ilk çerçeve
+ *    `{ status, headers }`, sonrakiler gövde parçaları (`Buffer`). Durum
+ *    2xx değilse gövde tek parça gelir ve akış biter.
+ */
+export const DOCKER_API_OP = "docker.api";
+export const DOCKER_API_STREAM_OP = "docker.apiStream";
+
+export type DockerApiRequest = {
+  method: string;
+  /** Sorgu dahil; sürüm öneki (`/v1.43`) olabilir. */
+  path: string;
+  headers?: Record<string, string>;
+  body?: Buffer;
+  /** Yalnız `docker.api`: Docker'ın yanıtı için süre sınırı. */
+  timeoutMs?: number;
+};
+
+export type DockerApiResponse = { status: number; headers: Record<string, string>; body: Buffer };
+
+export type DockerApiStreamHead = { status: number; headers: Record<string, string> };
+
 // --- Codec -----------------------------------------------------------------
 
 /**
@@ -217,7 +246,16 @@ export type AgentHello = {
   hostname: string;
   osName: string | null;
   time: number;
-  capabilities: { docker: boolean; helper: boolean; hostRoot: boolean; reports: boolean };
+  capabilities: {
+    docker: boolean;
+    helper: boolean;
+    hostRoot: boolean;
+    reports: boolean;
+    /** `docker.api` / `docker.apiStream` var (yoksa: eski ajan). */
+    dockerApi?: boolean;
+    /** `DOCKER_CALLS`/`DOCKER_STREAMS` var mı; yoksa true sayılır (Node ajanı). Native ajan false. */
+    dockerRpc?: boolean;
+  };
 };
 
 export type EnrollResponse = { fingerprint: string; proof: string; hello: AgentHello };

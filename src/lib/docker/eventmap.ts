@@ -54,8 +54,38 @@ export type DockerEventRaw = {
   Action?: string;
   status?: string;
   time?: number;
+  /** Nanosaniye — JSON'da 2^53'ü aşar, tek başına benzersiz anahtar sayılmaz. */
+  timeNano?: number;
   Actor?: { ID?: string; Attributes?: Record<string, string> };
 };
+
+/**
+ * Olay akışının imleci. Docker `since`'ı DAHİL sayar (saniye çözünürlüğü):
+ * yeniden bağlanınca imleç saniyesindeki olaylar tekrar gelir. O saniyede
+ * görülen olayların anahtarları tutulur, tekrarlar atlanır — atılmadan önce
+ * her yeniden bağlanma son olayı bir kez daha kaydediyordu.
+ */
+export type EventCursor = { ts: number; seen: Set<string> };
+
+export function newEventCursor(ts = 0): EventCursor {
+  return { ts, seen: new Set() };
+}
+
+/** Olay yeni mi? Yeniyse imleci ilerletir; tekrarsa false. */
+export function acceptEvent(cursor: EventCursor, raw: DockerEventRaw): boolean {
+  const ts = Number(raw.time ?? 0);
+  if (!Number.isFinite(ts) || ts <= 0) return true;
+  if (ts < cursor.ts) return false;
+  const key = `${raw.timeNano ?? ""}|${raw.Type ?? ""}|${raw.Action ?? raw.status ?? ""}|${raw.Actor?.ID ?? ""}`;
+  if (ts === cursor.ts) {
+    if (cursor.seen.has(key)) return false;
+  } else {
+    cursor.ts = ts;
+    cursor.seen.clear();
+  }
+  cursor.seen.add(key);
+  return true;
+}
 
 export type ClassifiedEvent = {
   /** Normalleştirilmiş eylem: `health_status: unhealthy` → `health_status`. */

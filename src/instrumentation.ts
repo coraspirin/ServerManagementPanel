@@ -72,15 +72,36 @@ export async function register() {
   const { prepareSetupCode } = await import("@/lib/auth/setup");
   prepareSetupCode();
 
+  // D1 — yerel sunucu isteğe bağlı: host mount'larının üçü de yoksa devre
+  // dışı bırakılır (bkz. lib/hosts/local-state.ts). Bağlamsız kod yolları
+  // (`currentHostId()`) artık yerele değil varsayılan sunucuya düşer.
+  const { isMockMode } = await import("@/lib/env");
+  const { LOCAL_HOST_ID, setDefaultHostResolver } = await import("@/lib/hosts/context");
+  const { defaultHostId } = await import("@/lib/hosts/resolve");
+  const { getHost, listHosts } = await import("@/lib/hosts/store");
+  setDefaultHostResolver(() => defaultHostId(listHosts()));
+  if (!isMockMode()) {
+    const { applyLocalProbe } = await import("@/lib/hosts/local-state");
+    const probe = applyLocalProbe();
+    if (probe.decision === "disable") {
+      console.log("[hosts] docker.sock, /host/proc ve /host/root yok — yerel sunucu devre dışı bırakıldı"); // i18n-ignore — operatör logu
+    } else if (probe.decision === "enable") {
+      console.log("[hosts] host mount'ları geri geldi — yerel sunucu yeniden etkin"); // i18n-ignore — operatör logu
+    }
+  }
+  const localEnabled = getHost(LOCAL_HOST_ID)?.enabled === true;
+
   // Yerel sunucunun adı/hostname'i — migration "local" adıyla tohumluyor.
   // Başarısızlık açılışı durdurmaz: ad yalnızca görünüm.
-  try {
-    const { syncLocalHost } = await import("@/lib/hosts/store");
-    const { getSystemProvider } = await import("@/lib/providers");
-    const renamed = syncLocalHost(await getSystemProvider().info());
-    if (renamed) console.log(`[hosts] yerel sunucu adı: ${renamed}`); // i18n-ignore — operatör logu
-  } catch (error) {
-    console.warn("[hosts] yerel sunucu bilgisi okunamadı:", error); // i18n-ignore — operatör logu
+  if (localEnabled) {
+    try {
+      const { syncLocalHost } = await import("@/lib/hosts/store");
+      const { providersFor } = await import("@/lib/providers");
+      const renamed = syncLocalHost(await providersFor(LOCAL_HOST_ID).system.info());
+      if (renamed) console.log(`[hosts] yerel sunucu adı: ${renamed}`); // i18n-ignore — operatör logu
+    } catch (error) {
+      console.warn("[hosts] yerel sunucu bilgisi okunamadı:", error); // i18n-ignore — operatör logu
+    }
   }
 
   const { pruneExpiredSessions } = await import("@/lib/auth/session");
@@ -111,6 +132,8 @@ export async function register() {
     Bağlantı kurulamazsa yalnızca günlüğe yazıyor; panel açılmaya devam
     ediyor. Olay akışı panelin çalışma koşulu değil.
   */
-  const { startDockerEvents } = await import("@/lib/docker/events");
-  startDockerEvents();
+  if (localEnabled) {
+    const { startDockerEvents } = await import("@/lib/docker/events");
+    startDockerEvents();
+  }
 }

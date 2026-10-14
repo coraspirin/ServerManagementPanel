@@ -47,6 +47,10 @@ export type HostCapabilities = {
   helper?: boolean;
   hostRoot?: boolean;
   reports?: boolean;
+  /** Ham Engine API tüneli (`docker.api`) — bkz. agent/protocol.ts. */
+  dockerApi?: boolean;
+  /** Sağlayıcı RPC'si (`docker.list`…); yoksa var sayılır. Native ajan false. */
+  dockerRpc?: boolean;
 };
 
 /** Seçili sunucunun taşındığı yerler. */

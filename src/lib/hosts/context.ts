@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { HostError } from "./errors.ts";
 
 /**
  * Çoklu sunucu — "şu an hangi sunucu için çalışıyoruz?" bilgisi.
@@ -56,11 +57,53 @@ export function hostSettingsOverlay(): Record<string, unknown> | undefined {
 }
 
 /**
- * Etkin sunucu. Bağlam açılmamışsa yerel sunucu — tek sunuculu kurulumda ve
- * henüz sarmalanmamış kod yollarında davranış eskisiyle aynı kalır.
+ * Bağlam yokken kullanılacak sunucuyu bulan fonksiyon. Merkezde açılışta
+ * (`instrumentation.ts`) kaydedilir: yerel etkinse yerel, değilse ilk etkin
+ * sunucu, hiç yoksa null. Kayıt yoksa (ajan süreci, birim testleri) yerel.
+ *
+ * `globalThis`'te tutulur: Next bu modülü route paketleri ile
+ * instrumentation arasında çoğaltabilir, modül değişkeni paylaşılmayabilir.
+ */
+type DefaultHostResolver = () => number | null;
+const RESOLVER_KEY = Symbol.for("panel.defaultHostResolver");
+type ResolverHolder = { [RESOLVER_KEY]?: DefaultHostResolver };
+
+export function setDefaultHostResolver(resolver: DefaultHostResolver | null): void {
+  const holder = globalThis as ResolverHolder;
+  if (resolver) holder[RESOLVER_KEY] = resolver;
+  else delete holder[RESOLVER_KEY];
+}
+
+/**
+ * Etkin sunucu. Bağlam açılmamışsa varsayılan sunucu (yukarıdaki çözücü);
+ * hiç etkin sunucu yoksa `HostError("noHost")` — yerele sessizce düşülmez
+ * (yerel sunucu devre dışı olabilir, bkz. kararlar.md D1).
  */
 export function currentHostId(): number {
-  return storage.getStore()?.hostId ?? LOCAL_HOST_ID;
+  const store = storage.getStore();
+  if (store) return store.hostId;
+  const resolver = (globalThis as ResolverHolder)[RESOLVER_KEY];
+  if (!resolver) return LOCAL_HOST_ID;
+  const id = resolver();
+  if (id === null) throw new HostError("noHost", 0);
+  return id;
+}
+
+/** `currentHostId` gibi ama etkin sunucu yoksa fırlatmak yerine null. */
+export function currentHostIdOrNull(): number | null {
+  const store = storage.getStore();
+  if (store) return store.hostId;
+  const resolver = (globalThis as ResolverHolder)[RESOLVER_KEY];
+  return resolver ? resolver() : LOCAL_HOST_ID;
+}
+
+/**
+ * Yalnızca AÇIKÇA kurulmuş bağlamın sunucusu; bağlam yoksa null. Varsayılan
+ * sunucu tahmini yapılmaz — örn. denetim kaydı: girişi/kullanıcı işlemini
+ * rastgele bir ajana yazmak yanlış olur.
+ */
+export function contextHostId(): number | null {
+  return storage.getStore()?.hostId ?? null;
 }
 
 /** Bağlam açıkça kurulmuş mu? Teşhis ve testler için. */

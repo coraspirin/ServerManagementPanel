@@ -1,5 +1,5 @@
 # Docker — /docker
-Son güncelleme: 2026-10-08 · commit 428d5e8
+Son güncelleme: 2026-10-13 · yetki yönergesi (commit edilmedi)
 
 ## Ne yapar
 Panelin en büyük sayfası. Sekmeler: **Container'lar** (liste, kolon seçici, toplu işlem, başlat/durdur/sil, güncelle, oluştur), **Yığınlar** (compose projeleri + uygulama kurulumu — eski App Store buraya taşındı), **Image'lar** (çek, etiketle, dışa aktar, katmanlar), **Volume'ler** (gezin, klonla, dışa aktar), **Ağlar** (topoloji grafiği, bağla/ayır), **Temizlik** (prune). Container detay çekmecesi: genel, kaynaklar (grafik), env, ağ, dosyalar, YAML/compose düzenleme, compose üretme, inspect, loglar (ANSI), terminal, runbook notu.
@@ -26,6 +26,13 @@ Panelin en büyük sayfası. Sekmeler: **Container'lar** (liste, kolon seçici, 
 - Tablolar: `runbooks` (`007`), `app_stacks` (`018`), ölçümler `metrics_raw`.
 - Ajan op'ları: `docker.<metot>` (`DOCKER_CALLS` / `DOCKER_STREAMS`, `src/lib/agent/protocol.ts`), terminal `exec.start/input/resize/close/output`, compose için `helper.call`.
 - Locale: `docker.*` (çok büyük; `docker.network`, `docker.compose`, `docker.create` …).
+
+## Yetki yönergesi (D6, 2026-10-13)
+- Docker'a ulaşılamazsa ekran `socketHint` (`hintFor("dockerMissing")`, sayfada üretilir, sunucuya özel compose/DOCKER_GID komutları) ile `HintBox` gösterir.
+- Yığın kurulumu/eylemleri (`appstore/install.ts`): `InstallOutcome.hint` — helper reddi `stackHint()` ile; desen reddinde izin satırları yığın kökünden. `preflight.ts` `PreflightResult.hint` (helperMissing / patternDenied / helperUnverified / helperOutdated). `/api/appstore`, `/api/host/compose`, `compose/generate` yanıtlarına `hint` eklendi; `StackInstaller`, `StackPanel` `HintBox` çizer.
+
+## Taşıma (K2, 2026-10-13)
+- Engine API'ye giden her istek `dockerTransport()` üzerinden (`src/lib/docker/transport.ts`): yerelde docker.sock, uzak sunucuda (tünel modunda) ajanın `docker.api`'si. `docker.live.ts`, `docker/exec.ts` (yerel terminal: `localDockerTransport().hijack`), `docker/events.ts` artık soket yolunu bilmez. Testler `transport.test.ts`.
 
 ## Çoklu sunucu
 `getDockerProvider()` seçili sunucuya göre yerel ya da `remoteProviders(host)` döner; çağıran fark etmez. Yeni bir Docker metodu uzakta da çalışsın diye `DOCKER_CALLS`/`DOCKER_STREAMS`'e eklenmeli. Port linkleri uzakta `host.address` kullanır.

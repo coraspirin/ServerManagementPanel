@@ -8,6 +8,17 @@ import type { SystemdUnit } from "@/lib/host/helper";
 import { ConsolePanel } from "./ConsolePanel";
 import { useT } from "@/lib/i18n/client";
 import { Rich } from "@/lib/i18n/rich";
+import { HintBox } from "@/components/permissions/HintBox";
+import type { PermissionHint } from "@/lib/permissions/hint";
+
+/** API hatası + yönergesi (kararlar.md D6): `run` mesajın altında gösterir. */
+class HostCallError extends Error {
+  readonly hint: PermissionHint | null;
+  constructor(message: string, hint: PermissionHint | null) {
+    super(message);
+    this.hint = hint;
+  }
+}
 
 type Stack = {
   project: string;
@@ -28,7 +39,7 @@ async function callHost(path: string, body: unknown) {
     body: JSON.stringify(body),
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error ?? "");
+  if (!response.ok) throw new HostCallError(data.error ?? "", data.hint ?? null);
   return data;
 }
 
@@ -43,12 +54,14 @@ async function callHost(path: string, body: unknown) {
  */
 export function HostScreen({
   helperReady,
+  helperHint,
   canPower,
   canService,
   canShell,
   consoleMaxLines,
 }: {
   helperReady: boolean;
+  helperHint: PermissionHint | null;
   canPower: boolean;
   canService: boolean;
   canShell: boolean;
@@ -58,7 +71,9 @@ export function HostScreen({
   const [stacks, setStacks] = useState<Stack[] | null>(null);
   const [units, setUnits] = useState<SystemdUnit[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ kind: "ok" | "hata"; text: string } | null>(null);
+  const [message, setMessage] = useState<{ kind: "ok" | "hata"; text: string; hint?: PermissionHint | null } | null>(
+    null,
+  );
   const [delayMinutes, setDelayMinutes] = useState(1);
 
   useEffect(() => {
@@ -84,7 +99,11 @@ export function HostScreen({
     try {
       setMessage({ kind: "ok", text: await fn() });
     } catch (error) {
-      setMessage({ kind: "hata", text: (error instanceof Error && error.message) || t("common.errors.actionFailed") });
+      setMessage({
+        kind: "hata",
+        text: (error instanceof Error && error.message) || t("common.errors.actionFailed"),
+        hint: error instanceof HostCallError ? error.hint : null,
+      });
     } finally {
       setBusy(null);
     }
@@ -102,9 +121,15 @@ export function HostScreen({
             values={{ ask: <em>{t("hostScreen.helperAsk")}</em> }}
           />
         </p>
-        <pre className="mt-3 overflow-x-auto rounded border border-line bg-canvas p-3 font-mono text-[11px]">
+        {helperHint ? (
+          <div className="mt-3">
+            <HintBox hint={helperHint} />
+          </div>
+        ) : (
+          <pre className="mt-3 overflow-x-auto rounded border border-line bg-canvas p-3 font-mono text-[11px]">
 {t("hostScreen.helperSteps")}
-        </pre>
+          </pre>
+        )}
       </div>
     );
   }
@@ -122,6 +147,7 @@ export function HostScreen({
           <span className="whitespace-pre-wrap font-mono text-xs">{message.text}</span>
         </p>
       )}
+      {message?.hint && <HintBox hint={message.hint} />}
 
       {canShell && <ConsolePanel maxLines={consoleMaxLines} />}
 

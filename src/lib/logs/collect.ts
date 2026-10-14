@@ -108,7 +108,10 @@ async function collectContainers(outcome: CollectOutcome): Promise<IncomingLine[
       const stream = provider.logs(container.id, {
         // İmleç bir saniye ileriden veriliyor (Docker `since`'ı dahil kabul
         // eder); ilk turda ise geriye dönük olarak son N satır alınır.
-        tail: since === 0 ? perSource : 0,
+        // `tail` HER turda N: Docker (API 1.47'de doğrulandı) `tail=0`'ı
+        // "hiç satır" sayıyor — eskiden imleç varken 0 gönderiliyordu ve
+        // ilk turdan sonra hiçbir satır toplanmıyordu (2026-10-12'den beri).
+        tail: perSource,
         follow: false,
         signal: controller.signal,
         since: since === 0 ? undefined : since + 1,

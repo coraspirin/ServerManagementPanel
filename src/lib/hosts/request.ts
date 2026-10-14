@@ -37,12 +37,22 @@ export function resolveRequestHost(request: Request): HostPick {
   );
 }
 
-/** Server component'ler için: çerezdeki seçim (yoksa yerel sunucu). */
-export async function resolvePageHost(): Promise<Host> {
+/**
+ * Server component'ler için: çerezdeki seçim, yoksa varsayılan sunucu.
+ * Etkin sunucu yoksa null — çağıran `/ilk-sunucu`ya yönlendirir
+ * ("İlk sunucunu ekle", kararlar.md D1).
+ */
+export async function resolvePageHost(): Promise<Host | null> {
   const store = await cookies();
   const pick = pickHost({ cookie: store.get(HOST_COOKIE)?.value ?? null }, listHosts());
-  const id = pick.ok ? pick.hostId : 1;
-  return getHost(id) ?? (getHost(1) as Host);
+  return pick.ok ? getHost(pick.hostId) : null;
+}
+
+/** Sayfa için sunucu; yoksa "İlk sunucunu ekle" sayfasına gönderir. */
+async function requirePageHost(): Promise<Host> {
+  const host = await resolvePageHost();
+  if (!host) redirect("/ilk-sunucu");
+  return host;
 }
 
 /**
@@ -52,7 +62,7 @@ export async function resolvePageHost(): Promise<Host> {
  *   enterHost(await pageHostId());
  */
 export async function pageHostId(options: { agent?: boolean } = {}): Promise<number> {
-  const host = await resolvePageHost();
+  const host = await requirePageHost();
   // Ekran henüz panel-agent'a taşınmadıysa uzak sunucuda yerel veriyi
   // göstermesin (bkz. guardHostApi'deki `agent` seçeneği).
   if (host.agentType === "agent" && !options.agent) {
@@ -72,7 +82,7 @@ export async function pageHostId(options: { agent?: boolean } = {}): Promise<num
  * yanıltıcı olurdu.
  */
 export async function requireLocalPage(): Promise<void> {
-  const host = await resolvePageHost();
+  const host = await requirePageHost();
   if (!host.isLocal) redirect("/hosts/unavailable?reason=unsupported");
 }
 
@@ -82,6 +92,6 @@ export async function requireLocalPage(): Promise<void> {
  *   const data = await withPageHost(() => loadOverview());
  */
 export async function withPageHost<T>(load: (host: Host) => Promise<T> | T): Promise<T> {
-  const host = await resolvePageHost();
+  const host = await requirePageHost();
   return runWithHost(host.id, () => load(host));
 }

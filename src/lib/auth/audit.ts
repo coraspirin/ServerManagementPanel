@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getDb } from "@/lib/db/client";
-import { currentHostId } from "@/lib/hosts/context";
+import { contextHostId, LOCAL_HOST_ID } from "@/lib/hosts/context";
 
 export type AuditEntry = {
   userId?: number | null;
@@ -27,8 +27,10 @@ export function audit(entry: AuditEntry): void {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
-        // Çoklu sunucu: işlem hangi sunucu seçiliyken yapıldıysa o.
-        currentHostId(),
+        // Çoklu sunucu: işlem hangi sunucu seçiliyken yapıldıysa o. Sunucu
+        // bağlamı olmayan işlemler (giriş, kullanıcı, ayar) panelin kendisine,
+        // yani yerel satıra yazılır — yerel devre dışı olsa da (D1).
+        contextHostId() ?? LOCAL_HOST_ID,
         entry.userId ?? null,
         entry.username ?? "",
         entry.action,

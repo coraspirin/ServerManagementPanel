@@ -17,6 +17,8 @@ import { ContainerRow, type RowHandlers } from "./ContainerRow";
 import { ComposeSection } from "./ComposeSection";
 import { StackInstaller } from "./StackInstaller";
 import { readCsrfToken } from "./detail/shared";
+import { HintBox } from "@/components/permissions/HintBox";
+import type { PermissionHint } from "@/lib/permissions/hint";
 import { CSRF_HEADER } from "@/lib/auth/types";
 import { formatBytes } from "@/lib/metrics/catalog";
 import { useFormat, useT } from "@/lib/i18n/client";
@@ -96,7 +98,9 @@ export function StackPanel({
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
   const [busy, setBusy] = useState<string | null>(null);
-  const [sonuc, setSonuc] = useState<{ stack: string; ok: boolean; text: string } | null>(null);
+  const [sonuc, setSonuc] = useState<{ stack: string; ok: boolean; text: string; hint?: PermissionHint } | null>(
+    null,
+  );
   const [editing, setEditing] = useState<string | null>(null);
   const [kurulum, setKurulum] = useState(false);
 
@@ -155,10 +159,11 @@ export function StackPanel({
         headers: { "content-type": "application/json", [CSRF_HEADER]: readCsrfToken() },
         body: JSON.stringify({ action, dir: stack.workingDir }),
       });
-      const payload = (await response.json()) as { output?: string; error?: string };
+      const payload = (await response.json()) as { output?: string; error?: string; hint?: PermissionHint };
       setSonuc({
         stack: stack.name,
         ok: response.ok,
+        hint: response.ok ? undefined : payload.hint,
         text: response.ok
           ? payload.output?.trim() || t("docker.stacks.done", { action: label })
           : (payload.error ?? t("common.errors.actionFailed")),
@@ -361,6 +366,11 @@ export function StackPanel({
                   >
                     {sonuc.text}
                   </pre>
+                )}
+                {sonuc?.stack === stack.name && sonuc.hint && (
+                  <div className="mx-4 mb-2">
+                    <HintBox hint={sonuc.hint} compact />
+                  </div>
                 )}
 
                 {editing === stack.name && members.length > 0 && (

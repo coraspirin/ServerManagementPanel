@@ -125,7 +125,7 @@ export async function POST(request: Request) {
     return Response.json(
       outcome.ok
         ? { ...state(), ok: true, message: outcome.message, output: outcome.output }
-        : { ...state(), ok: false, error: outcome.message },
+        : { ...state(), ok: false, error: outcome.message, hint: outcome.hint },
       { status: outcome.ok ? 200 : 400 },
     );
   }
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
   if (action === "remove") {
     const outcome = await removeStack(String(body.name ?? ""), actor);
     return Response.json(
-      { ...state(), ok: outcome.ok, message: outcome.message },
+      { ...state(), ok: outcome.ok, message: outcome.message, hint: outcome.hint },
       { status: outcome.ok ? 200 : 400 },
     );
   }
@@ -143,7 +143,7 @@ export async function POST(request: Request) {
     return Response.json(
       outcome.ok
         ? { ...state(), ok: true, message: outcome.message }
-        : { ...state(), ok: false, error: outcome.message },
+        : { ...state(), ok: false, error: outcome.message, hint: outcome.hint },
       { status: outcome.ok ? 200 : 400 },
     );
   }

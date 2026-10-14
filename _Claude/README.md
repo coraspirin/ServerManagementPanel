@@ -1,5 +1,5 @@
 # Sayfa rehberi — Sunucu Yönetim Paneli
-Son güncelleme: 2026-10-11 · commit a8ca514 (+ sadeleştirme, commit edilmedi)
+Son güncelleme: 2026-10-13 · boş başlangıç + yetki yönergesi (commit edilmedi)
 
 Bir sayfa üzerinde çalışmadan önce ilgili dosyayı oku: hangi dosyalar, uçlar, tablolar, ajan op'ları ve kararlar orada. Kod değişince ilgili `.md`'yi de güncelle (tarih + commit satırı dahil).
 
@@ -41,11 +41,14 @@ Bir sayfa üzerinde çalışmadan önce ilgili dosyayı oku: hangi dosyalar, uç
 | `/settings` | [settings.md](settings.md) | Ayar grupları, yapılandırma aktarma |
 | `/update` | [update.md](update.md) | Panelin kendini güncellemesi |
 | `/`, `/login`, `/kurulum` | [_digerleri.md](_digerleri.md) | Kök yönlendirme, giriş, kurulum sihirbazı |
+| `/ilk-sunucu` | [hosts.md](hosts.md) | Etkin sunucu yokken "İlk sunucunu ekle" (D1) |
+| `/yetki-yok` | [users.md](users.md) | Yetki yönergesi: eksik izin, roller, rol düzenleme (D6) |
 
 ## Ortak altyapı (her sayfada aynı, sayfa dosyalarında tekrar edilmez)
 - **Yapı**: Next.js 16 (App Router, standalone, Turbopack). Sayfalar `src/app/(panel)/<x>/page.tsx` (sunucu bileşeni, ilk veriyi okur) + `<X>Screen.tsx` (istemci). API `src/app/api/**/route.ts`. İş mantığı `src/lib/**`. Menü `src/lib/nav.ts`.
-- **Yetki**: sayfa `requirePermission("x.y")` / `requireSession()` (`src/lib/auth/guard.ts`); uç `guardApi` / `guardHostApi(request, perm, opts)` (`src/lib/auth/api.ts`). İzin anahtarları `src/lib/auth/types.ts`. Yazma işlemleri `audit()` (`src/lib/auth/audit.ts`). İstemci çağrıları CSRF başlığı taşır (`CSRF_HEADER`). `src/middleware.ts` yalnız çerez varlığına bakar.
-- **Çoklu sunucu** (ayrıntı `hosts.md`): `guardHostApi(..., { agent: true })` + `enterHost(guard.hostId)`; sayfada `enterHost(await pageHostId({ agent: true }))`. İşaretsiz uç ajan sunucusunda 501; `{ localOnly: true }` yalnız yerel. Host dosya sistemi işi → `onHost("op", args, localFn)` + `src/lib/agent/ops.ts` kaydı. Docker işi → `getDockerProvider()` (kendiliğinden yönlenir; yeni metot `DOCKER_CALLS`'a). `AGENT_PROTOCOL = 3` (`src/lib/agent/protocol.ts`). İstemci: `src/lib/client/host.ts` (`x-panel-host` başlığı, `withHostQuery()`).
+- **Yetki**: sayfa `requirePermission("x.y")` (eksikse `/yetki-yok?need=x.y`) / `requireSession()` (`src/lib/auth/guard.ts`); uç `guardApi` / `guardHostApi(request, perm, opts)` (`src/lib/auth/api.ts`). İzin anahtarları `src/lib/auth/types.ts`. Yazma işlemleri `audit()` (`src/lib/auth/audit.ts`). İstemci çağrıları CSRF başlığı taşır (`CSRF_HEADER`). `src/middleware.ts` yalnız çerez varlığına bakar.
+- **Çoklu sunucu** (ayrıntı `hosts.md`): `guardHostApi(..., { agent: true })` + `enterHost(guard.hostId)`; sayfada `enterHost(await pageHostId({ agent: true }))`. İşaretsiz uç ajan sunucusunda 501; `{ localOnly: true }` yalnız yerel. Host dosya sistemi işi → `onHost("op", args, localFn)` + `src/lib/agent/ops.ts` kaydı. Docker işi → `getDockerProvider()` (kendiliğinden yönlenir; yeni metot `DOCKER_CALLS`'a). `AGENT_PROTOCOL = 3` (`src/lib/agent/protocol.ts`). **Yerel sunucu isteğe bağlı** (D1): seçim yerele sessizce düşmez, etkin sunucu yoksa `/ilk-sunucu` / API 409 `noHost`.
+- **Yetki/yetenek yönergesi** (D6): `PermissionHint` (`src/lib/permissions/hint.ts`, sunucu `hintFor()`), katalog `src/lib/permissions/catalog.ts`, istemci `<HintBox>`; API hatalarında `error` korunur, `hint` eklenir. Bkz. `tarifler.md` → "Katalog satırı ekle". İstemci: `src/lib/client/host.ts` (`x-panel-host` başlığı, `withHostQuery()`).
 - **Sağlayıcılar** (`src/lib/providers/`): `docker|metrics|system|hardware` × `live|mock` + `remote.ts`. `MOCK_MODE=1` ile fixture'larla çalışır.
 - **Host'ta iş**: panel container'ı uid 1001, host kökü `/host/root` SALT-OKUNUR. Yükseltilmiş iş = panel imajından geçici container (`runThrowaway`, `panelImage()` `src/lib/host/self.ts`). Komut gerekiyorsa host-helper (`host-helper/panel-helper.py`, `src/lib/host/helper.ts`; izin listesi host'ta).
 - **Veritabanı**: `node:sqlite` (senkron), `src/lib/db/client.ts`; migration'lar TS modülü `src/lib/db/migrations/NNN_ad.ts` + `index.ts`'e kayıt (son: `035_drop_removed_features.ts`). Gizli değerler `encryptSecret` (`src/lib/crypto.ts`, `MASTER_KEY`).

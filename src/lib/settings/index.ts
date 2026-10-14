@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getDb } from "@/lib/db/client";
-import { currentHostId, hostSettingsOverlay, runWithHost } from "@/lib/hosts/context";
+import { currentHostIdOrNull, hostSettingsOverlay, runWithHost } from "@/lib/hosts/context";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { audit } from "@/lib/auth/audit";
 import { findSetting, settingDefs } from "@/settings.schema";
@@ -165,7 +165,11 @@ export function getSetting<T = string | number | boolean>(
     // veritabanındaki (boş) değerlere bakılmaz.
     const overlay = hostSettingsOverlay();
     if (overlay && key in overlay) return overlay[key] as T;
-    if (def.hostScoped) scope = { type: "host", id: String(currentHostId()) };
+    if (def.hostScoped) {
+      // Etkin sunucu yoksa (D1) sunucu ezmesi yok — global değer geçerli.
+      const hostId = currentHostIdOrNull();
+      if (hostId !== null) scope = { type: "host", id: String(hostId) };
+    }
   }
 
   if (scope) {

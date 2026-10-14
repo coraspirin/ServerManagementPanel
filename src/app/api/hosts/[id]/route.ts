@@ -1,8 +1,11 @@
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
 import { validateHostName } from "@/lib/hosts/agents";
+import { probeLocalMounts } from "@/lib/hosts/local-probe";
+import { clearLocalAutoDisabled } from "@/lib/hosts/local-state";
 import { getHost, removeHost, updateHostMeta } from "@/lib/hosts/store";
 import { toHostView } from "@/lib/hosts/view";
+import { isMockMode } from "@/lib/env";
 import { serverT } from "@/lib/i18n/runtime";
 import { clientIp } from "@/lib/request";
 
@@ -37,14 +40,20 @@ export async function PATCH(request: Request, { params }: Params) {
     patch.name = body.name.trim();
   }
   if (typeof body.enabled === "boolean") {
-    // Panelin kendi sunucusu kapatılamaz: seçici ve işler ona dayanıyor.
-    if (host.isLocal && !body.enabled) {
-      return Response.json({ error: serverT("hosts.validation.localAlwaysOn") }, { status: 400 });
+    // Yerel sunucu isteğe bağlı (kararlar.md D1): kapatılabilir; mount'ları
+    // hiç yokken açılamaz (açılsa her ekran hata verirdi).
+    if (host.isLocal && body.enabled) {
+      const mounts = probeLocalMounts();
+      if (!isMockMode() && !mounts.docker && !mounts.proc && !mounts.root) {
+        return Response.json({ error: serverT("hosts.validation.localNoMounts") }, { status: 400 });
+      }
     }
     patch.enabled = body.enabled;
   }
 
   updateHostMeta(host.id, patch);
+  // Elle verilen karar panelin otomatik kararını ezer (bkz. local-state.ts).
+  if (host.isLocal && patch.enabled !== undefined) clearLocalAutoDisabled();
   audit({
     userId: guard.session.user.id,
     username: guard.session.user.username,

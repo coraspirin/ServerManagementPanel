@@ -10,7 +10,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { classify, type DockerEventRaw } from "./eventmap.ts";
+import { acceptEvent, classify, newEventCursor, type DockerEventRaw } from "./eventmap.ts";
 
 function olay(action: string, attrs: Record<string, string> = {}): DockerEventRaw {
   return {
@@ -124,5 +124,37 @@ describe("classify — içerik", () => {
 
   it("gruplama anahtarı container ve eylemden oluşur", () => {
     assert.equal(classify(olay("start"))?.alertKey, "docker.start.web");
+  });
+});
+
+describe("acceptEvent (yeniden bağlanma tekrarı)", () => {
+  const die = { Type: "container", Action: "die", time: 100, timeNano: 100_000_000_001, Actor: { ID: "c1" } };
+  const destroy = { ...die, Action: "destroy", timeNano: 100_000_000_002 };
+
+  it("aynı olay ikinci kez gelirse atlanır", () => {
+    const cursor = newEventCursor();
+    assert.equal(acceptEvent(cursor, die), true);
+    assert.equal(acceptEvent(cursor, { ...die }), false);
+  });
+
+  it("aynı saniyedeki farklı olaylar kabul edilir", () => {
+    const cursor = newEventCursor();
+    assert.equal(acceptEvent(cursor, die), true);
+    assert.equal(acceptEvent(cursor, destroy), true);
+    assert.equal(acceptEvent(cursor, { ...die, Actor: { ID: "c2" } }), true);
+  });
+
+  it("imleçten eski olay atlanır, yeni saniye imleci ilerletir", () => {
+    const cursor = newEventCursor(100);
+    assert.equal(acceptEvent(cursor, { ...die, time: 99 }), false);
+    assert.equal(acceptEvent(cursor, { ...die, time: 101, timeNano: 101_000_000_000 }), true);
+    assert.equal(cursor.ts, 101);
+    // Önceki saniyenin anahtarları bırakıldı: bellek büyümez.
+    assert.equal(cursor.seen.size, 1);
+  });
+
+  it("zamanı olmayan olay süzülmez", () => {
+    const cursor = newEventCursor(100);
+    assert.equal(acceptEvent(cursor, { Type: "container", Action: "start" }), true);
   });
 });

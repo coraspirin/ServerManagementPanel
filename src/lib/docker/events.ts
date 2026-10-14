@@ -1,6 +1,6 @@
 import "server-only";
 
-import http from "node:http";
+import { StringDecoder } from "node:string_decoder";
 
 import { agentStream } from "@/lib/agent/client";
 import { announce } from "@/lib/alerts/announce";
@@ -10,7 +10,9 @@ import { currentHostId, runWithHost } from "@/lib/hosts/context";
 import { getHost } from "@/lib/hosts/store";
 import type { Host } from "@/lib/hosts/types";
 import { getBool } from "@/lib/settings";
-import { classify, type DockerEventRaw } from "./eventmap";
+import { acceptEvent, classify, newEventCursor, type DockerEventRaw, type EventCursor } from "./eventmap";
+import { dockerTransport, localDockerTransport, type DockerStreamReply, type DockerTransport } from "./transport";
+import { remoteDockerMode, remoteDockerTransport } from "./transport.remote";
 
 /**
  * Docker olay akışına abonelik (M3.32).
@@ -44,8 +46,6 @@ import { classify, type DockerEventRaw } from "./eventmap";
  * adını taşır. İzleyicileri `hosts.heartbeat` işi eşitliyor.
  */
 
-const SOCKET_PATH = process.env.DOCKER_SOCKET ?? "/var/run/docker.sock";
-
 /** İlk yeniden bağlanma gecikmesi; her başarısızlıkta ikiye katlanıyor. */
 const ILK_GECIKME_MS = 2_000;
 const AZAMI_GECIKME_MS = 60_000;
@@ -54,6 +54,8 @@ let started = false;
 let gecikme = ILK_GECIKME_MS;
 /** Son işlenen olayın zamanı — yeniden bağlanmada boşluk bırakmamak için. */
 let sonZaman = 0;
+/** Yerel akışın tekrar süzgeci (bkz. eventmap.ts `acceptEvent`). */
+const yerelImlec = newEventCursor();
 
 /**
  * Olayı kaydeder, gerekiyorsa bildirir.
@@ -63,10 +65,16 @@ let sonZaman = 0;
  * `start` olayının bildirim hattını (Telegram, ntfy, MQTT) hiç meşgul
  * etmemesi demek — sunucuda günde yüzlerce böyle olay oluyor.
  */
-async function handle(raw: DockerEventRaw, remote?: { host: Host; state: { lastTs: number } }): Promise<void> {
+async function handle(
+  raw: DockerEventRaw,
+  remote?: { host: Host; state: { lastTs: number; cursor: EventCursor } },
+): Promise<void> {
   // Uzak sunucunun olayı o sunucunun bağlamında kaydedilir/bildirilir: olay
   // listesinde o sunucuya düşer, bildirim başlığı sunucu adını taşır.
   if (remote && currentHostId() !== remote.host.id) return runWithHost(remote.host.id, () => handle(raw, remote));
+
+  // Yeniden bağlanmada `since` saniyesindeki olaylar tekrar gelir.
+  if (!acceptEvent(remote ? remote.state.cursor : yerelImlec, raw)) return;
 
   const classified = classify(raw);
   if (!classified) return;
@@ -108,80 +116,76 @@ async function handle(raw: DockerEventRaw, remote?: { host: Host; state: { lastT
 }
 
 function connect(): void {
+  void connectAsync();
+}
+
+async function connectAsync(): Promise<void> {
   const since = sonZaman > 0 ? `&since=${sonZaman}` : "";
   const path =
     "/events?filters=" +
     encodeURIComponent(JSON.stringify({ type: ["container"] })) +
     since;
 
-  const req = http.request(
-    {
-      socketPath: SOCKET_PATH,
-      path,
-      method: "GET",
-      // Zaman aşımı YOK: akış tanımı gereği sessiz kalabilir. `timeout`
-      // vermek, olay olmayan her dakikada bağlantıyı koparırdı.
-    },
-    (res) => {
-      if (res.statusCode !== 200) {
-        res.resume();
-        console.error(`[docker-events] beklenmeyen yanıt: HTTP ${res.statusCode}`);
-        yenidenBagla();
-        return;
+  // Zaman aşımı YOK: akış tanımı gereği sessiz kalabilir. Süre vermek, olay
+  // olmayan her dakikada bağlantıyı koparırdı. Bu izleyici her zaman BU
+  // makinenin Docker'ı; uzak sunucular `watchRemote` ile izlenir.
+  let response: DockerStreamReply;
+  try {
+    response = await localDockerTransport().stream({ path, timeoutMs: 0 });
+  } catch (error) {
+    console.error(`[docker-events] bağlanılamadı: ${error instanceof Error ? error.message : error}`);
+    yenidenBagla();
+    return;
+  }
+
+  if (response.status !== 200) {
+    response.close();
+    console.error(`[docker-events] beklenmeyen yanıt: HTTP ${response.status}`);
+    yenidenBagla();
+    return;
+  }
+
+  console.log("[docker-events] Docker olay akışına bağlanıldı");
+  gecikme = ILK_GECIKME_MS;
+
+  /*
+    Akış NDJSON: her satır bir olay. Ama TCP parçaları satır sınırında
+    gelmiyor — bir olay iki parçaya bölünebiliyor ya da bir parçada üç
+    olay birden gelebiliyor. Tampon bu yüzden şart; parçayı doğrudan
+    `JSON.parse`a vermek yarım satırlarda çöker. Çok baytlı UTF-8 karakteri
+    de iki parçaya bölünebilir: çözücü onu bir sonraki parçaya taşır.
+  */
+  const decoder = new StringDecoder("utf8");
+  let buffer = "";
+  try {
+    for await (const chunk of response.body) {
+      buffer += decoder.write(chunk);
+
+      let index = buffer.indexOf("\n");
+      while (index !== -1) {
+        const line = buffer.slice(0, index).trim();
+        buffer = buffer.slice(index + 1);
+        index = buffer.indexOf("\n");
+
+        if (!line) continue;
+        try {
+          void handle(JSON.parse(line) as DockerEventRaw);
+        } catch {
+          // Bozuk bir satır akışı bitirmemeli.
+        }
       }
 
-      console.log("[docker-events] Docker olay akışına bağlanıldı");
-      gecikme = ILK_GECIKME_MS;
-
-      /*
-        Akış NDJSON: her satır bir olay. Ama TCP parçaları satır sınırında
-        gelmiyor — bir olay iki parçaya bölünebiliyor ya da bir parçada üç
-        olay birden gelebiliyor. Tampon bu yüzden şart; parçayı doğrudan
-        `JSON.parse`a vermek yarım satırlarda çöker.
-      */
-      let buffer = "";
-      res.setEncoding("utf8");
-
-      res.on("data", (chunk: string) => {
-        buffer += chunk;
-
-        let index = buffer.indexOf("\n");
-        while (index !== -1) {
-          const line = buffer.slice(0, index).trim();
-          buffer = buffer.slice(index + 1);
-          index = buffer.indexOf("\n");
-
-          if (!line) continue;
-          try {
-            void handle(JSON.parse(line) as DockerEventRaw);
-          } catch {
-            // Bozuk bir satır akışı bitirmemeli.
-          }
-        }
-
-        // Tampon aşırı büyürse (bozuk akış) sıfırlanıyor: sonsuza kadar
-        // büyüyen bir dize belleği tüketir.
-        if (buffer.length > 1_000_000) buffer = "";
-      });
-
-      res.on("end", () => {
-        console.warn("[docker-events] akış kapandı");
-        yenidenBagla();
-      });
-
-      res.on("error", (error) => {
-        console.error("[docker-events] akış hatası:", error.message);
-        yenidenBagla();
-      });
-    },
-  );
-
-  req.on("error", (error) => {
-    console.error(`[docker-events] bağlanılamadı: ${error.message}`);
-    yenidenBagla();
-  });
-
-  req.end();
+      // Tampon aşırı büyürse (bozuk akış) sıfırlanıyor: sonsuza kadar
+      // büyüyen bir dize belleği tüketir.
+      if (buffer.length > 1_000_000) buffer = "";
+    }
+    console.warn("[docker-events] akış kapandı");
+  } catch (error) {
+    console.error("[docker-events] akış hatası:", error instanceof Error ? error.message : error);
+  } finally {
+    response.close();
+  }
+  yenidenBagla();
 }
 
 let bekleyen: NodeJS.Timeout | null = null;
@@ -226,8 +230,12 @@ export function startDockerEvents(): void {
  * MOCK_MODE'da soket yoksa hiçbir şey üretmeden iptali bekler; `DOCKER_SOCKET`
  * açıkça verildiyse (deneme için sahte bir daemon) ona bağlanır.
  */
-export async function* dockerEventStream(since: number, signal: AbortSignal): AsyncGenerator<DockerEventRaw> {
-  if (isMockMode() && !process.env.DOCKER_SOCKET) {
+export async function* dockerEventStream(
+  since: number,
+  signal: AbortSignal,
+  transport: DockerTransport = dockerTransport(),
+): AsyncGenerator<DockerEventRaw> {
+  if (transport.kind === "local" && isMockMode() && !process.env.DOCKER_SOCKET) {
     await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
     return;
   }
@@ -237,23 +245,18 @@ export async function* dockerEventStream(since: number, signal: AbortSignal): As
     encodeURIComponent(JSON.stringify({ type: ["container"] })) +
     (since > 0 ? `&since=${Math.floor(since)}` : "");
 
-  const response = await new Promise<http.IncomingMessage>((resolve, reject) => {
-    const req = http.request({ socketPath: SOCKET_PATH, path, method: "GET" }, resolve);
-    req.on("error", reject);
-    signal.addEventListener("abort", () => req.destroy(), { once: true });
-    req.end();
-  });
+  const response = await transport.stream({ path, timeoutMs: 0, signal });
 
-  if (response.statusCode !== 200) {
-    response.resume();
-    throw new Error(`HTTP ${response.statusCode}`);
+  if (response.status !== 200) {
+    response.close();
+    throw new Error(`HTTP ${response.status}`);
   }
 
+  const decoder = new StringDecoder("utf8");
   let buffer = "";
-  response.setEncoding("utf8");
   try {
-    for await (const chunk of response) {
-      buffer += chunk as string;
+    for await (const chunk of response.body) {
+      buffer += decoder.write(chunk);
       let index: number;
       while ((index = buffer.indexOf("\n")) !== -1) {
         const line = buffer.slice(0, index).trim();
@@ -268,7 +271,7 @@ export async function* dockerEventStream(since: number, signal: AbortSignal): As
       if (buffer.length > 1_000_000) buffer = "";
     }
   } finally {
-    response.destroy();
+    response.close();
   }
 }
 
@@ -319,7 +322,8 @@ function pause(ms: number, signal: AbortSignal): Promise<void> {
 async function watchRemote(hostId: number, signal: AbortSignal): Promise<void> {
   // İlk bağlantıda geçmiş taranmaz: izleyici açılmadan önceki olaylar ya
   // zaten kayıtlı ya da ilgisiz. Kopmalardan sonra ise son görülenden devam.
-  const state = { lastTs: Math.floor(Date.now() / 1000) };
+  const startTs = Math.floor(Date.now() / 1000);
+  const state = { lastTs: startTs, cursor: newEventCursor(startTs) };
   let delay = ILK_GECIKME_MS;
 
   while (!signal.aborted) {
@@ -329,7 +333,13 @@ async function watchRemote(hostId: number, signal: AbortSignal): Promise<void> {
     if (!watchable(host)) return;
 
     try {
-      for await (const raw of agentStream<DockerEventRaw>(host, "docker.events", [state.lastTs], signal)) {
+      // Ham API tünelinde olay akışı da `/events` üzerinden (native ajan
+      // `docker.events` op'unu bilmez); aksi hâlde ajandaki hazır akış.
+      const events =
+        remoteDockerMode(host) === "api"
+          ? dockerEventStream(state.lastTs, signal, remoteDockerTransport(host))
+          : agentStream<DockerEventRaw>(host, "docker.events", [state.lastTs], signal);
+      for await (const raw of events) {
         delay = ILK_GECIKME_MS;
         await runWithHost(host.id, () => handle(raw, { host, state }));
       }

@@ -4,10 +4,12 @@ import path from "node:path";
 
 import { audit } from "@/lib/auth/audit";
 import { getDb } from "@/lib/db/client";
-import { callHelper } from "@/lib/host/helper";
+import { callHelper, type HelperResponse } from "@/lib/host/helper";
 import { panelImage } from "@/lib/host/self";
 import { currentHostId } from "@/lib/hosts/context";
 import { serverT } from "@/lib/i18n/runtime";
+import type { PermissionHint } from "@/lib/permissions/hint";
+import { hintFor } from "@/lib/permissions/hint.server";
 import { getDockerProvider } from "@/lib/providers";
 import { getString } from "@/lib/settings";
 
@@ -149,6 +151,8 @@ export type InstallOutcome = {
    * ve servis parolasız açılır.
    */
   warnings?: string;
+  /** Helper reddettiyse birleşik yönerge (kararlar.md D6); `message` aynı kalır. */
+  hint?: PermissionHint;
 };
 
 /**
@@ -175,6 +179,17 @@ function explainHelper(error: string, directory: string): string {
     return serverT("stacks.helper.unknownAction");
   }
   return error;
+}
+
+/**
+ * Helper reddinin yönergesi. Desen reddinde izin satırları yığın kökünden
+ * üretilir (callHelper dizini bilmez).
+ */
+function stackHint(response: HelperResponse, directory: string): PermissionHint | undefined {
+  if (response.hint?.code === "patternDenied") {
+    return hintFor("patternDenied", { directory, allowLines: allowLinesFor(stacksRoot()).split("\n") });
+  }
+  return response.hint;
 }
 
 /**
@@ -362,6 +377,7 @@ export async function installComposeStack(
         }),
     output: (up.stdout ?? "") + (up.stderr ?? ""),
     warnings,
+    hint: ok ? undefined : stackHint(up, directory),
   };
 }
 
@@ -405,6 +421,7 @@ export async function stackAction(
           stack.directory,
         ),
     output: (response.stdout ?? "") + (response.stderr ?? ""),
+    hint: ok ? undefined : stackHint(response, stack.directory),
   };
 }
 
@@ -452,5 +469,6 @@ export async function removeStack(
           reason: explainHelper(response.error ?? "", stack.directory),
         }),
     output: (response.stdout ?? "") + (response.stderr ?? ""),
+    hint: stopped ? undefined : stackHint(response, stack.directory),
   };
 }

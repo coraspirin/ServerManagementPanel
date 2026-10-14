@@ -19,6 +19,7 @@ import type { PortForward } from "@/lib/security/upnp";
 import type { ScanRow } from "@/lib/security/vuln";
 import { useFormat, useT } from "@/lib/i18n/client";
 import { Rich } from "@/lib/i18n/rich";
+import { HintBox } from "@/components/permissions/HintBox";
 
 /** M3.8 — güvenlik izleme panelleri. Her biri kendi verisini kendi çekiyor. */
 
@@ -229,7 +230,14 @@ export function IntrusionPanel({
         </button>
       </div>
 
-      {state?.setupHint && (
+      {state?.hint && (
+        <div className="border-b border-line px-5 py-3">
+          <p className="mb-2 text-xs text-warn">{state.message}</p>
+          <HintBox hint={state.hint} compact />
+        </div>
+      )}
+
+      {!state?.hint && state?.setupHint && (
         <div className="border-b border-line bg-warn/5 px-5 py-3">
           <p className="text-xs text-warn">{state.message}</p>
           <code className="mt-1 block select-all whitespace-pre-wrap rounded bg-canvas px-2 py-1.5 font-mono text-[11px]">

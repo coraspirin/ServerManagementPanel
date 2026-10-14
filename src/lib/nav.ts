@@ -217,6 +217,12 @@ const STANDALONE: Record<string, NavItem[]> = {
   "/hosts/unavailable": [
     { href: "/hosts", labelKey: "nav.items.hosts", icon: Server, permission: "hosts.view" },
   ],
+  "/ilk-sunucu": [
+    { href: "/hosts", labelKey: "nav.items.hosts", icon: Server, permission: "hosts.view" },
+  ],
+  "/yetki-yok": [
+    { href: "/users", labelKey: "nav.items.users", icon: UsersRound, permission: "users.manage" },
+  ],
   "/hesap": [
     { href: "/hesap", labelKey: "nav.items.account", icon: UsersRound, permission: "panel.view" },
   ],

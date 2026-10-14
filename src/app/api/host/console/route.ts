@@ -4,6 +4,7 @@ import { audit } from "@/lib/auth/audit";
 import { callHelper, helperConfigured, CONSOLE_TIMEOUT_MS } from "@/lib/host/helper";
 import { findPreset } from "@/lib/host/presets";
 import { getString } from "@/lib/settings";
+import { hintFor } from "@/lib/permissions/hint.server";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,7 @@ export async function POST(request: Request) {
       {
         error:
           serverT("api.helperMissing"),
+        hint: hintFor("helperMissing"),
       },
       { status: 503 },
     );
@@ -136,7 +138,7 @@ export async function POST(request: Request) {
   // "komut çalışamadı" ile "komut çalıştı, sonucu bu" farklı şeyler.
   if (!response.ok && response.exitCode === undefined) {
     return Response.json(
-      { error: response.error ?? "host-helper reddetti", command: shown },
+      { error: response.error ?? "host-helper reddetti", command: shown, hint: response.hint },
       { status: 502 },
     );
   }

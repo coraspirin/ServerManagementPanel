@@ -9,6 +9,7 @@ import {
   type HelperAction,
 } from "@/lib/host/helper";
 import type { PermissionKey } from "@/lib/auth/types";
+import { hintFor } from "@/lib/permissions/hint.server";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,7 @@ export async function POST(request: Request) {
       {
         error:
           serverT("api.helperMissing"),
+        hint: hintFor("helperMissing"),
       },
       { status: 503 },
     );
@@ -84,7 +86,7 @@ export async function POST(request: Request) {
 
   if (!response.ok) {
     return Response.json(
-      { error: response.error ?? response.stderr ?? "host-helper reddetti" },
+      { error: response.error ?? response.stderr ?? "host-helper reddetti", hint: response.hint },
       { status: 502 },
     );
   }

@@ -25,6 +25,7 @@ export default async function HostUnavailablePage({
   const dict = getActiveDictionary();
   const tk = (key: string, params?: Record<string, string>) => translateLoose(dict, key, params);
   const host = await resolvePageHost();
+  if (!host) redirect("/ilk-sunucu");
   const raw = (await searchParams).reason ?? "offline";
   const reason: Reason = (REASONS as readonly string[]).includes(raw) ? (raw as Reason) : "offline";
 

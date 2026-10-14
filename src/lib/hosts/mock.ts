@@ -137,10 +137,10 @@ export function mockProvidersFor(host: Host, base: MockProviderSet): MockProvide
   };
 }
 
-/** Geçmiş üretilecek sunucular: yerel + etkin sahte sunucular. */
+/** Geçmiş üretilecek sunucular: etkin yerel + etkin sahte sunucular. */
 export function mockHistoryHostIds(): number[] {
   const rows = getDb()
-    .prepare("SELECT id FROM hosts WHERE is_local = 1 OR (agent_type = 'mock' AND enabled = 1)")
+    .prepare("SELECT id FROM hosts WHERE (is_local = 1 AND enabled = 1) OR (agent_type = 'mock' AND enabled = 1)")
     .all() as { id: number }[];
   return rows.map((row) => row.id);
 }

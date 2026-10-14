@@ -1,6 +1,6 @@
 import { serverT } from "@/lib/i18n/runtime";
-import http from "node:http";
 import { randomBytes } from "node:crypto";
+import { dockerTransport, type DockerStreamReply } from "@/lib/docker/transport";
 import type {
   ContainerDetail,
   ContainerPort,
@@ -21,54 +21,39 @@ import type {
 } from "./types";
 
 /**
- * Docker Engine API'sine Unix soketi üzerinden erişim.
+ * Docker Engine API'sinin panel tarafı: istek kurma + yanıtı şekillendirme.
+ * İsteklerin nereye gittiği taşımanın işi (`docker/transport.ts`): yerelde
+ * Unix soketi, uzak sunucuda ajanın `docker.api` tüneli (kararlar.md K2).
  *
  * M1.2 için yalnızca `inspect` gerekiyor (container tipi monitör). M1.6 bu
  * sağlayıcıyı listeleme, istatistik ve aksiyonlarla genişletecek — arayüz
  * şimdiden `providers/types.ts` içinde tanımlı ki o zaman yeni bir katman
  * uydurmak gerekmesin.
- *
- * `fetch` kullanılmıyor: Unix soketine bağlanmak için dispatcher gerekiyor ve
- * bu, ek bağımlılık (undici) demek. `node:http` soketi doğrudan destekliyor.
  */
-
-const SOCKET_PATH = process.env.DOCKER_SOCKET ?? "/var/run/docker.sock";
 
 type DockerResponse = { status: number; body: string };
 
-function request(
+/*
+  Soket yolu burada YOK (kararlar.md K2): istekler geçerli taşımaya gider
+  (`docker/transport.ts`) — yerelde docker.sock, uzak sunucuda ajanın
+  `docker.api` tüneli. Aşağıdaki yardımcıların imzaları eskisiyle aynı.
+*/
+
+async function request(
   path: string,
   timeoutMs = 5000,
   method: "GET" | "POST" | "DELETE" = "GET",
   jsonBody?: unknown,
 ): Promise<DockerResponse> {
-  return new Promise((resolve, reject) => {
-    const payload = jsonBody === undefined ? null : JSON.stringify(jsonBody);
-    const req = http.request(
-      {
-        socketPath: SOCKET_PATH,
-        path,
-        method,
-        timeout: timeoutMs,
-        headers: payload
-          ? { "content-type": "application/json", "content-length": Buffer.byteLength(payload) }
-          : undefined,
-      },
-      (res) => {
-        let body = "";
-        res.setEncoding("utf8");
-        res.on("data", (chunk) => {
-          body += chunk;
-        });
-        res.on("end", () => resolve({ status: res.statusCode ?? 0, body }));
-      },
-    );
-
-    req.on("timeout", () => req.destroy(new Error(serverT("dockerLive.socketTimeout"))));
-    req.on("error", reject);
-    if (payload) req.write(payload);
-    req.end();
+  const reply = await dockerTransport().request({
+    method,
+    path,
+    timeoutMs,
+    ...(jsonBody === undefined
+      ? {}
+      : { headers: { "content-type": "application/json" }, body: JSON.stringify(jsonBody) }),
   });
+  return { status: reply.status, body: reply.body.toString("utf8") };
 }
 
 /** Docker'ın hata gövdesi `{"message": "..."}` biçiminde gelir. */
@@ -178,23 +163,14 @@ export const liveDockerProvider: DockerProvider = {
     // almasın diye imleç bir saniye ileriden veriliyor (bkz. logs/collect.ts).
     if (options.since !== undefined) params.set("since", String(options.since));
 
-    const response = await new Promise<http.IncomingMessage>((resolve, reject) => {
-      const req = http.request(
-        {
-          socketPath: SOCKET_PATH,
-          path: `/containers/${encodeURIComponent(id)}/logs?${params}`,
-          method: "GET",
-        },
-        resolve,
-      );
-      req.on("error", reject);
-      options.signal.addEventListener("abort", () => req.destroy(), { once: true });
-      req.end();
+    const response = await dockerTransport().stream({
+      path: `/containers/${encodeURIComponent(id)}/logs?${params}`,
+      signal: options.signal,
     });
 
-    if (response.statusCode !== 200) {
-      response.resume();
-      throw new Error(`Docker API ${response.statusCode}`);
+    if (response.status !== 200) {
+      response.close();
+      throw new Error(`Docker API ${response.status}`);
     }
 
     /*
@@ -208,7 +184,7 @@ export const liveDockerProvider: DockerProvider = {
     let buffer = Buffer.alloc(0);
     let text = "";
 
-    for await (const chunk of response) {
+    for await (const chunk of response.body) {
       if (options.signal.aborted) break;
 
       if (tty) {
@@ -414,23 +390,16 @@ export const liveDockerProvider: DockerProvider = {
     // ilerlemeyi satır satır JSON olarak akıtır. Yanıtı toptan beklemek,
     // hem zaman aşımına yakalanmak hem de kullanıcıya "dondu mu?" dedirtmek
     // demekti.
-    const response = await new Promise<http.IncomingMessage>((resolve, reject) => {
-      const req = http.request(
-        { socketPath: SOCKET_PATH, path, method: "POST", timeout: 0 },
-        resolve,
-      );
-      req.on("error", reject);
-      req.end();
-    });
+    const response = await dockerTransport().stream({ method: "POST", path, timeoutMs: 0 });
 
-    if (response.statusCode !== 200) {
+    if (response.status !== 200) {
       let body = "";
-      for await (const chunk of response) body += chunk;
-      throw dockerError({ status: response.statusCode ?? 0, body });
+      for await (const chunk of response.body) body += chunk.toString();
+      throw dockerError({ status: response.status, body });
     }
 
     let buffer = "";
-    for await (const chunk of response) {
+    for await (const chunk of response.body) {
       buffer += chunk.toString();
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
@@ -762,17 +731,17 @@ export const liveDockerProvider: DockerProvider = {
         const response = await openStream(
           `/containers/${containerId}/logs?stdout=1&stderr=1&follow=1`,
         );
-        if (response.statusCode !== 200) {
-          response.resume();
-          throw new Error(`Docker API ${response.statusCode}`);
+        if (response.status !== 200) {
+          response.close();
+          throw new Error(`Docker API ${response.status}`);
         }
 
         // Tty kapalı → çerçeveli akış. Bir satır iki çerçeveye bölünebilir;
         // her akışın yarım kalan satırı ayrı tutuluyor.
         const carry = { stdout: "", stderr: "" };
         let buffer = Buffer.alloc(0);
-        for await (const chunk of response) {
-          buffer = Buffer.concat([buffer, chunk as Buffer]);
+        for await (const chunk of response.body) {
+          buffer = Buffer.concat([buffer, chunk]);
           while (buffer.length >= 8) {
             const size = buffer.readUInt32BE(4);
             if (buffer.length < 8 + size) break;
@@ -884,43 +853,22 @@ async function removeThrowaway(containerId: string): Promise<void> {
 }
 
 /** Süresiz GET akışı (follow) — zaman aşımı çağıranın sorumluluğunda. */
-function openStream(path: string): Promise<http.IncomingMessage> {
-  return new Promise((resolve, reject) => {
-    const req = http.request({ socketPath: SOCKET_PATH, path, method: "GET" }, resolve);
-    req.on("error", reject);
-    req.end();
-  });
+function openStream(path: string): Promise<DockerStreamReply> {
+  return dockerTransport().stream({ path, timeoutMs: 0 });
 }
 
 /** Ham bayt döndüren istek — çerçeveli exec çıktısı için (M2.8). */
-function requestBinary(path: string, timeoutMs: number, jsonBody: unknown): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const payload = JSON.stringify(jsonBody);
-    const req = http.request(
-      {
-        socketPath: SOCKET_PATH,
-        path,
-        method: "POST",
-        timeout: timeoutMs,
-        headers: {
-          "content-type": "application/json",
-          "content-length": Buffer.byteLength(payload),
-        },
-      },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (chunk: Buffer) => chunks.push(chunk));
-        res.on("end", () => resolve(Buffer.concat(chunks)));
-      },
-    );
-    req.on("timeout", () => req.destroy(new Error(serverT("dockerLive.socketTimeout"))));
-    req.on("error", reject);
-    req.write(payload);
-    req.end();
+async function requestBinary(path: string, timeoutMs: number, jsonBody: unknown): Promise<Buffer> {
+  const reply = await dockerTransport().request({
+    method: "POST",
+    path,
+    timeoutMs,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(jsonBody),
   });
+  return reply.body;
 }
 
-/** Ham bayt döndüren GET — çerçeveli container log çıktısı için (M3.4). */
 /**
  * Ham gövde + durum kodu (M3.23).
  *
@@ -929,52 +877,24 @@ function requestBinary(path: string, timeoutMs: number, jsonBody: unknown): Prom
  * "arşiv boş" gibi yanıltıcı bir sonuç üretir. Ayrıca istek gövdesi
  * gönderilebiliyor — PUT ile arşiv yüklemek için gerekli.
  */
-function requestRawStatus(
+async function requestRawStatus(
   path: string,
   timeoutMs: number,
   method: "GET" | "PUT",
   payload?: Buffer,
 ): Promise<{ status: number; body: Buffer }> {
-  return new Promise((resolve, reject) => {
-    const req = http.request(
-      {
-        socketPath: SOCKET_PATH,
-        path,
-        method,
-        timeout: timeoutMs,
-        headers: payload
-          ? { "content-type": "application/x-tar", "content-length": payload.length }
-          : undefined,
-      },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (chunk: Buffer) => chunks.push(chunk));
-        res.on("end", () =>
-          resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks) }),
-        );
-      },
-    );
-    req.on("timeout", () => req.destroy(new Error(serverT("dockerLive.socketTimeout"))));
-    req.on("error", reject);
-    if (payload) req.write(payload);
-    req.end();
+  const reply = await dockerTransport().request({
+    method,
+    path,
+    timeoutMs,
+    ...(payload ? { headers: { "content-type": "application/x-tar" }, body: payload } : {}),
   });
+  return { status: reply.status, body: reply.body };
 }
 
-function requestRawGet(path: string, timeoutMs: number): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const req = http.request(
-      { socketPath: SOCKET_PATH, path, method: "GET", timeout: timeoutMs },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (chunk: Buffer) => chunks.push(chunk));
-        res.on("end", () => resolve(Buffer.concat(chunks)));
-      },
-    );
-    req.on("timeout", () => req.destroy(new Error(serverT("dockerLive.socketTimeout"))));
-    req.on("error", reject);
-    req.end();
-  });
+/** Ham bayt döndüren GET — çerçeveli container log çıktısı için (M3.4). */
+async function requestRawGet(path: string, timeoutMs: number): Promise<Buffer> {
+  return (await dockerTransport().request({ path, timeoutMs })).body;
 }
 
 /**

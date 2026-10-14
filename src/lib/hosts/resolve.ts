@@ -1,9 +1,9 @@
-import { LOCAL_HOST_ID } from "./context.ts";
-
 /**
  * İstekten sunucu seçimi — saf karar mantığı.
  *
- * Öncelik: başlık > sorgu parametresi > çerez > yerel sunucu.
+ * Öncelik: başlık > sorgu parametresi > çerez > varsayılan sunucu
+ * (`defaultHostId`: listedeki ilk etkin sunucu — `listHosts` yereli başa
+ * koyar, yerel devre dışıysa sıradaki). Etkin sunucu yoksa `none`.
  *  - Başlığı `apiFetch` ekler; iki sekme farklı sunuculara bakıyorsa her
  *    istek kendi sekmesinin seçimini taşır (çerez sekmeler arasında ortak).
  *  - Sorgu parametresi `EventSource` gibi başlık gönderemeyen istemciler için.
@@ -20,7 +20,17 @@ export type HostPickInput = {
 
 export type HostPick =
   | { ok: true; hostId: number; explicit: boolean }
-  | { ok: false; reason: "unknown" | "disabled"; value: string };
+  | { ok: false; reason: "unknown" | "disabled"; value: string }
+  | { ok: false; reason: "none" };
+
+/**
+ * Bağlam/seçim yokken kullanılacak sunucu: listedeki ilk etkin sunucu.
+ * Liste yerel önde sıralı gelir (`listHosts`), yani yerel etkinse yerel.
+ * Yerel devre dışıysa yerele DÜŞÜLMEZ (kararlar.md D1).
+ */
+export function defaultHostId(hosts: readonly HostCandidate[]): number | null {
+  return hosts.find((h) => h.enabled)?.id ?? null;
+}
 
 function match(value: string, hosts: readonly HostCandidate[]): HostCandidate | undefined {
   const trimmed = value.trim();
@@ -33,7 +43,7 @@ function match(value: string, hosts: readonly HostCandidate[]): HostCandidate | 
 
 export function pickHost(input: HostPickInput, hosts: readonly HostCandidate[]): HostPick {
   // Başlık ve sorgu açık bir istek — geçersizse hata. Çerez eski/silinmiş bir
-  // sunucuyu gösteriyor olabilir; o durumda sessizce yerele düşülür.
+  // sunucuyu gösteriyor olabilir; o durumda varsayılan sunucuya düşülür.
   for (const value of [input.header, input.query]) {
     if (!value) continue;
     const host = match(value, hosts);
@@ -47,5 +57,7 @@ export function pickHost(input: HostPickInput, hosts: readonly HostCandidate[]):
     if (host?.enabled) return { ok: true, hostId: host.id, explicit: false };
   }
 
-  return { ok: true, hostId: LOCAL_HOST_ID, explicit: false };
+  const fallback = defaultHostId(hosts);
+  if (fallback === null) return { ok: false, reason: "none" };
+  return { ok: true, hostId: fallback, explicit: false };
 }

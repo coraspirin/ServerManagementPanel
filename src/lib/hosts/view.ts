@@ -1,5 +1,6 @@
 import { appVersion } from "@/lib/env";
 import { compareTags } from "@/lib/selfupdate/plan";
+import type { FeatureEvaluation } from "@/lib/permissions/catalog";
 import type { Host, HostAgentType, HostCapabilities, HostStatus } from "./types";
 
 /**
@@ -25,6 +26,12 @@ export type HostView = {
   hostname: string | null;
   osName: string | null;
   color: string | null;
+  /**
+   * Yetki yoklaması (kararlar.md D6): katalogdaki özelliklerin bu sunucudaki
+   * durumu; yetenekler bilinmiyorsa null. Yalnız liste ekranı doldurur
+   * (`hostFeatures`), seçici ve diğer kullanımlar boş bırakır.
+   */
+  features?: FeatureEvaluation[] | null;
 };
 
 /**

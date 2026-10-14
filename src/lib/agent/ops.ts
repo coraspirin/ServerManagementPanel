@@ -57,7 +57,18 @@ import {
   getSystemProvider,
   type DockerProvider,
 } from "@/lib/providers";
-import { AGENT_PROTOCOL, DOCKER_CALLS, DOCKER_STREAMS, type AgentHello } from "./protocol";
+import { localDockerTransport } from "@/lib/docker/transport";
+import { prepareDockerApiRequest } from "./docker-api-policy";
+import {
+  AGENT_PROTOCOL,
+  DOCKER_API_OP,
+  DOCKER_API_STREAM_OP,
+  DOCKER_CALLS,
+  DOCKER_STREAMS,
+  type AgentHello,
+  type DockerApiResponse,
+  type DockerApiStreamHead,
+} from "./protocol";
 
 /**
  * Ajanın ağdan çalıştırmaya izin verdiği işlemler — KAPALI liste.
@@ -89,8 +100,53 @@ export async function agentHello(): Promise<AgentHello> {
       helper: helperConfigured(),
       hostRoot: existsSync(/*turbopackIgnore: true*/ process.env.HOST_ROOT ?? "/host/root"),
       reports: existsSync(/*turbopackIgnore: true*/ process.env.REPORTS_DIR ?? "/app/reports"),
+      // Ham Engine API tüneli + eski sağlayıcı RPC'si ikisi de var.
+      dockerApi: true,
+      dockerRpc: true,
     },
   };
+}
+
+// --- docker.api tüneli (kararlar.md K2) -----------------------------------
+
+/** Yanıttan merkeze dönen başlıklar — merkez yalnız içerik türüne bakar. */
+function replyHeaders(headers: Record<string, string>): Record<string, string> {
+  return headers["content-type"] ? { "content-type": headers["content-type"] } : {};
+}
+
+function deniedError(reason: string): Error {
+  const error = new Error(`docker-api-denied:${reason}`) as Error & { code?: string };
+  error.code = "docker-api-denied";
+  return error;
+}
+
+async function dockerApiCall(args: unknown[], signal: AbortSignal): Promise<DockerApiResponse> {
+  const prepared = prepareDockerApiRequest(args[0], "call");
+  if (!prepared.ok) throw deniedError(prepared.reason);
+  const reply = await localDockerTransport().request({ ...prepared.request, signal });
+  return { status: reply.status, headers: replyHeaders(reply.headers), body: reply.body };
+}
+
+/** İlk çerçeve durum + başlık, sonra gövde parçaları; 2xx değilse gövde tek parça. */
+async function* dockerApiStream(args: unknown[], signal: AbortSignal): AsyncGenerator<DockerApiStreamHead | Buffer> {
+  const prepared = prepareDockerApiRequest(args[0], "stream");
+  if (!prepared.ok) throw deniedError(prepared.reason);
+  const reply = await localDockerTransport().stream({ ...prepared.request, signal });
+  try {
+    yield { status: reply.status, headers: replyHeaders(reply.headers) };
+    if (reply.status < 200 || reply.status >= 300) {
+      const chunks: Buffer[] = [];
+      for await (const chunk of reply.body) chunks.push(chunk);
+      yield Buffer.concat(chunks);
+      return;
+    }
+    for await (const chunk of reply.body) {
+      if (signal.aborted) return;
+      yield chunk;
+    }
+  } finally {
+    reply.close();
+  }
 }
 
 function dockerCall(method: (typeof DOCKER_CALLS)[number]): CallOp {
@@ -185,6 +241,9 @@ export const AGENT_OPS: Record<string, AgentOp> = {
   "system.info": { kind: "call", run: () => getSystemProvider().info() },
   "metrics.sample": { kind: "call", run: () => getMetricsProvider().sample() },
   "hardware.report": { kind: "call", run: () => getHardwareProvider().report() },
+  // Ham Engine API tüneli: izin listesi `docker-api-policy.ts`.
+  [DOCKER_API_OP]: { kind: "call", run: (args, signal) => dockerApiCall(args, signal) },
+  [DOCKER_API_STREAM_OP]: { kind: "stream", run: (args, signal) => dockerApiStream(args, signal) },
   ...Object.fromEntries(DOCKER_CALLS.map((method) => [`docker.${method}`, dockerCall(method)])),
   "docker.pullImage": {
     kind: "stream",

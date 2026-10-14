@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   KeyRound,
   LockOpen,
@@ -84,18 +84,23 @@ function useTimeAgo() {
   return (seconds: number | null) => (seconds ? f.relative(seconds * 1000) : t("users.never"));
 }
 
-type Tab = "users" | "roles" | "sessions";
+export type Tab = "users" | "roles" | "sessions";
 
 export function UsersScreen({
   initial,
   currentUserId,
+  initialTab = "users",
+  focusRoleId = null,
 }: {
   initial: Directory;
   currentUserId: number;
+  /** `/users?tab=roles&role=<id>` — yetki yönergesindeki "Rolü düzenle". */
+  initialTab?: Tab;
+  focusRoleId?: number | null;
 }) {
   const t = useT();
   const [directory, setDirectory] = useState(initial);
-  const [tab, setTab] = useState<Tab>("users");
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -167,7 +172,7 @@ export function UsersScreen({
           call={call}
         />
       )}
-      {tab === "roles" && <RolesTab directory={directory} busy={busy} call={call} />}
+      {tab === "roles" && <RolesTab directory={directory} busy={busy} call={call} focusRoleId={focusRoleId} />}
       {tab === "sessions" && <SessionsTab directory={directory} busy={busy} call={call} />}
     </div>
   );
@@ -557,10 +562,12 @@ function RolesTab({
   directory,
   busy,
   call,
+  focusRoleId,
 }: {
   directory: Directory;
   busy: boolean;
   call: CallFn;
+  focusRoleId: number | null;
 }) {
   const t = useT();
   const [creating, setCreating] = useState(false);
@@ -582,7 +589,14 @@ function RolesTab({
 
       <div className="space-y-4">
         {directory.roles.map((role) => (
-          <RoleCard key={role.id} role={role} groups={groups} busy={busy} call={call} />
+          <RoleCard
+            key={role.id}
+            role={role}
+            groups={groups}
+            busy={busy}
+            call={call}
+            focused={role.id === focusRoleId}
+          />
         ))}
       </div>
 
@@ -641,13 +655,19 @@ function RoleCard({
   groups,
   busy,
   call,
+  focused,
 }: {
   role: ManagedRole;
   groups: [string, PermissionInfo[]][];
   busy: boolean;
   call: CallFn;
+  focused: boolean;
 }) {
   const t = useT();
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (focused) ref.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [focused]);
   const [draft, setDraft] = useState<string[]>(role.permissions);
   const dirty =
     draft.length !== role.permissions.length ||
@@ -658,7 +678,7 @@ function RoleCard({
   }
 
   return (
-    <section className="rounded-lg border border-line bg-surface">
+    <section ref={ref} className={`rounded-lg border bg-surface ${focused ? "border-brand ring-1 ring-brand" : "border-line"}`}>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
         <div>
           <h3 className="flex items-center gap-2 text-sm font-semibold">

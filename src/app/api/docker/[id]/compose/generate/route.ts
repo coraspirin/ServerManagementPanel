@@ -96,7 +96,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     Docker'a yazan bir işlem olduğu için `docker.action` da gerekiyor.
   */
   if (body.replace === true && !guard.session.user.permissions.includes("docker.action")) {
-    return Response.json({ ok: false, error: serverT("api.auth.forbidden") }, { status: 403 });
+    return Response.json(
+      { ok: false, error: serverT("api.auth.forbidden"), code: "forbidden", need: "docker.action" },
+      { status: 403 },
+    );
   }
   const outcome =
     body.replace === true
@@ -116,7 +119,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   return Response.json(
     outcome.ok
       ? { ok: true, message: outcome.message, output: outcome.output }
-      : { ok: false, error: outcome.message },
+      : { ok: false, error: outcome.message, hint: outcome.hint },
     { status: outcome.ok ? 200 : 400 },
   );
 }

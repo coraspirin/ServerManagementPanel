@@ -905,6 +905,19 @@ export const settingDefs: SettingDef[] = [
     default: true,
   },
   {
+    // Uzak sunucunun Docker'ına giden yol (kararlar.md K2): ajandaki
+    // sağlayıcı RPC'si ya da ham Engine API tüneli (`docker.api`). Native
+    // ajan yalnız tüneli bilir ve bu ayar ona etki etmez; Node ajanında
+    // tüneli sunucu bazında denemek için.
+    key: "agents.docker_transport",
+    hostScoped: true,
+    group: "updates",
+    section: "agents",
+    type: "enum",
+    default: "auto",
+    options: ["auto", "api", "rpc"],
+  },
+  {
     key: "backup.watch_dir",
     hostScoped: true,
     group: "updates",
