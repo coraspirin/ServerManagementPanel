@@ -151,6 +151,12 @@ func Parse(content string) (Policy, error) {
 				return Policy{}, fmt.Errorf("satır %d: beklenen \"allow <op> [desen]\"", line)
 			}
 			rule := Rule{Name: fields[1]}
+			if len(fields) > 2 && !strings.HasPrefix(fields[1], "helper.") {
+				// Desen yalnız helper eylemlerinde uygulanır; başka op'ta yok
+				// sayılsaydı "allow files.read ^/var/log" op'u TAMAMEN açardı
+				// (güvenlik incelemesi 2026-10-14).
+				return Policy{}, fmt.Errorf("satır %d: desen yalnız helper.<eylem> satırlarında kullanılabilir", line)
+			}
 			if len(fields) > 2 {
 				// Desen satırın geri kalanı (allow.conf gibi; boşluk içerebilir).
 				rest := strings.TrimSpace(text[strings.Index(text, fields[1])+len(fields[1]):])

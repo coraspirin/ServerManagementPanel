@@ -62,6 +62,12 @@ func TestDuzenlemeDogrulanir(t *testing.T) {
 	if _, err := Allow(sample, "helper.x", "a # b"); err == nil {
 		t.Fatal("# içeren desen kabul edildi (yorum sanılırdı)")
 	}
+	if _, err := Allow(sample, "files.read", "^/var/log"); err == nil {
+		t.Fatal("helper dışı op'a desen kabul edildi (op'u tamamen açardı)")
+	}
+	if _, err := Parse("allow docker.api ^GET$"); err == nil {
+		t.Fatal("Parse helper dışı desenli satırı kabul etti")
+	}
 	if _, err := Deny(sample, "agent.update"); err == nil {
 		t.Fatal("çekirdek op kapatıldı")
 	}

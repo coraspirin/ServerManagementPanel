@@ -80,6 +80,22 @@ const ALLOW_CONF = "/etc/panel-helper/allow.conf";
 const RESTART_HELPER = "sudo systemctl restart panel-helper";
 const POLICY_CONF = "/etc/panel-agent/policy.conf";
 
+/**
+ * Kopyala-yapıştır komutlarına giren satırlar (güvenlik incelemesi
+ * 2026-10-14). Satırlar istekteki argümandan (komut, dizin, birim) türer;
+ * satır sonu içeren bir argüman `<<'EOF'` bloğunu erken kapatıp sonrasını
+ * yöneticinin kabuğunda çalıştırırdı. Kontrol karakterli satır HİÇ
+ * gösterilmez (yönetici dosyayı elle düzenler).
+ */
+export function safeConfLines(lines: string[] | undefined): string[] {
+  return (lines ?? []).filter((line) => !/[\u0000-\u001f\u007f]/.test(line) && line.trim() !== "EOF");
+}
+
+/** Tek tırnaklı kabuk dizgesi: `'` kapatılır, kaçışlı eklenir, yeniden açılır. */
+export function shellQuote(text: string): string {
+  return `'${text.replace(/'/g, "'\\''")}'`;
+}
+
 /** allow.conf satırı ("compose.up ^/opt/x$") → policy.conf satırı. */
 export function policyLine(allowLine: string): string {
   return `allow helper.${allowLine.trim()}`;
@@ -92,10 +108,10 @@ function nativeHelperCommands(code: PermissionHintCode, ctx: HintContext, t: Hin
     case "patternDenied":
     case "argumentDenied":
     case "policyMissing":
-      return [`# ${t("permissions.hint.policyConfShould")}`, `sudo tee -a ${POLICY_CONF} <<'EOF'`, ...(ctx.allowLines ?? []).map(policyLine), "EOF"];
+      return [`# ${t("permissions.hint.policyConfShould")}`, `sudo tee -a ${POLICY_CONF} <<'EOF'`, ...safeConfLines(ctx.allowLines).map(policyLine), "EOF"];
     case "actionDisabled":
       return ctx.action
-        ? [`echo '${policyLine(ctx.action)}' | sudo tee -a ${POLICY_CONF}`]
+        ? [`echo ${shellQuote(policyLine(ctx.action))} | sudo tee -a ${POLICY_CONF}`]
         : [`sudoedit ${POLICY_CONF}`];
     default:
       return null;
@@ -139,14 +155,14 @@ function hostCommands(code: PermissionHintCode, ctx: HintContext, t: HintTransla
     case "helperOutdated":
       return [`# ${t("permissions.hint.updateHelper")}`, "sudo host-helper/install.sh", RESTART_HELPER];
     case "helperUnverified":
-      return [`# ${t("permissions.hint.allowConfShould")}`, `sudo tee -a ${ALLOW_CONF} <<'EOF'`, ...(ctx.allowLines ?? []), "EOF", RESTART_HELPER];
+      return [`# ${t("permissions.hint.allowConfShould")}`, `sudo tee -a ${ALLOW_CONF} <<'EOF'`, ...safeConfLines(ctx.allowLines), "EOF", RESTART_HELPER];
     case "actionDisabled":
       return ctx.action
-        ? [`echo '${ctx.action}' | sudo tee -a ${ALLOW_CONF}`, RESTART_HELPER]
+        ? [`echo ${shellQuote(ctx.action)} | sudo tee -a ${ALLOW_CONF}`, RESTART_HELPER]
         : [`sudoedit ${ALLOW_CONF}`, RESTART_HELPER];
     case "patternDenied":
     case "argumentDenied":
-      return [`sudo tee -a ${ALLOW_CONF} <<'EOF'`, ...(ctx.allowLines ?? []), "EOF", RESTART_HELPER];
+      return [`sudo tee -a ${ALLOW_CONF} <<'EOF'`, ...safeConfLines(ctx.allowLines), "EOF", RESTART_HELPER];
     case "socketMissing":
       return ["systemctl status panel-helper", "sudo host-helper/install.sh", ...composeMount(ctx, t, ["- /run/panel-helper:/run/panel-helper"])];
     case "socketDenied":

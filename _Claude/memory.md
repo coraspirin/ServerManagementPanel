@@ -12,6 +12,11 @@ Biçim:
 
 ---
 
+## 2026-10-14 16:41 — Commit 307c2a9, merkez deploy, güvenlik incelemesi düzeltmeleri
+- Commit `307c2a9` (native ajan, saat dilimi, duyuru, güvenlik düzeltmeleri; `note.txt` ve `host-helper/__pycache__/` dahil edilmedi). `bash deploy.sh` → merkez 1.13.1 sağlıklı, migration 036 uygulandı (`pre-migration-36.db`), loglar temiz, iki sunucu çevrimiçi, `/api/agent/announce` imzasız isteğe 401.
+- Arka plan güvenlik incelemesi 4+1 bulgu: (1) `hint.ts` ipucu komutlarında satır sonuyla heredoc kaçışı → `safeConfLines` + `shellQuote` (+test); (2) policy: helper dışı op'ta desen yok sayılıp op tamamen açılıyordu → Parse reddi (+test); (3) Docker `/containers/create` ile host kaçışı ve (4) merkez kontrollü `files.roots` → standard profilde merkez fiilen root: tasarım sorusu, kullanıcıya soruldu (`native-ajan.md`, `yapilacaklar.md`).
+- Testler: Node 592/592, typecheck, lint, i18n; Go tümü.
+
 ## 2026-10-14 16:27 — Faz B adım 6: ajan duyurusu, profil ayrıntısı, `policy` ve `doctor` komutları
 - Merkez: `POST /api/agent/announce` (`src/lib/hosts/announce.ts`, oturumsuz, yalnız merkez rolü; RPC imzası + bekleyen satırın sırrı, sır üretiminden 1 sa, kaynak başına 20/10 dk, toplam 200) → `hosts.announce` önerisi + denetim kaydı + bildirim; migration 036 (`token_issued_at`, `announce`; bellekte 001–036 denendi); `protocol.ts` `parseAnnounce`/`announceUrl`/sabitler (+3 test); `HostView.announce`; kurulum komutuna `--central <köken>` (`centralOrigin`); Sunucular ekranı: kurulum penceresinde 3 sn yoklama + "Ajan bulundu" kutusu (parmak izi) + "Onayla ve bağlan", satırda "Ajan bulundu" düğmesi. Yeni metinler `hosts.announce.*`, `hosts.kit.nativeHelp` (tr/en/de).
 - Ajan: `internal/announce` (dakikada bir, 70 dk, `enrolled` işaretiyle biter; yerel adres UDP "dial"), `internal/doctor` (token, politika, sertifika + dinleyen parmak izi, systemd, Docker ping, NTP/timesyncd, merkez saat farkı, kayıt, veri klasörü; düzeltme komutlarıyla), `policy/edit.go` + `cli.go` (`policy show|profile|allow|deny`), `-env` argümanların arasında da (`extractEnvFlag`). Profiller: readonly her şeyi okur (Docker GET/HEAD, dosya okuma op'ları), sanal `docker.write`; bozuk politika → `-` profili (yalnız çekirdek). `install-agent.sh --central` (AGENT_CENTRAL; yeni sırda `enrolled` silinir; çıktıda doctor/policy).
