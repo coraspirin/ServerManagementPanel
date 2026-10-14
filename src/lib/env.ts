@@ -12,7 +12,7 @@ export function isMockMode(): boolean {
 }
 
 export function appVersion(): string {
-  return process.env.APP_VERSION ?? "1.13.1";
+  return process.env.APP_VERSION ?? "1.13.2";
 }
 
 /**
