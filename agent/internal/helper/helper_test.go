@@ -2,6 +2,7 @@ package helper
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -70,8 +71,14 @@ func TestHataMetinleriMerkezleUyumlu(t *testing.T) {
 	if res := Run(context.Background(), "service.restart", Args{"unit": "x"}, "t", pattern, quiet); !strings.Contains(res.Error, "desene uymuyor") {
 		t.Fatalf("desen: %+v", res)
 	}
-	// Var olmayan ikili: "komut bulunamadı" (Windows'ta da /usr/bin/... yok).
-	if res := Run(context.Background(), "power.cancel", Args{}, "t", allowAll, quiet); res.OK || !strings.HasPrefix(res.Error, "komut bulunamadı") && res.ExitCode == nil {
+	// Var olmayan ikili: "komut bulunamadı". Komut yolu boş bir geçici
+	// klasöre yönlendirilir — gerçek `shutdown -c` asla çalışmaz (CI'da
+	// runner'da shutdown vardı, komut başarılı olup testi bozmuştu).
+	empty := t.TempDir()
+	original := commandPath
+	commandPath = func(path string) string { return filepath.Join(empty, filepath.Base(path)) }
+	defer func() { commandPath = original }()
+	if res := Run(context.Background(), "power.cancel", Args{}, "t", allowAll, quiet); res.OK || !strings.HasPrefix(res.Error, "komut bulunamadı: /") {
 		t.Fatalf("bulunamadı: %+v", res)
 	}
 }

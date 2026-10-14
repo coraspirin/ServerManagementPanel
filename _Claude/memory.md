@@ -12,6 +12,13 @@ Biçim:
 
 ---
 
+## 2026-10-14 17:20 — Push + v1.13.1 etiketi; agent-release başarısız (neden bilinmiyor)
+- `15c59cd` (güvenlik düzeltmeleri) commit; `main` push; `v1.13.1` etiketi push. Merkez `15c59cd` ile yeniden deploy (sağlıklı).
+- İş akışları: CI main/v1.13.1 ✓, Docker imajı main/v1.13.1 ✓ (GHCR 1.13.1), **agent-release ✖ "Derle (vet + test dahil)" adımında**. Loglar `gh` oturumu olmadan okunamıyor.
+- Elenenler: Go 1.22 vet (windows + linux/amd64 + linux/arm) ✓; Go 1.22 testler Pi'de root ve `nobody` ✓; `golang:1.22` container'ında uid 1001 vet+test ✓ (sunucuda geçici, imaj ve klasör silindi); etiketteki ağaçla `agent-strings --check` ✓; `-count=15` ve tek çekirdek + yük altında kararsız test yok.
+- Commit edilmemiş: `hint.ts` `#` içeren ipucu satırı filtresi (yorum çapayı düşürüp izni genişletirdi; güvenlik incelemesi) + test.
+- Sıradaki: kullanıcı `gh auth login` yaparsa log okunup iş yeniden çalıştırılacak.
+
 ## 2026-10-14 16:41 — Commit 307c2a9, merkez deploy, güvenlik incelemesi düzeltmeleri
 - Commit `307c2a9` (native ajan, saat dilimi, duyuru, güvenlik düzeltmeleri; `note.txt` ve `host-helper/__pycache__/` dahil edilmedi). `bash deploy.sh` → merkez 1.13.1 sağlıklı, migration 036 uygulandı (`pre-migration-36.db`), loglar temiz, iki sunucu çevrimiçi, `/api/agent/announce` imzasız isteğe 401.
 - Arka plan güvenlik incelemesi 4+1 bulgu: (1) `hint.ts` ipucu komutlarında satır sonuyla heredoc kaçışı → `safeConfLines` + `shellQuote` (+test); (2) policy: helper dışı op'ta desen yok sayılıp op tamamen açılıyordu → Parse reddi (+test); (3) Docker `/containers/create` ile host kaçışı ve (4) merkez kontrollü `files.roots` → standard profilde merkez fiilen root: tasarım sorusu, kullanıcıya soruldu (`native-ajan.md`, `yapilacaklar.md`).

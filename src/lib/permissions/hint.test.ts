@@ -56,6 +56,9 @@ describe("buildHint", () => {
       assert.ok(!commands.some((line) => line.includes("curl")), commands.join("\n"));
       assert.equal(commands.filter((line) => line === "EOF").length, 1);
       assert.ok(commands.some((line) => line.includes("service.restart")));
+      // `#` yorum: çapayı düşürüp izni genişletirdi.
+      const comment = buildHint("argumentDenied", { host, allowLines: ["shell.exec ^ls #x$"] }, t);
+      assert.ok(!comment.fix.commands.some((line) => line.includes("^ls")), comment.fix.commands.join("\n"));
     }
     const quoted = buildHint("actionDisabled", { host: { ...PI, native: true }, action: "x'; rm -rf /; echo '" }, t);
     assert.ok(quoted.fix.commands[1]?.startsWith("echo 'allow helper.x'\\''; rm -rf /; echo '\\'''"), quoted.fix.commands.join("\n"));

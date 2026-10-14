@@ -84,11 +84,13 @@ const POLICY_CONF = "/etc/panel-agent/policy.conf";
  * Kopyala-yapıştır komutlarına giren satırlar (güvenlik incelemesi
  * 2026-10-14). Satırlar istekteki argümandan (komut, dizin, birim) türer;
  * satır sonu içeren bir argüman `<<'EOF'` bloğunu erken kapatıp sonrasını
- * yöneticinin kabuğunda çalıştırırdı. Kontrol karakterli satır HİÇ
+ * yöneticinin kabuğunda çalıştırırdı. `#` ise allow.conf/policy.conf'ta
+ * yorum başlatır: `^ls #x$` dosyada `^ls ` okunur, çapa düşer ve satır
+ * "ls ile başlayan HER komut"a izin verirdi. Böyle satırlar HİÇ
  * gösterilmez (yönetici dosyayı elle düzenler).
  */
 export function safeConfLines(lines: string[] | undefined): string[] {
-  return (lines ?? []).filter((line) => !/[\u0000-\u001f\u007f]/.test(line) && line.trim() !== "EOF");
+  return (lines ?? []).filter((line) => !/[\u0000-\u001f\u007f#]/.test(line) && line.trim() !== "EOF");
 }
 
 /** Tek tırnaklı kabuk dizgesi: `'` kapatılır, kaçışlı eklenir, yeniden açılır. */

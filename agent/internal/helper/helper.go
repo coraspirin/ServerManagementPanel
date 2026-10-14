@@ -371,6 +371,11 @@ func truncateRunes(text string, limit int) string {
 	return string(runes[:limit])
 }
 
+// commandPath — çalıştırılacak ikilinin yolu. Testler bunu var olmayan bir
+// klasöre yönlendirir: test asla gerçek sistem komutu (shutdown, systemctl…)
+// çalıştırmamalı (CI'da `shutdown -c` gerçekten çalışıp testi bozmuştu).
+var commandPath = func(path string) string { return path }
+
 // Run — eylemi doğrular ve çalıştırır.
 func Run(ctx context.Context, action string, args Args, actor string, decide Decide, logf Logf) Response {
 	build, known := Actions[action]
@@ -399,7 +404,7 @@ func Run(ctx context.Context, action string, args Args, actor string, decide Dec
 	started := time.Now()
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(runCtx, argv[0], argv[1:]...)
+	cmd := exec.CommandContext(runCtx, commandPath(argv[0]), argv[1:]...)
 	if consoleActions[action] {
 		cmd.Env = append(os.Environ(), consoleEn...)
 	}
