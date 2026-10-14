@@ -51,6 +51,8 @@ function featureHost(host: Host): FeatureHost | null {
       hostRoot: caps.hostRoot === true,
       helper: caps.helper === true,
     },
+    ops: Array.isArray(caps.ops) ? caps.ops : null,
+    helperActions: Array.isArray(caps.helperActions) ? caps.helperActions : null,
   };
 }
 

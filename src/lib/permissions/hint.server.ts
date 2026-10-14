@@ -10,7 +10,13 @@ import { buildHint, type HintContext, type HintHost, type PermissionHint, type P
 /** Sunucu satırından komut üretimi için özet. */
 export function hintHost(host: Host | null): HintHost | null {
   if (!host) return null;
-  return { id: host.id, name: host.name, address: host.address, local: host.isLocal };
+  return {
+    id: host.id,
+    name: host.name,
+    address: host.address,
+    local: host.isLocal,
+    native: host.capabilities.native === true,
+  };
 }
 
 /**

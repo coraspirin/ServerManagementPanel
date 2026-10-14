@@ -32,7 +32,9 @@ export type SettingType =
    * Arayüz dili. Seçenekler şemada değil, dil kaydında (`src/locales/`):
    * yeni bir dil dosyası eklendiğinde listede kendiliğinden görünür.
    */
-  | "locale";
+  | "locale"
+  /** IANA saat dilimi adı ("Europe/Istanbul"); seçenekler çalışma ortamının Intl listesi. */
+  | "timezone";
 
 export type SettingScope = "global" | "host" | "container" | "volume" | "app" | "repo";
 

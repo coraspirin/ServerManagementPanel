@@ -21,11 +21,11 @@ import type { FeatureState } from "@/lib/permissions/catalog";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import type { HostView } from "@/lib/hosts/view";
 import { formatDateTime } from "@/lib/i18n/format";
-import { useDict, useDynamicT, useT } from "@/lib/i18n/client";
+import { useDict, useDynamicT, useT, useTimeZone } from "@/lib/i18n/client";
 import { copyText } from "@/lib/client/clipboard";
 import type { UpdateStatus } from "@/lib/selfupdate";
 
-type InstallKit = { token: string; image: string; port: number; env: string; compose: string };
+type InstallKit = { token: string; image: string; port: number; env: string; compose: string; native: string };
 
 const STATUS_STYLE: Record<HostView["status"], string> = {
   online: "bg-ok/15 text-ok",
@@ -36,6 +36,8 @@ const STATUS_STYLE: Record<HostView["status"], string> = {
 };
 
 const REFRESH_MS = 15_000;
+/** Kurulum penceresi açıkken ajanın duyurusu daha sık yoklanır. */
+const ANNOUNCE_REFRESH_MS = 3_000;
 const BTN = "rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50";
 const BTN_SECONDARY =
   "flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm transition-colors hover:border-brand disabled:opacity-50";
@@ -82,6 +84,7 @@ export function HostsScreen({
   const t = useT();
   const tk = useDynamicT();
   const dict = useDict();
+  const timeZone = useTimeZone();
   const router = useRouter();
   const [hosts, setHosts] = useState(initial);
   const [dialog, setDialog] = useState<Dialog | null>(openAdd && canManage ? { kind: "add" } : null);
@@ -95,10 +98,11 @@ export function HostsScreen({
   }, []);
 
   // Heartbeat 15 sn'de bir yazıyor; liste aynı sıklıkta tazelenir.
+  const waitingAnnounce = dialog?.kind === "kit";
   useEffect(() => {
-    const timer = setInterval(reload, REFRESH_MS);
+    const timer = setInterval(reload, waitingAnnounce ? ANNOUNCE_REFRESH_MS : REFRESH_MS);
     return () => clearInterval(timer);
-  }, [reload]);
+  }, [reload, waitingAnnounce]);
 
   function close() {
     setDialog(null);
@@ -180,6 +184,16 @@ export function HostsScreen({
                     </div>
                     <div className="text-xs text-subtle">{tk(`hosts.agentType.${host.agentType}`)}</div>
                     <FeatureSummary host={host} onOpen={() => setDialog({ kind: "features", host })} />
+                    {canManage && host.announce && (
+                      <button
+                        type="button"
+                        className="mt-1 flex items-center gap-1 rounded bg-ok/15 px-1.5 py-0.5 text-xs font-medium text-ok"
+                        onClick={() => setDialog({ kind: "enroll", host })}
+                      >
+                        <Link2 className="size-3" aria-hidden />
+                        {t("hosts.announce.found", { url: host.announce.url })}
+                      </button>
+                    )}
                     {host.lastError && host.status !== "online" && (
                       <div className="mt-1 max-w-xs break-words text-xs text-danger">{host.lastError}</div>
                     )}
@@ -197,6 +211,11 @@ export function HostsScreen({
                     {host.agentVersion && (
                       <div className="flex flex-wrap items-center gap-1.5">
                         v{host.agentVersion}
+                        {host.capabilities.native && (
+                          <span className="rounded bg-brand/15 px-1.5 py-0.5 font-sans font-medium text-brand" title={t("hosts.native.help")}>
+                            {t("hosts.native.badge")}
+                          </span>
+                        )}
                         {host.updateTarget && (
                           <span className="rounded bg-warn/15 px-1.5 py-0.5 font-sans font-medium text-warn">
                             {t("hosts.update.badge", { version: host.updateTarget })}
@@ -210,7 +229,7 @@ export function HostsScreen({
                     {host.osName && <div>{host.osName}</div>}
                   </td>
                   <td data-label={t("hosts.screen.colLastSeen")} className="px-4 py-3 text-xs text-subtle">
-                    {remote && host.lastSeen ? formatDateTime(host.lastSeen * 1000, dict) : "—"}
+                    {remote && host.lastSeen ? formatDateTime(host.lastSeen * 1000, dict, undefined, timeZone) : "—"}
                   </td>
                   {(canManage || canUpdate) && (
                     <td data-label="" className="px-4 py-3">
@@ -335,6 +354,7 @@ export function HostsScreen({
       {dialog?.kind === "kit" && (
         <KitDialog
           host={dialog.host}
+          announce={hosts.find((item) => item.id === dialog.host.id)?.announce ?? null}
           kit={dialog.kit}
           busy={busy}
           error={error}
@@ -347,8 +367,9 @@ export function HostsScreen({
 
       {dialog?.kind === "enroll" && (
         <Modal open title={t("hosts.enroll.title", { host: dialog.host.name })} onClose={close}>
+          {dialog.host.announce && <AnnounceInfo announce={dialog.host.announce} />}
           <EnrollForm
-            initialUrl={dialog.host.agentUrl ?? ""}
+            initialUrl={dialog.host.announce?.url ?? dialog.host.agentUrl ?? ""}
             busy={busy}
             error={error}
             onEnroll={(agentUrl) =>
@@ -438,8 +459,25 @@ function CopyBlock({ label, text }: { label: string; text: string }) {
   );
 }
 
+/** Ajanın duyurusu: adres, sistem, parmak izi (kurulum çıktısıyla karşılaştırmak için). */
+function AnnounceInfo({ announce }: { announce: NonNullable<HostView["announce"]> }) {
+  const t = useT();
+  return (
+    <div className="mb-3 space-y-1 rounded-md border border-ok/40 bg-ok/10 px-3 py-2 text-sm">
+      <div className="font-medium text-ok">{t("hosts.announce.found", { url: announce.url })}</div>
+      <div className="text-xs text-subtle">
+        {t("hosts.announce.details", { hostname: announce.hostname, version: announce.version })}
+        {announce.osName && ` · ${announce.osName}`}
+      </div>
+      <div className="text-xs text-subtle">{t("hosts.announce.fingerprint")}</div>
+      <div className="break-all font-mono text-xs">{announce.fingerprint}</div>
+    </div>
+  );
+}
+
 function KitDialog({
   host,
+  announce,
   kit,
   busy,
   error,
@@ -447,6 +485,7 @@ function KitDialog({
   onEnroll,
 }: {
   host: HostView;
+  announce: HostView["announce"];
   kit: InstallKit;
   busy: boolean;
   error: string;
@@ -458,15 +497,42 @@ function KitDialog({
     <Modal open wide title={t("hosts.kit.title", { host: host.name })} onClose={onClose}>
       <div className="space-y-4">
         <p className="rounded-md bg-warn/10 px-3 py-2 text-sm text-warn">{t("hosts.kit.onceWarning")}</p>
-        <ol className="list-decimal space-y-1 pl-5 text-sm text-subtle">
-          <li>{t("hosts.kit.step1")}</li>
-          <li>{t("hosts.kit.step2")}</li>
-          <li>{t("hosts.kit.step3", { port: kit.port })}</li>
-        </ol>
-        <CopyBlock label=".env" text={kit.env} />
-        <CopyBlock label="docker-compose.yml" text={kit.compose} />
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold">{t("hosts.kit.nativeTitle")}</h3>
+          <p className="text-sm text-subtle">{t("hosts.kit.nativeHelp", { port: kit.port })}</p>
+          <CopyBlock label="bash" text={kit.native} />
+        </section>
+        <details className="rounded-md border border-line px-3 py-2">
+          <summary className="cursor-pointer text-sm font-medium">{t("hosts.kit.dockerTitle")}</summary>
+          <div className="mt-3 space-y-3">
+            <ol className="list-decimal space-y-1 pl-5 text-sm text-subtle">
+              <li>{t("hosts.kit.step1")}</li>
+              <li>{t("hosts.kit.step2")}</li>
+              <li>{t("hosts.kit.step3", { port: kit.port })}</li>
+            </ol>
+            <CopyBlock label=".env" text={kit.env} />
+            <CopyBlock label="docker-compose.yml" text={kit.compose} />
+          </div>
+        </details>
         <div className="border-t border-line pt-4">
-          <EnrollForm initialUrl="" port={kit.port} busy={busy} error={error} onEnroll={onEnroll} />
+          {announce ? (
+            <AnnounceInfo announce={announce} />
+          ) : (
+            <p className="mb-3 flex items-center gap-2 text-sm text-subtle">
+              <Loader2 className="size-4 animate-spin" aria-hidden />
+              {t("hosts.announce.waiting")}
+            </p>
+          )}
+          {/* Duyuru gelince form o adresle yeniden kurulur. */}
+          <EnrollForm
+            key={announce?.url ?? ""}
+            initialUrl={announce?.url ?? ""}
+            port={kit.port}
+            busy={busy}
+            error={error}
+            submitLabel={announce ? t("hosts.announce.approve") : undefined}
+            onEnroll={onEnroll}
+          />
         </div>
       </div>
     </Modal>
@@ -478,10 +544,12 @@ function EnrollForm({
   port = 7443,
   busy,
   error,
+  submitLabel,
   onEnroll,
 }: {
   initialUrl: string;
   port?: number;
+  submitLabel?: string;
   busy: boolean;
   error: string;
   onEnroll: (agentUrl: string) => void;
@@ -510,7 +578,7 @@ function EnrollForm({
       <div className="flex justify-end">
         <button type="submit" className={`${BTN_SECONDARY} border-brand`} disabled={busy || url.trim() === ""}>
           <Link2 className="size-4" aria-hidden />
-          {busy ? t("hosts.enroll.connecting") : t("hosts.enroll.connect")}
+          {busy ? t("hosts.enroll.connecting") : (submitLabel ?? t("hosts.enroll.connect"))}
         </button>
       </div>
     </form>

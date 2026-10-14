@@ -255,7 +255,79 @@ export type AgentHello = {
     dockerApi?: boolean;
     /** `DOCKER_CALLS`/`DOCKER_STREAMS` var mı; yoksa true sayılır (Node ajanı). Native ajan false. */
     dockerRpc?: boolean;
+    /** Native (Go) ajan (`agent/`). Protokole EKLEME — eski merkez yok sayar. */
+    native?: boolean;
+    /**
+     * Ajanın sunduğu op'ların tam listesi. Yalnız native ajan bildirir; varsa
+     * merkez listede olmayan özellikleri "bu ajanda yok" gösterir. Yoksa
+     * (Node ajanı) her op var sayılır.
+     */
+    ops?: string[];
+    /**
+     * Native ajan: host politikasında (`policy.conf`) açık helper eylemleri.
+     * Merkez yetki yoklamasında "doğrulanamadı" yerine kesin durum gösterir.
+     */
+    helperActions?: string[];
   };
 };
 
 export type EnrollResponse = { fingerprint: string; proof: string; hello: AgentHello };
+
+// --- Duyuru (native ajan → merkez, Faz B adım 6) -----------------------------
+//
+// Kurulumdan sonra ajan merkeze "buradayım" der: gövde RPC ile AYNI imzayla
+// (`signRequest`, yol `ANNOUNCE_PATH`) bekleyen sunucunun sırrıyla imzalanır.
+// Merkez bunu yalnız kayıt ÖNERİSİ olarak saklar; kullanıcı onaylayınca
+// mevcut enroll (parmak izi kanıtı) çalışır. Yani duyurudaki adres ya da
+// parmak izi yanlış olsa bile sabitleme yine enroll kanıtına dayanır.
+
+export const ANNOUNCE_PATH = "/api/agent/announce";
+
+/** Sır üretildikten sonra duyurunun kabul edildiği süre (kararlar.md: ~1 sa). */
+export const ANNOUNCE_WINDOW_SECONDS = 3600;
+
+export const ANNOUNCE_MAX_BYTES = 4096;
+
+export type AgentAnnounce = {
+  /** Ajanın merkeze bağlandığı yerel adres (merkezin geri ulaşacağı IP). */
+  address: string;
+  port: number;
+  fingerprint: string;
+  version: string;
+  hostname: string;
+  osName: string | null;
+};
+
+const ANNOUNCE_ADDRESS = /^(?:[0-9]{1,3}(?:\.[0-9]{1,3}){3}|[0-9a-fA-F:]{2,39}|[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?)$/;
+
+const announceText = (value: unknown, max: number): string | null =>
+  typeof value === "string" && value.length > 0 && value.length <= max && !/[\u0000-\u001f]/.test(value) ? value : null;
+
+/** Duyuru gövdesini doğrular; biçim dışı her şey null (merkez 400 döner). */
+export function parseAnnounce(body: string): AgentAnnounce | null {
+  let raw: Record<string, unknown>;
+  try {
+    const value = JSON.parse(body) as unknown;
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    raw = value as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  const address = announceText(raw.address, 253);
+  const port = raw.port;
+  const fingerprint = announceText(raw.fingerprint, 128);
+  const version = announceText(raw.version, 40);
+  const hostname = announceText(raw.hostname, 253);
+  if (!address || !ANNOUNCE_ADDRESS.test(address)) return null;
+  if (typeof port !== "number" || !Number.isInteger(port) || port < 1 || port > 65535) return null;
+  if (!fingerprint || normalizeFingerprint(fingerprint).length !== 64) return null;
+  if (!version || !/^[0-9A-Za-z.+-]+$/.test(version) || !hostname) return null;
+  const osName = raw.osName === null || raw.osName === undefined ? null : announceText(raw.osName, 200);
+  return { address, port, fingerprint, version, hostname, osName };
+}
+
+/** Duyurudan kayıt adresi (IPv6 köşeli parantezle). */
+export function announceUrl(announce: Pick<AgentAnnounce, "address" | "port">): string {
+  const host = announce.address.includes(":") ? `[${announce.address}]` : announce.address;
+  return `https://${host}:${announce.port}`;
+}

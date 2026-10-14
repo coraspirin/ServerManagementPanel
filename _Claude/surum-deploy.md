@@ -52,6 +52,17 @@ Commit/etiket/GHCR olmadan merkezdeki kod ajana böyle taşındı (Next standalo
 4. `/root/panel-agent/.env` yedeklenir (`.env.manual-X-<damga>`), `AGENT_IMAGE=panel-agent-local:X`, `docker compose -p panel-agent up -d --force-recreate --pull never panel-agent`; 2,5 dk içinde healthy değilse yedek geri konur.
 ⚠️ Ajan yerel imajdayken merkezin otomatik güncellemesi (`agents.auto_update`) bir sonraki merkez sürümünde GHCR'den o etiketi çekmeye çalışır; etiket yayınlanmadıysa "pull" adımında durur (zararsız, etiket başına bir kez). Kalıcı çözüm: sürümü yayınlayıp normal yola dönmek.
 
+## Native (Go) ajan yayını (Faz B adım 5)
+- **Ön koşul (bir kez)**: GitHub → Settings → Secrets and variables → Actions → `AGENT_SIGNING_KEY` = Ed25519 özel anahtarı (PKCS#8 PEM; 2026-10-14 üretildi ve eklendi, yerel kopyası yok; ortak anahtarı `agent/internal/update/keys.go` ve `scripts/install-agent.sh`'ta). Sır yoksa iş akışı durur — imzasız yayın ajanlarca reddedilir.
+- Kurulum komutu (panelin "Sunucu ekle" penceresi verir): `install-agent.sh --token T --version vX.Y.Z --profile standard --central <panel adresi>`; `--central` ile ajan kendini panele duyurur (1 sa), panelde "Onayla ve bağlan". Yerinde denetim: `panel-agent doctor`, izinler: `panel-agent policy show`.
+- Etiket (`vX.Y.Z`, package.json ile aynı) itilince `.github/workflows/agent-release.yml`: derle (vet+test) → `SHA256SUMS` imzala → ikililer + `SHA256SUMS(.sig)` + `install-agent.sh` aynı etiketin GitHub sürümüne.
+- Native ajanlar merkezin otomatik güncellemesiyle (`agents.auto_update`) ya da Sunucular → güncelle ile kendini günceller (indirir, doğrular, onay alamazsa geri alır).
+- Yeni sunucu: panel "Sunucu ekle" → native tek komut.
+- Anahtar değişimi: yeni ortak anahtarı `TrustedKeys`'e EKLE (eskiyi silme), bir yayın çıkar, sonra sırrı değiştir; eski anahtar bir sonraki yayında kaldırılır.
+
+## Native (Go) ajan ikilileri (Faz B adım 3+)
+`bash scripts/build-agent.sh` (`--all`: + 386, armv6) → `agent/dist/panel-agent-linux-{amd64,arm64,armv7}` + `SHA256SUMS`; sürüm `package.json`'dan (`-X main.version`). Go bu bilgisayarda `%LOCALAPPDATA%\go-sdk\go` (1.27.2, go.dev zip, SHA256 doğrulandı). Yayın (GitHub Releases + Ed25519 imzalı SHA256SUMS + CI), kurulum betiği ve systemd birimi Faz B adım 5'te — şimdilik ikili elle kopyalanır. Ayrıntı `native-ajan.md`.
+
 ## İlgili dosyalar
 `deploy.sh`, `agent-deploy.py`, `.github/workflows/docker-publish.yml`, `.github/workflows/ci.yml`, `src/lib/selfupdate/{index,plan}.ts` (panelin kendini güncellemesi, `/update` sayfası), `src/lib/hosts/agents.ts` (otomatik güncelleme, ajan compose'u), `scripts/docker-entry.mjs`.
 

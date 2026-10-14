@@ -19,21 +19,31 @@ import type { BackupJob, BackupRepo } from "./types";
  * buluyor: zamanlanmış yedekler, yeniden denemeler ve konum doğrulamaları.
  */
 
+/**
+ * Cron ifadeleri panelin saat diliminde okunur (`general.timezone`, açılışta
+ * ve ayar değişince `process.env.TZ`'ye yazılıyor — `lib/time/zone.ts`).
+ * Açıkça veriliyor ki süreç dilimi bir şekilde boş kalırsa sessizce UTC'ye
+ * düşülmesin (2026-10-14'e kadar böyleydi: "0 6 * * *" TR 09:00'da çalıştı).
+ */
+function cronOptions(from: Date, tz = process.env.TZ): { currentDate: Date; tz?: string } {
+  return tz ? { currentDate: from, tz } : { currentDate: from };
+}
+
 /** Cron ifadesine göre `from`dan sonraki ilk çalışma (unix sn); bozuksa null. */
-export function nextRunAt(cron: string, from: Date): number | null {
+export function nextRunAt(cron: string, from: Date, tz?: string): number | null {
   if (cron.trim().length === 0) return null;
   try {
-    return Math.floor(CronExpressionParser.parse(cron, { currentDate: from }).next().getTime() / 1000);
+    return Math.floor(CronExpressionParser.parse(cron, cronOptions(from, tz)).next().getTime() / 1000);
   } catch {
     return null;
   }
 }
 
 /** Sonraki N çalışma — arayüz önizlemesi. */
-export function upcomingRuns(cron: string, count = 3, from = new Date()): number[] {
+export function upcomingRuns(cron: string, count = 3, from = new Date(), tz?: string): number[] {
   const result: number[] = [];
   try {
-    const interval = CronExpressionParser.parse(cron, { currentDate: from });
+    const interval = CronExpressionParser.parse(cron, cronOptions(from, tz));
     for (let index = 0; index < count; index += 1) result.push(Math.floor(interval.next().getTime() / 1000));
   } catch {
     // Bozuk ifade: önizleme boş.

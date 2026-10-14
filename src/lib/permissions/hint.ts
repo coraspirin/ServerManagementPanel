@@ -27,7 +27,13 @@ export type PermissionHintCode =
   | "socketStale"
   | "dockerMissing"
   | "procMissing"
-  | "hostRootMissing";
+  | "hostRootMissing"
+  /** Native ajan bu özelliğin op'larını (henüz) sunmuyor. */
+  | "agentOpMissing"
+  /** Native ajan: host politikası (`policy.conf`) bu helper eylemlerine izin vermiyor. */
+  | "policyMissing"
+  /** Helper eylemi açık ama bu argümana (birim, kalıp, komut) izin yok — compose dışı desen reddi. */
+  | "argumentDenied";
 
 export type PermissionHint = {
   code: PermissionHintCode;
@@ -39,7 +45,18 @@ export type PermissionHint = {
 };
 
 /** Komut üretmek için gereken sunucu özeti. */
-export type HintHost = { id: number; name: string; address: string | null; local: boolean };
+export type HintHost = {
+  id: number;
+  name: string;
+  address: string | null;
+  local: boolean;
+  /**
+   * Native (Go) ajan: helper eylemleri ajanın içinde, izinler
+   * `/etc/panel-agent/policy.conf`'ta (`allow helper.<eylem> [desen]`) —
+   * allow.conf ve ayrı helper servisi yok, yeniden başlatma gerekmez.
+   */
+  native?: boolean;
+};
 
 export type HintContext = {
   host: HintHost | null;
@@ -51,6 +68,8 @@ export type HintContext = {
   /** `patternDenied`: izin listesine eklenecek satırlar ve dizin. */
   allowLines?: string[];
   directory?: string;
+  /** `argumentDenied`: reddedilen argüman (birim, kalıp ya da komut). */
+  subject?: string;
   /** Soket hataları: container içindeki soket yolu. */
   socketPath?: string;
 };
@@ -59,13 +78,37 @@ export type HintTranslate = (key: string, params?: Record<string, string | numbe
 
 const ALLOW_CONF = "/etc/panel-helper/allow.conf";
 const RESTART_HELPER = "sudo systemctl restart panel-helper";
+const POLICY_CONF = "/etc/panel-agent/policy.conf";
+
+/** allow.conf satırı ("compose.up ^/opt/x$") → policy.conf satırı. */
+export function policyLine(allowLine: string): string {
+  return `allow helper.${allowLine.trim()}`;
+}
+
+/** Native ajanda helper izinleri policy.conf'ta; değişiklik anında geçerli. */
+function nativeHelperCommands(code: PermissionHintCode, ctx: HintContext, t: HintTranslate): string[] | null {
+  switch (code) {
+    case "helperUnverified":
+    case "patternDenied":
+    case "argumentDenied":
+    case "policyMissing":
+      return [`# ${t("permissions.hint.policyConfShould")}`, `sudo tee -a ${POLICY_CONF} <<'EOF'`, ...(ctx.allowLines ?? []).map(policyLine), "EOF"];
+    case "actionDisabled":
+      return ctx.action
+        ? [`echo '${policyLine(ctx.action)}' | sudo tee -a ${POLICY_CONF}`]
+        : [`sudoedit ${POLICY_CONF}`];
+    default:
+      return null;
+  }
+}
 
 /** Düzeltmesi sunucuda değil panelde olanlar. */
-const PANEL_SIDE = new Set<PermissionHintCode>(["permission", "noHost", "unsupported"]);
+const PANEL_SIDE = new Set<PermissionHintCode>(["permission", "noHost", "unsupported", "agentOpMissing"]);
 
 function hostHeader(ctx: HintContext, t: HintTranslate): string {
   const host = ctx.host;
   if (!host || host.local) return `# ${t("permissions.hint.where.local")}`;
+  if (host.native) return `# ${t("permissions.hint.where.native", { host: host.name, address: host.address ?? "?" })}`;
   return `# ${t("permissions.hint.where.agent", { host: host.name, address: host.address ?? "?" })}`;
 }
 
@@ -80,6 +123,10 @@ function composeMount(ctx: HintContext, t: HintTranslate, lines: string[]): stri
 }
 
 function hostCommands(code: PermissionHintCode, ctx: HintContext, t: HintTranslate): string[] {
+  if (ctx.host?.native) {
+    const native = nativeHelperCommands(code, ctx, t);
+    if (native) return native;
+  }
   const agent = ctx.host !== null && !ctx.host.local;
   switch (code) {
     case "helperMissing":
@@ -98,6 +145,7 @@ function hostCommands(code: PermissionHintCode, ctx: HintContext, t: HintTransla
         ? [`echo '${ctx.action}' | sudo tee -a ${ALLOW_CONF}`, RESTART_HELPER]
         : [`sudoedit ${ALLOW_CONF}`, RESTART_HELPER];
     case "patternDenied":
+    case "argumentDenied":
       return [`sudo tee -a ${ALLOW_CONF} <<'EOF'`, ...(ctx.allowLines ?? []), "EOF", RESTART_HELPER];
     case "socketMissing":
       return ["systemctl status panel-helper", "sudo host-helper/install.sh", ...composeMount(ctx, t, ["- /run/panel-helper:/run/panel-helper"])];
@@ -128,6 +176,8 @@ export function buildHint(code: PermissionHintCode, ctx: HintContext, t: HintTra
     action: ctx.action ?? "?",
     directory: ctx.directory ?? "?",
     path: ctx.socketPath ?? "?",
+    actions: (ctx.allowLines ?? []).join(", ") || "?",
+    subject: ctx.subject ?? "?",
   };
   const commands = where === "host" ? [hostHeader(ctx, t), ...hostCommands(code, ctx, t)] : [];
   return {

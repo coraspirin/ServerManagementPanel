@@ -26,16 +26,22 @@ import {
   type DateInput,
 } from "./format.ts";
 
-type I18nValue = { locale: Locale; dict: Dictionary };
+/**
+ * `timeZone`: panelin saat dilimi (`general.timezone`). Tarihler tarayıcının
+ * değil bu dilimin saatiyle yazılır — sunucudaki zamanlayıcı da bu saate
+ * bakıyor (bkz. `lib/time/zone.ts`).
+ */
+type I18nValue = { locale: Locale; dict: Dictionary; timeZone?: string };
 
 const I18nContext = createContext<I18nValue | null>(null);
 
 export function I18nProvider({
   locale,
   dict,
+  timeZone,
   children,
 }: I18nValue & { children: React.ReactNode }) {
-  const value = useMemo(() => ({ locale, dict }), [locale, dict]);
+  const value = useMemo(() => ({ locale, dict, timeZone }), [locale, dict, timeZone]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
@@ -45,6 +51,11 @@ function useI18n(): I18nValue {
   // render ediliyor" demek ve sessizce Türkçeye düşmek yerine bağırmalı.
   if (!value) throw new Error("I18nProvider bulunamadı — bileşen ağacın dışında.");
   return value;
+}
+
+/** Panelin saat dilimi; tanımsızsa tarayıcınınki kullanılır. */
+export function useTimeZone(): string | undefined {
+  return useI18n().timeZone;
 }
 
 export function useLocale(): Locale {
@@ -80,29 +91,29 @@ export function useDynamicT(): (key: string, params?: Params) => string {
  * hem kısa hem de unutmaya kapalı.
  */
 export function useFormat() {
-  const { locale, dict } = useI18n();
+  const { locale, dict, timeZone } = useI18n();
 
   return useMemo(
     () => ({
       locale,
       date: (value: DateInput, options?: Intl.DateTimeFormatOptions) =>
-        formatDate(value, dict, options),
+        formatDate(value, dict, options, timeZone),
       time: (value: DateInput, options?: Intl.DateTimeFormatOptions) =>
-        formatTime(value, dict, options),
+        formatTime(value, dict, options, timeZone),
       dateTime: (value: DateInput, options?: Intl.DateTimeFormatOptions) =>
-        formatDateTime(value, dict, options),
+        formatDateTime(value, dict, options, timeZone),
       number: (value: number, options?: Intl.NumberFormatOptions) =>
         formatNumber(value, dict, options),
       pct: (value: number, digits?: number) => formatPct(value, dict, digits),
       duration: (seconds: number) => formatDuration(seconds, dict),
       uptime: (seconds: number) => formatUptime(seconds, dict),
-      relative: (value: DateInput) => formatRelative(value, dict),
+      relative: (value: DateInput) => formatRelative(value, dict, timeZone),
       compare: (a: string, b: string) => compareText(a, b, dict),
       weekday: (index: number, style?: "long" | "short") => formatWeekday(index, dict, style),
       month: (month: number) => formatMonth(month, dict),
       /** Aramada büyük/küçük harf eşitleme — Türkçede "İ"/"ı" kuralı dile bağlı. */
       lower: (text: string) => text.toLocaleLowerCase(intlOf(dict)),
     }),
-    [locale, dict],
+    [locale, dict, timeZone],
   );
 }

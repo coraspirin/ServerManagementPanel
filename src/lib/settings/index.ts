@@ -7,6 +7,7 @@ import { audit } from "@/lib/auth/audit";
 import { findSetting, settingDefs } from "@/settings.schema";
 import { serverT } from "@/lib/i18n/runtime";
 import { isLocale } from "@/locales";
+import { applyProcessTimeZone, isValidTimeZone, TIMEZONE_SETTING } from "@/lib/time/zone";
 import type { ResolvedSetting, SettingDef, SettingScope } from "./types";
 
 /**
@@ -66,6 +67,8 @@ export function validateValue(def: SettingDef, value: unknown): string | null {
         : serverT("settings.validation.enum");
     case "locale":
       return isLocale(value) ? null : serverT("settings.validation.locale");
+    case "timezone":
+      return isValidTimeZone(value) ? null : serverT("settings.validation.timezone");
     case "cron": {
       const parts = String(value).trim().split(/\s+/);
       return parts.length === 5 ? null : serverT("settings.validation.cron");
@@ -288,7 +291,17 @@ export function setSetting(
         : `${key}: ${previous} → ${String(value)}`,
   });
 
+  afterChange(key);
   return { ok: true };
+}
+
+/**
+ * Yazımdan sonra süreç düzeyinde uygulanması gereken ayarlar. Saat dilimi
+ * `process.env.TZ`'ye yansır: zamanlayıcılar yeniden başlatmadan yeni saate
+ * bakar (bkz. `lib/time/zone.ts`).
+ */
+function afterChange(key: string): void {
+  if (key === TIMEZONE_SETTING) applyProcessTimeZone(getString(key));
 }
 
 export function resetSetting(
@@ -310,6 +323,7 @@ export function resetSetting(
     detail: serverT("settingsLib.reset", { value: String(def.default) }),
   });
 
+  afterChange(key);
   return { ok: true };
 }
 

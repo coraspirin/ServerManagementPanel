@@ -182,14 +182,60 @@ function explainSocketError(error: Error): { error: string; hintCode?: Permissio
  * (soket/secret) ya da helper'ın sabit hata metninden (izin listesi) gelir;
  * eski ajanlar `hintCode` göndermez, metin eşlemesi onları da kapsar.
  */
-function withHint(response: HelperResponse, action: HelperAction, hostId: number): HelperResponse {
+/**
+ * Helper'ın desen uyguladığı "ana argüman" — eyleme özgü, komutta kullanılanla
+ * aynı (panel-helper.py `ACTION_SUBJECT`, native ajan `subjectKey`).
+ */
+const HELPER_SUBJECT: Record<string, string> = {
+  "service.status": "unit",
+  "service.restart": "unit",
+  "service.start": "unit",
+  "service.stop": "unit",
+  "compose.ps": "dir",
+  "compose.config": "dir",
+  "compose.up": "dir",
+  "compose.pull": "dir",
+  "compose.restart": "dir",
+  "compose.down": "dir",
+  "shell.preset": "preset",
+  "shell.exec": "command",
+  "fail2ban.jail": "jail",
+  "fail2ban.unban": "jail",
+  "cron.list": "user",
+};
+
+function helperSubject(action: string, args: Record<string, unknown>): string {
+  const key = HELPER_SUBJECT[action];
+  return key ? String(args[key] ?? "").trim() : "";
+}
+
+function regexEscape(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function withHint(
+  response: HelperResponse,
+  action: HelperAction,
+  hostId: number,
+  args: Record<string, unknown> = {},
+): HelperResponse {
   if (response.ok || !response.error) return response;
-  const code = response.hintCode ?? helperErrorCode(response.error);
+  let code = response.hintCode ?? helperErrorCode(response.error);
   if (!code) return response;
+  // Desen reddi compose dışında (kalıp, birim, komut): "dizin" metni yanlış
+  // olurdu; reddedilen argüman ve onu açacak kesin satır gösterilir.
+  const subject = helperSubject(action, args);
+  let allowLines: string[] | undefined;
+  if (code === "patternDenied" && !action.startsWith("compose.")) {
+    code = "argumentDenied";
+    allowLines = subject ? [`${action} ^${regexEscape(subject)}$`] : undefined;
+  }
   const hint = hintFor(code, {
     hostId,
     action: code === "actionDisabled" ? (helperErrorAction(response.error) ?? action) : action,
     socketPath: SOCKET_PATH,
+    subject,
+    allowLines,
   });
   return { ...response, hint };
 }
@@ -217,7 +263,7 @@ export async function callHelper(
   const response = isLocalHost(hostId)
     ? await callLocalHelper(action, args, actor, timeoutMs, requestId)
     : await callRemoteHelper(hostId, action, args, actor, timeoutMs, requestId);
-  return withHint(response, action, hostId);
+  return withHint(response, action, hostId, args);
 }
 
 /** Bu makinedeki helper soketine doğrudan istek (ajan da bunu kullanır). */

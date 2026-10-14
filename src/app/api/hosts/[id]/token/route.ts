@@ -1,6 +1,6 @@
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
-import { regenerateAgentKit } from "@/lib/hosts/agents";
+import { centralOrigin, regenerateAgentKit } from "@/lib/hosts/agents";
 import { serverT } from "@/lib/i18n/runtime";
 import { clientIp } from "@/lib/request";
 
@@ -16,7 +16,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!guard.ok) return guard.response;
 
   const id = Number((await params).id);
-  const kit = Number.isInteger(id) ? regenerateAgentKit(id) : null;
+  const kit = Number.isInteger(id) ? regenerateAgentKit(id, centralOrigin(request)) : null;
   if (!kit) return Response.json({ error: serverT("hosts.errors.unknown", { host: String(id) }) }, { status: 404 });
 
   audit({

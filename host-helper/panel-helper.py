@@ -269,6 +269,27 @@ ACTIONS = {
     # kılacak bir kaldıraç elde ederdi.
 }
 
+#: Her eylemin izin desenine tabi "ana argümanı" — komut şablonunda kullanılanın
+#: AYNISI. Listede olmayan eylemin ana argümanı yok (desen boş metne uygulanır).
+#: Native ajandaki karşılığı: agent/internal/helper/helper.go `subjectKey`.
+ACTION_SUBJECT = {
+    "service.status": "unit",
+    "service.restart": "unit",
+    "service.start": "unit",
+    "service.stop": "unit",
+    "compose.ps": "dir",
+    "compose.config": "dir",
+    "compose.up": "dir",
+    "compose.pull": "dir",
+    "compose.restart": "dir",
+    "compose.down": "dir",
+    "shell.preset": "preset",
+    "shell.exec": "command",
+    "fail2ban.jail": "jail",
+    "fail2ban.unban": "jail",
+    "cron.list": "user",
+}
+
 #: Varsayılandan uzun sürmesi normal olan eylemler.
 ACTION_TIMEOUTS = {
     "shell.preset": CONSOLE_TIMEOUT_SECONDS,
@@ -384,9 +405,16 @@ def handle_request(message, secret, allow):
         # Eylemin "ana argümanı": systemd birimi, compose dizini, konsol kalıbı
         # ya da serbest komut metni. Sonuncusu sayesinde `shell.exec` desenle
         # daraltılabilir — desensiz açmak root kabuğu vermektir.
-        subject = str(
-            args.get("unit") or args.get("dir") or args.get("preset") or args.get("command") or ""
-        )
+        #
+        # Desen, komuta GERÇEKTEN giren argümana uygulanır (ACTION_SUBJECT).
+        # Eskiden "unit, yoksa dir, …" sırasıyla ilk dolu argüman alınıyordu:
+        # `compose.up`'a izinli bir `unit` ile izinsiz bir `dir` birlikte
+        # gönderilince desen `unit`'e bakar, komut `dir`'de çalışırdı
+        # (güvenlik incelemesi, 2026-10-14).
+        key = ACTION_SUBJECT.get(action)
+        subject = str(args.get(key) or "") if key else ""
+        if action == "shell.exec":
+            subject = subject.strip()
         if not pattern.search(subject):
             log("RED: argüman izin desenine uymuyor (%s: %s)" % (action, subject))
             return {"ok": False, "error": "argüman izin verilen desene uymuyor"}

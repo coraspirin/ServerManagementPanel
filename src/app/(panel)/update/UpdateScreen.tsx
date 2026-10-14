@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, CloudDownload, ExternalLink, Loader2, RefreshCw } from "lucide-react";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/lib/auth/types";
 import { formatDateTime } from "@/lib/i18n/format";
-import { useDict, useDynamicT, useT } from "@/lib/i18n/client";
+import { useDict, useDynamicT, useT, useTimeZone } from "@/lib/i18n/client";
 import type { UpdateCheck, UpdateStatus } from "@/lib/selfupdate";
 
 const BTN =
@@ -39,6 +39,7 @@ export function UpdateScreen({
   const t = useT();
   const tk = useDynamicT();
   const dict = useDict();
+  const timeZone = useTimeZone();
   const [check, setCheck] = useState(initialCheck);
   const [status, setStatus] = useState(initialStatus);
   const [busy, setBusy] = useState(false);
@@ -126,7 +127,7 @@ export function UpdateScreen({
         </div>
 
         <p className="mt-3 text-xs text-subtle">
-          {t("update.checkedAt", { time: formatDateTime(check.checkedAt, dict) })}
+          {t("update.checkedAt", { time: formatDateTime(check.checkedAt, dict, undefined, timeZone) })}
         </p>
         {check.error && <p className="mt-2 text-sm text-danger">{check.error}</p>}
 
@@ -177,7 +178,7 @@ export function UpdateScreen({
           )}
           {running && <Loader2 className="size-4 animate-spin text-brand" aria-hidden />}
           {status.at && (
-            <span className="ml-auto text-xs text-subtle">{formatDateTime(status.at * 1000, dict)}</span>
+            <span className="ml-auto text-xs text-subtle">{formatDateTime(status.at * 1000, dict, undefined, timeZone)}</span>
           )}
         </div>
 

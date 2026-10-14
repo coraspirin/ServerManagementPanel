@@ -66,10 +66,49 @@ export type InstallKit = {
   port: number;
   env: string;
   compose: string;
+  /**
+   * Native (Go) ajanın tek komutluk kurulumu (önerilen): imzası doğrulanan
+   * ikili + systemd (scripts/install-agent.sh, kararlar.md K5). Sürüm merkezle
+   * aynı etiket — o etiketin yayınında ajan ikilileri olmalı.
+   */
+  native: string;
 };
 
-function installKit(token: string): InstallKit {
+const REPO = "coraspirin/ServerManagementPanel";
+
+/**
+ * Kurulum komutundaki merkez adresi: tarayıcının paneli açtığı köken
+ * (`Origin`, yoksa vekil başlıkları). Ajan buraya kendini duyurur; uzak
+ * sunucu bu adrese ulaşamıyorsa kullanıcı komutta düzeltir ya da elle kayıt
+ * yapar (duyuru yalnız kolaylık).
+ */
+export function centralOrigin(request: Request): string | null {
+  const candidates = [request.headers.get("origin")];
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  if (host) {
+    const proto = (request.headers.get("x-forwarded-proto") ?? "http").split(",")[0].trim();
+    candidates.push(`${proto}://${host.split(",")[0].trim()}`);
+  }
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      const url = new URL(candidate);
+      if (url.protocol === "http:" || url.protocol === "https:") return url.origin;
+    } catch {
+      // sonraki aday
+    }
+  }
+  return null;
+}
+
+function installKit(token: string, central: string | null): InstallKit {
   const image = agentImage();
+  const tag = `v${appVersion()}`;
+  const native = [
+    `curl -fsSL https://github.com/${REPO}/releases/download/${tag}/install-agent.sh \\`,
+    `  | sudo bash -s -- --token ${token} --version ${tag} --profile standard${central ? " \\" : ""}`,
+    ...(central ? [`    --central ${central}`] : []),
+  ].join("\n");
   const env = [
     `AGENT_TOKEN=${token}`,
     `AGENT_IMAGE=${image}`,
@@ -106,22 +145,22 @@ function installKit(token: string): InstallKit {
 volumes:
   agent-data:
 `;
-  return { token, image, port: DEFAULT_AGENT_PORT, env, compose };
+  return { token, image, port: DEFAULT_AGENT_PORT, env, compose, native };
 }
 
-export function createAgentHost(name: string): { host: Host; kit: InstallKit } {
+export function createAgentHost(name: string, central: string | null): { host: Host; kit: InstallKit } {
   const token = generateToken(32);
   const id = insertPendingHost(name.trim(), JSON.stringify(encryptSecret(token)));
-  return { host: getHost(id) as Host, kit: installKit(token) };
+  return { host: getHost(id) as Host, kit: installKit(token, central) };
 }
 
 /** Sırrı yeniler (ör. kurulum metni kaybolduysa). Ajan yeni sırla yeniden başlatılmalı. */
-export function regenerateAgentKit(id: number): InstallKit | null {
+export function regenerateAgentKit(id: number, central: string | null): InstallKit | null {
   const host = getHost(id);
   if (!host || host.isLocal || host.agentType !== "agent") return null;
   const token = generateToken(32);
   resetHostSecret(id, JSON.stringify(encryptSecret(token)));
-  return installKit(token);
+  return installKit(token, central);
 }
 
 function helloUpdate(hello: AgentHello, latencyMs: number) {

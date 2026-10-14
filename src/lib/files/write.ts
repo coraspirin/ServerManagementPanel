@@ -1,6 +1,6 @@
 import "server-only";
 
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
@@ -11,8 +11,9 @@ import { onHost } from "@/lib/hosts/on-host";
 import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 import { getString } from "@/lib/settings";
-import { elevatedList, isPermissionError } from "./elevated";
-import { checkPath } from "./paths";
+import { elevatedList, elevatedResolve, isPermissionError } from "./elevated";
+import { allowedRoots, checkPath, forbiddenPath, hostRoot } from "./paths";
+import { insideRoots, LinkLoopError, resolveHostPath } from "./resolve";
 
 /**
  * M3.5 — yazma tarafı.
@@ -49,18 +50,66 @@ export type WriteOutcome = { ok: boolean; message: string };
  * yerine çöp bir dizin üretiyordu. Bind vermeden önce klasörün varlığını
  * sormak bunun tek çaresi.
  */
-async function parentExists(parentHostPath: string): Promise<boolean> {
-  const check = checkPath(parentHostPath);
-  if (!check.ok) return false;
-
+async function parentExists(realHostPath: string): Promise<boolean> {
+  const containerPath = path.posix.join(hostRoot(), realHostPath);
   try {
-    return (await stat(check.containerPath)).isDirectory();
+    return (await stat(containerPath)).isDirectory();
   } catch (error) {
     // Panel kullanıcısı göremiyorsa root container'a sor.
     if (!isPermissionError(error)) return false;
-    const listing = await elevatedList(check.containerPath, 1);
+    const listing = await elevatedList(containerPath, 1);
     return !("error" in listing);
   }
+}
+
+/** Host yolundaki tek parça bağ mı; bağsa hedefi (resolve.ts sözleşmesi). */
+function readHostLink(hostPath: string): string | null {
+  const full = path.posix.join(hostRoot(), hostPath);
+  try {
+    return lstatSync(full).isSymbolicLink() ? readlinkSync(full) : null;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return null;
+    throw error;
+  }
+}
+
+/** Bağları çözülmüş host yolu; panel kullanıcısı göremiyorsa root container. */
+async function resolveOnHost(hostPath: string): Promise<{ resolved: string } | { error: string }> {
+  try {
+    return { resolved: resolveHostPath(hostPath, readHostLink) };
+  } catch (error) {
+    if (error instanceof LinkLoopError) return { error: serverT("paths.linkLoop", { path: hostPath }) };
+    if (!isPermissionError(error)) return { error: String((error as Error).message ?? error) };
+    return elevatedResolve(hostPath);
+  }
+}
+
+/**
+ * Bind edilecek GERÇEK üst klasör (güvenlik incelemesi 2026-10-14).
+ *
+ * Docker bind kaynağındaki sembolik bağları host'ta çözer: izinli kökteki
+ * `bag → /etc` üzerinden yazma kök dışına çıkardı. Yol burada çözülür,
+ * çözülmüş hâli de izinli köklerde olmalı ve bind'a o verilir. Köklerin
+ * kendileri bağ olabilir (`/data → /mnt/disk`): çözülmüş hâlleri de kök sayılır.
+ * Native ajandaki karşılığı `agent/internal/files/paths.go` (`Parent`).
+ */
+async function realParent(parentHostPath: string): Promise<{ path: string } | { error: string }> {
+  const result = await resolveOnHost(parentHostPath);
+  if ("error" in result) return result;
+  const resolved = result.resolved;
+  if (resolved === parentHostPath) return { path: resolved };
+
+  const roots = allowedRoots();
+  const realRoots = [...roots];
+  for (const root of roots) {
+    const real = await resolveOnHost(root);
+    if (!("error" in real)) realRoots.push(real.resolved);
+  }
+  if (forbiddenPath(resolved) || !insideRoots(resolved, realRoots)) {
+    return { error: serverT("paths.linkOutside", { path: parentHostPath, target: resolved }) };
+  }
+  return { path: resolved };
 }
 
 async function runInParent(
@@ -68,7 +117,10 @@ async function runInParent(
   cmd: string[],
   extraBinds: string[] = [],
 ): Promise<WriteOutcome> {
-  if (!(await parentExists(parentHostPath))) {
+  const real = await realParent(parentHostPath);
+  if ("error" in real) return { ok: false, message: real.error };
+
+  if (!(await parentExists(real.path))) {
     return {
       ok: false,
       message: serverT("fileWrite.parentMissing", { path: parentHostPath }),
@@ -78,7 +130,7 @@ async function runInParent(
   const result = await getDockerProvider().runThrowaway({
     image: image(),
     cmd,
-    binds: [`${parentHostPath}:${WORK}`, ...extraBinds],
+    binds: [`${real.path}:${WORK}`, ...extraBinds],
     env: {},
     namePrefix: "panel-files",
     timeoutMs: 120_000,

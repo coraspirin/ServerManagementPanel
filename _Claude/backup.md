@@ -1,5 +1,5 @@
 # Yedekleme — /backup
-Son güncelleme: 2026-10-08 · commit 428d5e8 (v2 yeniden yazımı)
+Son güncelleme: 2026-10-14 · zamanlama panel saat diliminde (`general.timezone`)
 
 ## Ne yapar
 restic tabanlı yedekleme, sekmeli sayfa. Sunucu başına üç "sistem" işi: **Docker** (container volume/bind + compose klasörleri), **İşletim Sistemi** (/etc, /home, /root, cron, /opt, /usr/local, dpkg durumu — disk imajı değil), **Veritabanı** (pg/mysql dökümleri + panel DB). Kullanıcı yol yazmaz: kaynaklar otomatik bulunur, işaretlenir. Ayrıca: konumlar (yerel disk, SMB/NFS, S3/B2/MinIO), geçmiş, snapshot gezinme/karşılaştırma/geri yükleme/indirme, eski v1 işleri "Özel işler" olarak, kurulum sihirbazı, kurtarma kiti, aylık otomatik geri yükleme testi.
@@ -27,5 +27,6 @@ Tüm restic/döküm container'ları sağlayıcı katmanıyla seçili sunucunun D
 - SMB/NFS kimlikleri restic'e gitmez; Docker volume sürücüsü (cifs/nfs) ile bağlanır.
 - Geri yükleme tek yazma işlemi; varsayılan "yeni klasöre çıkar", yerine yazma ad yazdırılarak onaylanır.
 - DB dökümü kimliği: container env (root tercihli), yoksa veritabanı sayfasındaki KULLANICI ADI DOLU bağlantı (envanterin kimliksiz satırları sayılmaz).
+- Zamanlama ve "Sonraki yedek" panelin saat diliminde (`general.timezone`, bkz. `settings.md`). 2026-10-14'e kadar süreç UTC çalışıyordu: `0 6 * * *` TR 09:00'da tetikleniyor, Genel bakış 09:00 (gerçek), sekmelerdeki cron önizlemesi 06:00 (tarayıcı) gösteriyordu. Düzeltmeyle zamanlamalar fiilen 3 saat erkene (yazıldıkları saate) kaydı.
 - Henüz yapılmayan: sunucuda gerçek restic koşusu ile doğrulama; "ilk kurulumda yedekten geri yükle".
 - Plan: `C:\Users\mucah\.claude\plans\starry-chasing-rain.md`.

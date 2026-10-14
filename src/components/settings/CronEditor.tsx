@@ -10,7 +10,7 @@ import {
   type CronMode,
   type CronParts,
 } from "@/lib/cron/friendly";
-import { useDict, useFormat, useT } from "@/lib/i18n/client";
+import { useDict, useFormat, useT, useTimeZone } from "@/lib/i18n/client";
 import { Rich } from "@/lib/i18n/rich";
 import type { MessageKey } from "@/lib/i18n/translate";
 
@@ -83,7 +83,9 @@ export function CronEditor({
   }
 
   const expression = parts.mode === "custom" ? rawDraft : buildCron(parts);
-  const upcoming = useMemo(() => nextRuns(expression, 2), [expression]);
+  // Önizleme panelin saat dilimiyle: zamanlayıcı da o saate bakıyor.
+  const timeZone = useTimeZone();
+  const upcoming = useMemo(() => nextRuns(expression, 2, new Date(), timeZone), [expression, timeZone]);
 
   const modes = allowCustom || parts.mode === "custom"
     ? MODES

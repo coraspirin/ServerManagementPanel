@@ -26,7 +26,7 @@ import { refreshImageUpdates } from "@/lib/updates";
 import { serverT } from "@/lib/i18n/runtime";
 import { fanOut, summarizeOutcomes } from "@/lib/hosts/fanout";
 import { heartbeatAgents } from "@/lib/hosts/agents";
-import { activeHosts, getHost, listHosts } from "@/lib/hosts/store";
+import { activeHosts, dockerHosts, getHost, listHosts } from "@/lib/hosts/store";
 import { LOCAL_HOST_ID, runWithHost } from "@/lib/hosts/context";
 import { syncRemoteEventWatchers } from "@/lib/docker/events";
 import type { JobDefinition, JobResult } from "./types";
@@ -104,7 +104,7 @@ export const jobDefinitions: JobDefinition[] = [
     run: perHost(async () => {
       const { containers, running, written } = await collectDockerMetrics();
       return { detail: serverT("jobs.detail.dockerCollect", { running, containers, written }) };
-    }),
+    }, dockerHosts),
   },
   {
     key: "docker.autoprune",
@@ -128,7 +128,7 @@ export const jobDefinitions: JobDefinition[] = [
           mb: (result.reclaimedBytes / 1024 ** 2).toFixed(0),
         }),
       };
-    }),
+    }, dockerHosts),
   },
   {
     key: "monitors.check",
@@ -202,7 +202,7 @@ export const jobDefinitions: JobDefinition[] = [
           serverT("jobs.detail.images", { count: results.length, outdated }) +
           (unknown > 0 ? serverT("jobs.detail.imagesUnknown", { count: unknown }) : ""),
       };
-    }),
+    }, dockerHosts),
   },
   {
     key: "network.scan",

@@ -1,5 +1,5 @@
 # Panel veritabanı şeması (SQLite)
-Son güncelleme: 2026-10-11 · son migration `035_drop_removed_features`
+Son güncelleme: 2026-10-14 · son migration `036_agent_announce`
 
 Dosya: `data/panel.db` (container'da `/app/data`, named volume `panel-data`). Erişim `src/lib/db/client.ts` (`node:sqlite`, senkron, WAL, `foreign_keys = ON`). Migration'lar `src/lib/db/migrations/NNN_ad.ts` + `index.ts`'e kayıt; çalıştırıcı `src/lib/db/migrate.ts` (her migration öncesi `data/backups/pre-migration-NN.db` kopyası).
 
@@ -37,5 +37,7 @@ Dosya: `data/panel.db` (container'da `/app/data`, named volume `panel-data`). Er
 - SQLite tablo genelindeki `UNIQUE` kısıtını tablo yeniden kurulmadan kaldıramaz; yeniden kurmak `foreign_keys = ON` iken FK CASCADE ile bağlı satırları siler (ör. `db_connections` → `db_query_history`). Çözüm örnekleri: 029/030 (yeni tablo + kopyala + RENAME, FK'siz tablolarda), 033/034 (benzersiz iç ad).
 - `ALTER TABLE … ADD COLUMN` ile FK eklenemez → ilişkili tablolar birlikte açılır (009 notu).
 - Migration'ı denemek: `test-dogrulama.md` → "Migration'ı bellekte dene".
+
+036 (`agent_announce`, 2026-10-14): `hosts.token_issued_at` (sırrın üretildiği an; duyuru yalnız sonraki 1 saatte kabul — eski satırlarda NULL, sır yenilenmeli) ve `hosts.announce` (ajan duyurusu JSON: url, fingerprint, version, hostname, osName, sourceIp, at; enroll ve sır yenilemede NULL). Bellekte 001–036 zinciriyle denendi.
 
 035 (`drop_removed_features`, 2026-10-11): `apps`, `app_categories`, `bookmarks`, `kiosk_tokens`, `kiosk_widgets`, `proxy_hosts`, `certificates`, `ddns_records`, `api_tokens` DROP; ilgili izinler, ayarlar, iş kayıtları ve `dashboard_widgets` satırları silindi.

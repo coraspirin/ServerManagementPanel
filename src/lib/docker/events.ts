@@ -7,7 +7,7 @@ import { announce } from "@/lib/alerts/announce";
 import { recordEvent } from "@/lib/alerts/store";
 import { isMockMode } from "@/lib/env";
 import { currentHostId, runWithHost } from "@/lib/hosts/context";
-import { getHost } from "@/lib/hosts/store";
+import { getHost, hostHasDocker } from "@/lib/hosts/store";
 import type { Host } from "@/lib/hosts/types";
 import { getBool } from "@/lib/settings";
 import { acceptEvent, classify, newEventCursor, type DockerEventRaw, type EventCursor } from "./eventmap";
@@ -283,7 +283,10 @@ function watchable(host: Host | null): host is Host {
     host.agentType === "agent" &&
     host.enabled &&
     host.status === "online" &&
-    host.certFingerprint !== null
+    host.certFingerprint !== null &&
+    // Docker'ı olmayan sunucu (native ajan çekirdeği) izlenmez; yoksa her
+    // turda "ajan uyumsuz" yazıp yeniden dener (2026-10-14 Pi'de görüldü).
+    hostHasDocker(host)
   );
 }
 

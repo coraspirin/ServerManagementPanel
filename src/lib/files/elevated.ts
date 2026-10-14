@@ -100,6 +100,28 @@ try {
       if (Date.now() > deadline) break;
     }
     console.log(JSON.stringify({ ok: true, entries, timedOut: Date.now() > deadline }));
+  } else if (op === "resolve") {
+    // resolve.ts resolveHostPath ile AYNI algoritma; TARGET host yolu.
+    let pending = target.split("/").filter(Boolean);
+    let resolved = "/";
+    let hops = 0;
+    while (pending.length > 0) {
+      const part = pending.shift();
+      if (part === ".") continue;
+      if (part === "..") { resolved = path.posix.dirname(resolved); continue; }
+      const candidate = path.posix.join(resolved, part);
+      let link = null;
+      try {
+        if (fs.lstatSync(path.join(${JSON.stringify(HOST_MOUNT)}, candidate)).isSymbolicLink()) {
+          link = fs.readlinkSync(path.join(${JSON.stringify(HOST_MOUNT)}, candidate));
+        }
+      } catch (error) { if (error.code !== "ENOENT" && error.code !== "ENOTDIR") throw error; }
+      if (link === null) { resolved = candidate; continue; }
+      if (++hops > 40) throw new Error("ELOOP " + candidate);
+      pending = [...link.split("/").filter(Boolean), ...pending];
+      if (link.startsWith("/")) resolved = "/";
+    }
+    console.log(JSON.stringify({ ok: true, resolved }));
   } else {
     console.log(JSON.stringify({ ok: false, error: "bilinmeyen islem" }));
   }
@@ -198,6 +220,15 @@ export async function elevatedUsage(
     entries: (result.entries as { name: string; isDir: boolean; bytes: number }[]) ?? [],
     timedOut: Boolean(result.timedOut),
   };
+}
+
+/** Host yolunun bağları çözülmüş hâli (izin hatasında; bkz. resolve.ts). */
+export async function elevatedResolve(hostPath: string): Promise<{ resolved: string } | { error: string }> {
+  const result = await run("resolve", hostPath);
+  if (!result.ok || typeof result.resolved !== "string") {
+    return { error: String(result.error ?? serverT("elevated.unreadable")) };
+  }
+  return { resolved: result.resolved };
 }
 
 /** Erişim reddi mi — yükseltilmiş yola yalnızca bu durumda düşülüyor. */

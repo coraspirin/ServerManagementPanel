@@ -67,6 +67,13 @@ export async function register() {
   const { registerLocaleResolver } = await import("@/lib/i18n/server");
   registerLocaleResolver();
 
+  // Saat dilimi — tohumlamadan SONRA ve zamanlayıcılardan ÖNCE: cron
+  // hesapları `process.env.TZ`'ye bakıyor; container'da TZ boşsa süreç
+  // UTC çalışır ve "0 6 * * *" yerel 09:00'da tetiklenirdi (bkz. lib/time/zone.ts).
+  const { syncProcessTimeZone } = await import("@/lib/time/zone.server");
+  const zone = syncProcessTimeZone();
+  console.log(`[time] saat dilimi: ${zone ?? "UTC (ayar okunamadı)"}`); // i18n-ignore — operatör logu
+
   // Kullanıcı yoksa yönetici OLUŞTURULMAZ: /kurulum sihirbazının istediği
   // tek kullanımlık kod üretilip loga yazılır (bkz. lib/auth/setup.ts).
   const { prepareSetupCode } = await import("@/lib/auth/setup");

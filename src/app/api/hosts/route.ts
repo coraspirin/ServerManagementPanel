@@ -1,6 +1,6 @@
 import { guardApi } from "@/lib/auth/api";
 import { audit } from "@/lib/auth/audit";
-import { createAgentHost, validateHostName } from "@/lib/hosts/agents";
+import { centralOrigin, createAgentHost, validateHostName } from "@/lib/hosts/agents";
 import { listHosts } from "@/lib/hosts/store";
 import { toHostView } from "@/lib/hosts/view";
 import { serverT } from "@/lib/i18n/runtime";
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   const problem = validateHostName(name);
   if (problem) return Response.json({ error: problem }, { status: 400 });
 
-  const { host, kit } = createAgentHost(name);
+  const { host, kit } = createAgentHost(name, centralOrigin(request));
   audit({
     userId: guard.session.user.id,
     username: guard.session.user.username,

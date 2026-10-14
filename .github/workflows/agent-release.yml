@@ -1,0 +1,63 @@
+# Native (Go) ajan yayını — kararlar.md K5.
+#
+# vX.Y.Z etiketinde: ikililer (amd64, arm64, armv7 + 386, armv6) derlenir,
+# SHA256SUMS Ed25519 ile imzalanır (özel anahtar yalnız AGENT_SIGNING_KEY
+# sırrında) ve aynı etiketin GitHub sürümüne eklenir. Ajanlar güncellemeyi
+# buradan indirir; imza ajana gömülü ortak anahtarla doğrulanır
+# (agent/internal/update/keys.go). install-agent.sh de sürüme eklenir.
+name: agent-release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.mod
+
+      - name: Etiket package.json sürümüyle aynı mı
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "Etiket ${GITHUB_REF_NAME} ama package.json ${version}" >&2
+            exit 1
+          fi
+
+      - name: Derle (vet + test dahil)
+        run: bash scripts/build-agent.sh --all
+
+      - name: SHA256SUMS'u imzala
+        env:
+          AGENT_SIGNING_KEY: ${{ secrets.AGENT_SIGNING_KEY }}
+        run: |
+          if [ -z "${AGENT_SIGNING_KEY}" ]; then
+            echo "AGENT_SIGNING_KEY sırrı tanımlı değil — imzasız yayın ajanlarca reddedilir" >&2
+            exit 1
+          fi
+          cd agent && go run ./cmd/release-sign dist/SHA256SUMS
+
+      - name: Kurulum betiğini ekle
+        run: cp scripts/install-agent.sh agent/dist/install-agent.sh
+
+      - name: Sürüme yükle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release create "${GITHUB_REF_NAME}" --verify-tag --title "${GITHUB_REF_NAME}" --generate-notes
+          fi
+          gh release upload "${GITHUB_REF_NAME}" agent/dist/* --clobber

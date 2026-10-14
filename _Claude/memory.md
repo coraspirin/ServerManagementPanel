@@ -12,6 +12,99 @@ Biçim:
 
 ---
 
+## 2026-10-14 16:27 — Faz B adım 6: ajan duyurusu, profil ayrıntısı, `policy` ve `doctor` komutları
+- Merkez: `POST /api/agent/announce` (`src/lib/hosts/announce.ts`, oturumsuz, yalnız merkez rolü; RPC imzası + bekleyen satırın sırrı, sır üretiminden 1 sa, kaynak başına 20/10 dk, toplam 200) → `hosts.announce` önerisi + denetim kaydı + bildirim; migration 036 (`token_issued_at`, `announce`; bellekte 001–036 denendi); `protocol.ts` `parseAnnounce`/`announceUrl`/sabitler (+3 test); `HostView.announce`; kurulum komutuna `--central <köken>` (`centralOrigin`); Sunucular ekranı: kurulum penceresinde 3 sn yoklama + "Ajan bulundu" kutusu (parmak izi) + "Onayla ve bağlan", satırda "Ajan bulundu" düğmesi. Yeni metinler `hosts.announce.*`, `hosts.kit.nativeHelp` (tr/en/de).
+- Ajan: `internal/announce` (dakikada bir, 70 dk, `enrolled` işaretiyle biter; yerel adres UDP "dial"), `internal/doctor` (token, politika, sertifika + dinleyen parmak izi, systemd, Docker ping, NTP/timesyncd, merkez saat farkı, kayıt, veri klasörü; düzeltme komutlarıyla), `policy/edit.go` + `cli.go` (`policy show|profile|allow|deny`), `-env` argümanların arasında da (`extractEnvFlag`). Profiller: readonly her şeyi okur (Docker GET/HEAD, dosya okuma op'ları), sanal `docker.write`; bozuk politika → `-` profili (yalnız çekirdek). `install-agent.sh --central` (AGENT_CENTRAL; yeni sırda `enrolled` silinir; çıktıda doctor/policy).
+- Doğrulama: Node typecheck/lint/test 591/591/i18n/build; Go vet + tüm testler (announce, doctor, policy edit, env bayrağı yeni); diller arası duyuru (Go ajan → `protocol.ts` doğrulayıcı) ✓. Pi: `policy show`, `doctor` ✓ (bulunan iki hata düzeltildi: `-env` konumu, koşullu op'lar listede yoktu; dbus'sız NTP denetimi eklendi); üretim ajanı yeni ikiliye geçti (`.prev`), `enrolled` yazıldı, panelde çevrimiçi.
+- Belgeler: `native-ajan.md`, `hosts.md`, `veritabani-sema.md`, `kararlar.md` (uygulama notları), `surum-deploy.md`, `test-dogrulama.md` §4d, `yapilacaklar.md`. Commit/deploy yok. Duyuru gerçek merkezde deploy'dan sonra denenmeli.
+
+## 2026-10-14 16:09 — Güvenlik: Node yolunda yazma öncesi sembolik bağ denetimi
+- Sorun: `files/write.ts` üst klasörü geçici container'a bind ediyordu; Docker bind kaynağındaki bağı HOST'ta çözdüğü için izinli kökteki `bag → /etc` üzerinden kök dışına mkdir/rm/mv/chmod/yazma yapılabiliyordu (merkez + Node ajan).
+- Düzeltme: yeni saf `src/lib/files/resolve.ts` (`resolveHostPath`, `insideRoots`) + `resolve.test.ts` (7 test); `write.ts` `realParent` (çözülmüş yol köklerde ya da çözülmüş köklerde, yasak değil; bind'a gerçek yol), izin hatasında `elevated.ts` `elevatedResolve` (betikte "resolve"). Yeni metinler `paths.linkOutside`, `paths.linkLoop` (tr/en/de; ajan strings.json yeniden üretildi).
+- Doğrulama: typecheck, lint, test 588/588, i18n:check/scan, build, go vet/test. Sunucuda denenmedi. Commit/deploy yok.
+- Belgeler: `files.md`, `kararlar.md`, `yapilacaklar.md`.
+
+## 2026-10-14 16:05 — Pi saat eşitlemesi sürekli moda alındı; profil varsayılanları onaylandı
+- Pi (192.168.61.107): `dietpi-set_software ntpd-mode 4` → `CONFIG_NTP_MODE=4`, `systemd-timesyncd` etkin+çalışıyor (dbus kuruldu, DietPi ön koşulu). Önce ~19 sn ileriydi; timesyncd 45.74.159.19 ile eşitledi, fark ~1-2 sn (ssh gecikmesi dahil). Ajan aktif.
+- Kullanıcı native ajan profil varsayılanlarını (readonly/standard/full) onayladı → `kararlar.md`.
+- `yapilacaklar.md`: Pi saat kayması düştü. Commit/deploy yok.
+
+## 2026-10-14 16:02 — İmza anahtarı GitHub sırrına eklendi, yerel kopya silindi
+- Kullanıcı `AGENT_SIGNING_KEY` sırrını GitHub Actions'a ekledi. Scratchpad'deki `signing/AGENT_SIGNING_KEY.pem` + `public.pem` silindi, pano temizlendi. Özel anahtar artık yalnız GitHub sırrında (kaybolursa yeni çift + ortak anahtar değişimi gerekir, K5).
+- Belgeler: `yapilacaklar.md`, `native-ajan.md`, `surum-deploy.md`. Commit/deploy yok.
+
+## 2026-10-14 14:05 — Güvenlik incelemesi: korunan yolun ATASI üzerinden atlatma kapatıldı
+- Bulgu (YÜKSEK): kökler "/" iken `/etc` yeniden adlandırılıp/silinip korunan `/etc/panel-agent` yerinden oynatılabiliyordu. Düzeltme: `files.Fs.containsProtected` (kendisi, içi ya da ATASI) → `Remove`/`Rename` istenen ve çözülmüş yolda `guardAncestor`; `protectedPaths` korunan yolların sembolik bağı çözülmüş hâllerini de ekliyor. Test `TestAjanDosyalariKorunur` genişledi. Go testleri geçti; Pi'ye yeni ikili (prev yedekli), servis aktif. Commit/deploy yok.
+
+## 2026-10-14 13:59 — Faz B adım 5: kendini güncelleme + CI + install-agent.sh
+- Kullanıcı kararı: imza anahtarını Claude üretsin, kullanıcı GitHub sırrına eklesin. Ed25519 çifti üretildi; özel anahtar scratchpad `signing/AGENT_SIGNING_KEY.pem` (depo dışı, eklendikten sonra silinecek); ortak anahtar `agent/internal/update/keys.go` + `scripts/install-agent.sh`.
+- Kod: `agent/internal/update/` (indir/imza/özet/selftest/.prev/pending/onay/geri alma, durum Node biçiminde), `cmd/release-sign`, `cmd/servedir` (deneme), main: `selftest`, `newUpdater`, `Resume`, `OnVerified→Confirm`; politika çekirdeğine agent.update(+Status). `.github/workflows/agent-release.yml`, `scripts/install-agent.sh`. Merkez: `InstallKit.native` + Sunucu ekle penceresi (native önerilen, Docker açılır), catalog stacks ← `agent.image`.
+- Bulunan/düzeltilen: güncelleyicide iki yarış (durum yazımı/bayrak sırası; Status'ta bayrak dosyadan önce) + Windows yeniden adlandırma paylaşım ihlali (kısa yeniden deneme).
+- Pi'de geçici sınamalar (hepsi temizlendi): güncelleme + onay, onaysız geri alma, kurulum betiği (bozuk ikili ret, yanlış anahtar ret, kurulum + smoke, purge). Üretim ajanı güncelleyicili ikiliye geçti.
+- Gözlem: Pi saati merkezden ~17 sn ileri ve büyüyor (DietPi NTP modu 2) → yapilacaklar.
+- Testler: Go tümü (update 20× tekrar), Node 581/581, typecheck/lint/i18n/build. Commit/deploy yok.
+
+## 2026-10-14 13:42 — Güvenlik incelemesi bulguları düzeltildi (helper deseni + ajan dosyaları)
+- [YÜKSEK] Helper izin deseni "ilk dolu argümana" uygulanıyordu, komut ise eyleme özgü argümanla kuruluyordu → desen atlatılabiliyordu (compose.up: izinli unit + izinsiz dir). Düzeltme: Go `subjectKey`, Python `panel-helper.py` `ACTION_SUBJECT`, merkez ipucu `HELPER_SUBJECT`. Testler: Go `TestDesenKomuttakiArgumanaUygulanir`; Python için Windows'ta socketserver taklidiyle iki atlatma denemesi reddedildi, izinli dizin desenden geçti.
+- [ORTA] Native ajanın dosya işlemleri, kökler "/" ise kendi politika/anahtar/env dosyalarına dokunabilirdi → `Fs.Protected` (main.go `protectedPaths`), rename hedefi dahil. Test `TestAjanDosyalariKorunur`.
+- Doğrulama: Go tümü, Node 581/581 + typecheck/lint/i18n; Pi'ye yeni ikili (prev yedekli), merkez API ile docker/dosya/servis gerilemesiz.
+- Not: host'lardaki Python helper'ın düzeltmesi yeniden kurulumla gelir (merkez ZimaOS'ta helper yok gibi — `helperConfigured` yerelde HELPER_SECRET'a bağlı).
+- Durum: commit/deploy yok.
+
+## 2026-10-14 10:09 — Faz B adım 4c: helper eylemleri native ajanda (K4) — Pi'de çalışıyor
+- `agent/internal/helper/` (panel-helper.py eylem tablosu/doğrulayıcılar/hata metinleri birebir), `ops/helper.go` (`helper.call`), politika `allow helper.<eylem> [desen]` + profil varsayılanları (readonly/standard/full — güç, shell.exec, paket yükseltme, docker prune yalnız full), hello `helper: true` + `helperActions`.
+- Merkez: `helperActions` tipi; katalog native'de helper durumunu kesin hesaplar (`policyMissing`); ipuçları native'de policy.conf satırları + başlık `where.native`; helper desen reddi compose dışındaysa yeni `argumentDenied` (eski "'?' dizininde compose" hatası Node helper için de düzeldi); `withHint` argüman alıyor. Locale: `permissions.hint.policyMissing|policyConfShould|argumentDenied|where.native`.
+- Testler: Go tümü; Node 581/581; typecheck/lint/i18n/build geçti.
+- Pi: yeni ikili (prev yedekli) → merkez API ile service.list, service.status, konsol disk.usage çalıştı; power.cancel/shell.exec reddi, apt.upgrade desen reddi doğru.
+- Durum: commit/deploy yok. Profil varsayılanları kullanıcı onayı bekliyor (kararlar.md).
+
+## 2026-10-14 10:02 — Faz B adım 4b: native ajanda dosya yöneticisi + host okumaları (Pi'de çalışıyor)
+- `agent/internal/files/` (paths: Check/Follow/Parent + sembolik bağ çözümü; browse; write; cleanup (yalnız host dosyası kalemleri); host: listDirs/dirExists/accounts/osReport/scanWatchDir) + `ops/files.go`; politika standard'a `files.*`, `host.*`, `updates.osReport`, `backup.scanDir`; yeni locale `fileWrite.isDirectory`; agent-strings önekleri genişledi.
+- Merkez: `src/lib/files/cleanup.ts` native sunucuda Docker kalemlerini merkezde (tünel) hesaplar/temizler (`dockerCleanupItems`), dosya kalemleri ajandan. Typecheck geçti; deploy yok.
+- Testler: Go tümü geçti (Windows); sembolik bağ kaçış testi Windows'ta atlandığı için Pi'de çapraz derlenmiş test ikilileriyle koşuldu (`/root/panel-agent-native/testrun`, sonra silindi; Pi'de `/tmp` noexec değil ama ilk deneme çıktısı boştu). Pi'de geçti. Pi'de policy/server testleri eski beklentiler yüzünden düştü → testler yeni standart profile göre düzeltildi (Windows'ta tüm paket koşulmadan geçti sanılmıştı — ders: her değişiklikte `go test ./...`).
+- Pi uçtan uca (merkez API, agent kullanıcısı): dosya işlemleri, kök dışı ret, host/users, host/dirs, files/cleanup. Geçici `/opt/panel-native-sinama` silindi.
+- Not: Node yazma yolunda bind + sembolik bağ ile kök dışına yazma ihtimali → `yapilacaklar.md`.
+
+## 2026-10-14 09:53 — Faz B adım 4a: native ajanda Docker tüneli + terminal (Pi'de çalışıyor)
+- `agent/internal/docker/` (policy, client, exec + testler: vektörler, sahte unix-soket Docker'ına karşı tünel/akış/süre aşımı/hijack terminal, yarım UTF-8), `agent/internal/ops/docker.go`; politika standard'a `docker.api`, `docker.apiStream`, `exec.*`; `agent-strings` önekleri `execLib.`, `dockerUpdate.notFound`, `api.notFound.session`.
+- Pi'ye yeni armv7 ikili (`panel-agent.prev` önceki), servis yeniden başlatıldı (sertifika aynı, yeniden kayıt gerekmedi). Merkez (deploy'daki 1.13.1, değişiklik yok) Pi'yi tünel modunda kullanıyor: Docker ✅, 6 container + istatistik, log SSE, kaynaklar, olaylar, terminal (ğüş, exitCode 3) uçtan uca doğrulandı. RSS 13,7 MB.
+- Sınama için Pi'de `hello-world` bir kez `--rm` ile çalıştırıldı (3 olay kaydı).
+- Durum: commit/deploy yok. Sıradaki 4b (files/host ops), 4c (helper).
+
+## 2026-10-14 09:45 — Pi tek kayıt: DietPi (host 3) native Go ajana taşındı
+- Kullanıcı panelde Claude için `agent` kullanıcısı açtı; "Pi için tek bağlantı" + seçimi "Go ajan, tek kayıt altında (geçmiş korunur)".
+- API ile pi-native (host 4) silindi. Pi'de: Go ajan sırrı Node ajanın `.env` `AGENT_TOKEN`'ından kopyalandı (Pi dışına çıkmadı), port 7443, systemd `panel-agent-native.service` (enable, Restart=always, After=time-sync.target); Node ajan `docker compose -p panel-agent stop` (silinmedi). Merkezde `POST /api/hosts/3/enroll` → online, 37 ms, capabilities native + 4 op; metrikler 5 sn'de 21 değer.
+- Beklenen yan etki: deploy'daki merkez Docker'sız sunucuya olay izleyicisi açmaya devam ediyor → `[docker-events] DietPi: … uyumsuz` logu (düzeltme yerelde). Pi'de Docker/dosya/log/yedek adım 4'e kadar yok.
+- Geri dönüş `hosts.md`. Durum: commit/deploy yok.
+
+## 2026-10-14 09:34 — Native ajan Pi'de denendi (kullanıcı onayıyla) + Docker'sız sunucu düzeltmesi
+- Pi: `/root/panel-agent-native/` (armv7 ikili, SHA256 eşleşti; `agent.env` 0600; `pid`), port 7444, elle `setsid` (systemd yok — adım 5). Node ajan 7443'te dokunulmadı.
+- Önce geçici sırla `agent-smoke.ts` (gerçek veri: 4 çekirdek, 21 metrik, 1 sensör); sonra kullanıcı merkezde "pi-native" (host 4) ekledi, sırrı verdi, ajan o sırla yeniden başlatıldı, kullanıcı kaydı tamamladı → online, 52 ms, capabilities `native`+4 op, metrikler 5 sn'de 21 değer.
+- Node ajanla aynı Pi'de karşılaştırma (Node tarafı container içinden, sırrı dışarı çıkmadan): system.info birebir, metrik anahtarları 21/21, donanım biçimi aynı. Kaynak: Go 13 MB / %1,9 tek çekirdek; Node 145 MB / %8,8 (Docker toplama dahil). Pi saati merkezden ~10 sn ileri.
+- Bulgu: merkez Docker'ı olmayan sunucuya da Docker olay izleyicisi açıyor → "ajan uyumsuz" logu tekrar ediyor (deploy'daki merkezde sürüyor, zararsız). Yerel düzeltme: `hosts/store.ts` `hostHasDocker`/`dockerHosts`; `docker/events.ts` `watchable`; `jobs/definitions.ts` `docker.collect`/`docker.autoprune`/`updates.images` → `perHost(…, dockerHosts)`; `logs/collect.ts` container kısmı atlanır. Testler 576/576.
+- Durum: commit/deploy yok. pi-native kaydı ve Pi'deki süreç ÇALIŞIR durumda bırakıldı (kullanıcı kararı bekleniyor).
+
+## 2026-10-14 08:52 — Faz B adım 3: native (Go) ajan çekirdeği
+- Go: winget bu ortamda takıldı (kurucu hiç başlamadı, `winget list` bile yanıt vermedi) → kullanıcının onayladığı "Go kur" için resmî go.dev zip'i (go1.27.2, SHA256 doğrulandı) `%LOCALAPPDATA%\go-sdk\go`'ya açıldı; yönetici izni gerekmedi, PATH'e eklenmedi.
+- `agent/` (yalnız stdlib): protocol (imza/doğrulama/kayıt kanıtı/codec, sıralı `Reply`/`Frame` — Node ile kablo birebir), server (rpc/stream/enroll, nonce, 20 hata/dk kilit, politika, NDJSON flush, panic koruması), cert (ECDSA P-256, Node parmak izi biçimi), ops (`agent.hello` + `native`/`ops`, `system.info`, `metrics.sample`, `hardware.report`), hostinfo (`metrics.live.ts`/`hardware.live.ts`/`system.live.ts` karşılıkları), policy (K3 iskeleti: profile/allow/deny, mtime ile yeniden okuma, bozuk dosya → yalnız çekirdek), i18n (`strings.json` panel dillerinden `scripts/agent-strings.mjs` ile üretilir).
+- Derleme `scripts/build-agent.sh`: amd64 7,4 MB, arm64 6,7 MB, armv7 7,3 MB (+386, armv6). `agent/dist/` gitignore, `agent` .dockerignore.
+- Merkez: `AgentHello`/`HostCapabilities` `native?`/`ops?`; `client.ts` unknown-op (404) ve `policy-denied` → `HostError("unsupported")` (eskiden 404 = "uyumsuz"); katalog `ops` + `agentOpMissing`; `/hosts` "native" rozeti; locale `hosts.errors.policyDenied`, `permissions.hint.agentOpMissing`, `hosts.native.*`. Ek: `HostsScreen`/`UpdateScreen` doğrudan `formatDateTime` çağrılarına panel saat dilimi.
+- Doğrulama: `go vet` + `go test` (protocol vektörleri, server uçtan uca, hostinfo sahte /proc, policy, i18n) geçti; Node 576/576, typecheck/lint/i18n geçti; `scripts/agent-smoke.ts` ile merkezin protocol.ts'i → yerel Go ajanı (Windows, 127.0.0.1:17443) 8/8. Pi'de gerçek veriyle deneme YAPILMADI (izin istenecek).
+- Belgeler: yeni `native-ajan.md`, `README.md` dizini, `hosts.md`, `host-helper.md` (K4 yol haritası), `kararlar.md`, `tarifler.md`, `surum-deploy.md`, `test-dogrulama.md` §4c, `yapilacaklar.md`. Durum: commit edilmedi, deploy edilmedi.
+
+## 2026-10-14 08:31 — Saat dilimi tek kaynaktan (`general.timezone`)
+- Sorun (kullanıcı notu): yedek "Sonraki yedek" Genel bakışta 09:00, sekmelerde 06:00. Merkez container'ında `TZ` boş → Node UTC; `cron-parser` tz'siz (UTC) → `0 6 * * *` gerçekte TR 09:00'da çalışıyordu; `CronEditor` önizlemesi tarayıcı saatiyle 06:00 diyordu. `general.timezone` ayarı vardı ama yalnız hava durumu kullanıyordu.
+- Çözüm: `src/lib/time/zone.ts` (+ `zone.server.ts`); süreç `process.env.TZ` açılışta (`instrumentation.ts`) ve ayar değişince (`settings/index.ts` `afterChange`); `backup/scheduler.ts` + `jobs/runner.ts` açık `tz`; `i18n/format.ts` `timeZone` parametresi, `I18nProvider timeZone` + `useTimeZone()`; `cron/friendly.ts` `nextRuns(…, timeZone)` duvar saatinde eşleştirir; yeni ayar tipi `timezone` + `TimeZoneSelect` (aranabilir, "bu dilimde şu an", "tarayıcınınkini kullan"); locale tr/en/de.
+- Test: `src/lib/time/zone.test.ts` (10) — istemci önizlemesi = sunucu `cron-parser` (yaz saati geri/ileri alış dahil). Tümü 575/575; typecheck, lint, i18n, build geçti. Arayüz MOCK dev'de gözle denenmedi.
+- Etki: deploy edilince zamanlamalar fiilen 3 saat erkene (yazıldıkları yerel saate) kayar.
+- Belgeler: `kararlar.md` (yeni karar), `settings.md`, `backup.md`. Durum: commit edilmedi, deploy edilmedi.
+
+## 2026-10-14 07:30 — Tüm deploy/proje yedekleri silindi (kullanıcı isteği)
+- Merkez: `panel.db.pre-dedupe-20261014.bak`, `data/backups/` (`pre-migration-33/34/35.db`, `panel-db-snapshot.db`), compose dizininde tüm `docker-compose.yml.*.bak` (6), `.panel-backups/*.tgz` (2), `/tmp/panel-deploy-20261011-2008.tgz`. /DATA %19 dolu.
+- Pi: `/root/panel-agent/.env.agent-deploy-*` (3) + `.env.manual-1.13.1-*`, `.panel-backups/*.tgz` (5), `/root/panel-agent-build-1.13.1`.
+- Yerel: dev sunucusu (3107, MOCK doğrulaması) durduruldu, oturum scratchpad'i (merkez `/app` arşivi, mock DB, betikler, deploy logları) silindi.
+- Sonuç: geri dönüş için yedek YOK — deploy.sh önceki imajı da silmişti; geri dönüş = eski commit'ten yeniden derleme. Merkez ve Pi healthy.
+
 ## 2026-10-14 07:15 — Tekrarlanan olaylar silindi; Faz A + Faz B adım 2 + 1.13.1 commit edildi
 - Kullanıcı onayıyla merkez DB'de akış hatasının iki kez yazdığı 37 docker olayı silindi (her (host, ts, alert_key, title, detail) grubunun en küçük id'si kaldı; 31 Pi + 6 yerel, hepsi 2026-10-13 21:xx). Önce `VACUUM INTO /app/data/panel.db.pre-dedupe-20261014.bak` (≈397 MB, işe yaramadığı görülünce silinebilir); sonra sayım 0.
 - Commit (main, push/etiket YOK): Faz A (D1/D6/kurulum ipucu/yoklama), Faz B adım 2 (DockerTransport, `docker.api`, vektörler), 1.13.1 sürüm dosyaları, iki düzeltme (akış zaman aşımı, log `tail`).

@@ -11,6 +11,7 @@
 import { formatMonth, formatWeekday } from "../i18n/format.ts";
 import type { Dictionary } from "../i18n/locales.ts";
 import type { TFunction } from "../i18n/translate.ts";
+import { fromWallClock, wallClock } from "../time/zone.ts";
 
 export type CronMode =
   | "minutes"
@@ -240,31 +241,57 @@ function fieldMatches(value: number, field: string): boolean {
 /**
  * Sonraki N çalışma anı. Dakika dakika ilerleyerek eşleşme arar; en fazla
  * 400 gün taranır (yılda bir çalışan ifadeler için yeterli, sonsuz döngü yok).
+ *
+ * `timeZone` verilirse eşleştirme o dilimin DUVAR SAATİNDE yapılır (panelin
+ * `general.timezone`'u — sunucudaki zamanlayıcıyla aynı saat). Verilmezse
+ * çalışma ortamının yerel saati kullanılır.
  */
-export function nextRuns(expression: string, count = 3, from: Date = new Date()): Date[] {
+export function nextRuns(
+  expression: string,
+  count = 3,
+  from: Date = new Date(),
+  timeZone?: string,
+): Date[] {
   const fields = expression.trim().split(/\s+/);
   if (fields.length !== 5) return [];
 
   const [min, hour, dom, month, dow] = fields;
   const results: Date[] = [];
 
-  const cursor = new Date(from.getTime());
-  cursor.setSeconds(0, 0);
-  cursor.setMinutes(cursor.getMinutes() + 1);
+  // İmleç duvar saatini UTC alanlarında taşır; eşleşme anı gerçek ana çevrilir.
+  const cursor = timeZone ? wallClock(from, timeZone) : localWall(from);
+  cursor.setUTCSeconds(0, 0);
+  cursor.setUTCMinutes(cursor.getUTCMinutes() + 1);
 
   const limit = 400 * 24 * 60;
   for (let i = 0; i < limit && results.length < count; i++) {
     if (
-      fieldMatches(cursor.getMinutes(), min) &&
-      fieldMatches(cursor.getHours(), hour) &&
-      fieldMatches(cursor.getDate(), dom) &&
-      fieldMatches(cursor.getMonth() + 1, month) &&
-      fieldMatches(cursor.getDay(), dow)
+      fieldMatches(cursor.getUTCMinutes(), min) &&
+      fieldMatches(cursor.getUTCHours(), hour) &&
+      fieldMatches(cursor.getUTCDate(), dom) &&
+      fieldMatches(cursor.getUTCMonth() + 1, month) &&
+      fieldMatches(cursor.getUTCDay(), dow)
     ) {
-      results.push(new Date(cursor.getTime()));
+      results.push(timeZone ? fromWallClock(cursor, timeZone) : localInstant(cursor));
     }
-    cursor.setMinutes(cursor.getMinutes() + 1);
+    cursor.setUTCMinutes(cursor.getUTCMinutes() + 1);
   }
 
   return results;
+}
+
+function localWall(date: Date): Date {
+  return new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds()),
+  );
+}
+
+function localInstant(wall: Date): Date {
+  return new Date(
+    wall.getUTCFullYear(),
+    wall.getUTCMonth(),
+    wall.getUTCDate(),
+    wall.getUTCHours(),
+    wall.getUTCMinutes(),
+  );
 }

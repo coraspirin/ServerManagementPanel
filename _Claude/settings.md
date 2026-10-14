@@ -1,5 +1,5 @@
 # Ayarlar — /settings, /settings/[group]
-Son güncelleme: 2026-10-11 · `container`/`richtext` ayar tipleri ve api/apps/proxy/tailscale grupları kaldırıldı
+Son güncelleme: 2026-10-14 · `timezone` ayar tipi (`general.timezone` artık zamanlamaları ve tüm saat gösterimlerini yönetiyor)
 
 ## Ne yapar
 Tüm panel ayarları gruplar halinde (sekme başına bir grup): genel, izleme, saklama, bildirim, dosyalar, yedek, giriş sayfası… Alan tipleri: metin, sayı, anahtar, cron (insan dili), dizin seçici, host kullanıcısı, container seçici, zengin metin. Yapılandırma dışa/içe aktarma da burada.
@@ -7,7 +7,7 @@ Tüm panel ayarları gruplar halinde (sekme başına bir grup): genel, izleme, s
 ## Dosyalar
 - Sayfalar: `src/app/(panel)/settings/page.tsx` (ilk gruba `redirect`), `src/app/(panel)/settings/[group]/page.tsx` — `requirePermission("settings.view")`.
 - Ekran: `SettingsScreen.tsx` (482), `SettingsTabs.tsx`.
-- Bileşenler: `src/components/settings/{ConfigTransfer,CronEditor,ContainerSelect,DirPicker,HostUserSelect,RichTextField}.tsx`.
+- Bileşenler: `src/components/settings/{ConfigTransfer,CronEditor,ContainerSelect,DirPicker,HostUserSelect,RichTextField,TimeZoneSelect}.tsx`.
 - API:
   - `src/app/api/settings/route.ts` GET (`settings.view`), PATCH (`settings.edit`)
   - `src/app/api/backup/config/route.ts` GET/POST — yapılandırma dışa/içe aktarma (`settings.edit`)
@@ -22,6 +22,12 @@ Tüm panel ayarları gruplar halinde (sekme başına bir grup): genel, izleme, s
 
 ## Çoklu sunucu
 Ayarlar merkezde; sunucuya özgü olanlar sunucu kapsamlı okunur (`runWithHost` bağlamında `settings` ajana istekle taşınır — `handleRpc` `{settings}`).
+
+## Saat dilimi (`general.timezone`, 2026-10-14)
+- Tek kaynak. `src/lib/time/zone.ts` (saf: `isValidTimeZone`, `supportedTimeZones`, `wallClock`/`fromWallClock`), `zone.server.ts` (`panelTimeZone`, `syncProcessTimeZone`).
+- Sunucu: açılışta (`instrumentation.ts`) ve ayar yazılınca/sıfırlanınca (`settings/index.ts` `afterChange`) `process.env.TZ`'ye yazılır. Cron hesapları (`backup/scheduler.ts`, `jobs/runner.ts`) ayrıca açık `tz` verir.
+- İstemci: kök layout `I18nProvider`'a `timeZone` verir; `useFormat()` `date/time/dateTime/relative` bu dilimle biçimler (çağıranın kendi `timeZone`'u kazanır), `useTimeZone()`. `CronEditor` önizlemesi `nextRuns(…, timeZone)` — sunucudaki `cron-parser` ile aynı anları bulduğu `zone.test.ts`'te sınanır (yaz saati sınırları dahil).
+- Ajan rolü süreç dilimini değiştirmez (zamanlama merkezde).
 
 ## Değişiklik yaparken
 Yeni ayar: `src/settings.schema.ts`'e bir tanım (ilke: eşik/aralık/limit/sıklık koda sabit yazılmaz), locale'de etiket/açıklama (`settings.*`). Ayar okuyan kod `getNumber("x.y")` ile okur; migration gerekmez.

@@ -1,5 +1,5 @@
 # host-helper
-Son güncelleme: 2026-10-13
+Son güncelleme: 2026-10-14
 
 ## Ne
 Host'ta root olarak çalışan küçük Python daemon (`host-helper/panel-helper.py`, yalnız stdlib). Panel container'ı root değil; host'ta komut gerekirse Unix soketi üzerinden helper'dan **rica eder**. Ne çalışacağına host karar verir. Protokol ayrıntısı: `host-helper/PROTOCOL.md`.
@@ -23,6 +23,9 @@ Host'ta root olarak çalışan küçük Python daemon (`host-helper/panel-helper
 - compose: `compose.ps|config|up|pull|restart|down` (dizin izin desenine uymalı)
 - Konsol: `shell.preset` (anahtar → `PRESETS` tablosundaki sabit argv), `shell.exec` (serbest komut; ayrıca izin gerekir)
 Argüman doğrulayıcılar dosyanın üstünde (`_unit`, `_project_dir`, `_preset`, `_command`…).
+
+## Gelecek: native ajana katılma (K4)
+Karar (2026-10-13 K4): helper eylemleri native (Go) ajanın içine taşınır. **Yapıldı (2026-10-14, Faz B adım 4c)**: `agent/internal/helper/` aynı eylem tablosu/doğrulayıcı/hata metinleriyle; izinler `/etc/panel-agent/policy.conf` (`allow helper.<eylem> [desen]`) + profil varsayılanları (`native-ajan.md`). Native ajanlı sunucuda bu daemon gerekmez. Node ajan `helper.call` ile hâlâ bu daemon'a iletir; yerel (merkez) sunucu bu daemon'u kullanmaya devam eder. Eylem eklerken İKİ yer: `panel-helper.py` ve `agent/internal/helper/helper.go` (+ profil gerekiyorsa `agent/internal/policy`).
 
 ## Kullanan özellikler
 | Özellik | Eylemler | Rehber |

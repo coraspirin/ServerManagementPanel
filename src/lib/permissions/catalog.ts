@@ -28,21 +28,31 @@ export type FeatureEntry = {
   helperActions?: string[];
   /** Yalnızca panelin çalıştığı sunucuda (uzakta 501). */
   localOnly?: boolean;
+  /**
+   * Uzakta kullandığı ajan op'ları. Ajan op listesini bildiriyorsa (native
+   * ajan, `capabilities.ops`) eksik olan özelliği kapatır (🔴). Node ajanı
+   * liste bildirmez; orada bu alan yok sayılır.
+   */
+  ops?: string[];
 };
 
 export const FEATURE_CATALOG: readonly FeatureEntry[] = [
-  { key: "docker", route: "/docker", permission: "docker.view", requires: ["docker"] },
+  { key: "docker", route: "/docker", permission: "docker.view", requires: ["docker"], ops: ["docker.api"] },
   {
     key: "stacks",
     route: "/docker?tab=stack",
     permission: "apps.install",
     requires: ["docker", "helper"],
+    // `agent.image`: compose dosyaları sunucunun panel imajıyla açılan geçici
+    // container'da yazılıyor (appstore/install, compose/edit). Native ajanda
+    // imaj yok → yığın kurulumu/düzenlemesi şimdilik 🔴 (yarıda kırılmasın).
+    ops: ["docker.api", "helper.call", "agent.image"],
     helperActions: ["compose.ps", "compose.config", "compose.up", "compose.pull", "compose.restart", "compose.down"],
   },
-  { key: "database", route: "/database", permission: "db.read", requires: ["docker"], optional: ["hostRoot"] },
-  { key: "files", route: "/files", permission: "files.read", requires: ["hostRoot"], optional: ["docker"] },
-  { key: "backup", route: "/backup", permission: "backup.manage", requires: ["docker", "hostRoot"] },
-  { key: "monitoring", route: "/monitoring", permission: "metrics.view", requires: ["proc"] },
+  { key: "database", route: "/database", permission: "db.read", requires: ["docker"], optional: ["hostRoot"], ops: ["db.query"] },
+  { key: "files", route: "/files", permission: "files.read", requires: ["hostRoot"], optional: ["docker"], ops: ["files.list"] },
+  { key: "backup", route: "/backup", permission: "backup.manage", requires: ["docker", "hostRoot"], ops: ["docker.api"] },
+  { key: "monitoring", route: "/monitoring", permission: "metrics.view", requires: ["proc"], ops: ["metrics.sample"] },
   {
     key: "logs",
     route: "/logs",
@@ -55,6 +65,7 @@ export const FEATURE_CATALOG: readonly FeatureEntry[] = [
     route: "/host",
     permission: "host.service",
     requires: ["helper"],
+    ops: ["helper.call"],
     helperActions: ["service.list", "service.status", "service.restart", "service.start", "service.stop"],
   },
   {
@@ -62,9 +73,10 @@ export const FEATURE_CATALOG: readonly FeatureEntry[] = [
     route: "/host",
     permission: "host.power",
     requires: ["helper"],
+    ops: ["helper.call"],
     helperActions: ["power.reboot", "power.shutdown", "power.cancel"],
   },
-  { key: "hostShell", route: "/host", permission: "host.shell", requires: ["helper"], helperActions: ["shell.preset", "shell.exec"] },
+  { key: "hostShell", route: "/host", permission: "host.shell", requires: ["helper"], ops: ["helper.call"], helperActions: ["shell.preset", "shell.exec"] },
   { key: "ports", route: "/ports", permission: "security.view", requires: ["proc"] },
   {
     key: "fail2ban",
@@ -83,7 +95,16 @@ export function featuresForPermission(permission: string): FeatureEntry[] {
   return FEATURE_CATALOG.filter((entry) => entry.permission === permission);
 }
 
-export type FeatureHost = HintHost & { capabilities: Record<Capability, boolean> };
+export type FeatureHost = HintHost & {
+  capabilities: Record<Capability, boolean>;
+  /** Ajanın bildirdiği op listesi (native ajan); null/yok = hepsi var sayılır. */
+  ops?: readonly string[] | null;
+  /**
+   * Native ajan: politikada açık helper eylemleri. Varsa helper eylemleri
+   * "doğrulanamadı" (🟡) yerine kesin: hepsi açık ✅, biri kapalı 🟡/🔴.
+   */
+  helperActions?: readonly string[] | null;
+};
 
 export type FeatureState = "ok" | "partial" | "off";
 
@@ -113,6 +134,11 @@ export function evaluateFeature(entry: FeatureEntry, host: FeatureHost, t: HintT
     return { ...base, state: "off", hints: [buildHint("unsupported", ctx, t)] };
   }
 
+  const offered = host.ops;
+  if (offered && (entry.ops ?? []).some((op) => !offered.includes(op))) {
+    return { ...base, state: "off", hints: [buildHint("agentOpMissing", ctx, t)] };
+  }
+
   const missingRequired = (entry.requires ?? []).filter((cap) => !host.capabilities[cap]);
   if (missingRequired.length > 0) {
     return { ...base, state: "off", hints: missingRequired.map((cap) => buildHint(MISSING_HINT[cap], ctx, t)) };
@@ -123,7 +149,17 @@ export function evaluateFeature(entry: FeatureEntry, host: FeatureHost, t: HintT
     .map((cap) => buildHint(MISSING_HINT[cap], ctx, t));
 
   const usesHelper = (entry.helperActions?.length ?? 0) > 0 && host.capabilities.helper;
-  if (usesHelper) {
+  if (usesHelper && host.helperActions) {
+    // Native ajan politikasını bildiriyor: hangi eylemin kapalı olduğu belli.
+    const enabled = host.helperActions;
+    const missing = (entry.helperActions ?? []).filter((action) => !enabled.includes(action));
+    if (missing.length === (entry.helperActions ?? []).length) {
+      return { ...base, state: "off", hints: [...hints, buildHint("policyMissing", { ...ctx, allowLines: missing }, t)] };
+    }
+    if (missing.length > 0) {
+      hints.push(buildHint("policyMissing", { ...ctx, allowLines: missing }, t));
+    }
+  } else if (usesHelper) {
     hints.push(buildHint("helperUnverified", { ...ctx, allowLines: entry.helperActions }, t));
   }
 

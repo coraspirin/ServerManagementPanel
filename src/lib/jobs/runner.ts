@@ -70,7 +70,9 @@ function computeNextRun(job: JobDefinition, from: Date = new Date()): number | n
       return (Math.floor(nowSeconds / seconds) + 1) * seconds;
     }
     const expression = getString(job.schedule.settingKey);
-    const interval = CronExpressionParser.parse(expression, { currentDate: from });
+    // Panelin saat dilimi (`general.timezone` → `process.env.TZ`); bkz. `lib/time/zone.ts`.
+    const tz = process.env.TZ;
+    const interval = CronExpressionParser.parse(expression, tz ? { currentDate: from, tz } : { currentDate: from });
     return Math.floor(interval.next().getTime() / 1000);
   } catch (error) {
     console.error(`[jobs] ${job.key} zamanlaması okunamadı:`, error);

@@ -5,7 +5,7 @@ import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { dataDir } from "@/lib/db/client";
-import { onHost } from "@/lib/hosts/on-host";
+import { currentAgentHost, onHost } from "@/lib/hosts/on-host";
 import { serverT } from "@/lib/i18n/runtime";
 import { getDockerProvider } from "@/lib/providers";
 import type { PruneScope } from "@/lib/providers/types";
@@ -101,10 +101,14 @@ function hostView(hostPath: string): string {
   return path.posix.join(hostRoot(), hostPath);
 }
 
-export async function localScanCleanup(): Promise<{ items: CleanupItem[]; totalBytes: number }> {
+/**
+ * Docker kalemleri — seçili sunucunun Docker sağlayıcısıyla. Native (Go)
+ * ajanlı sunucuda bu MERKEZDE çalışır (sağlayıcı ajanın `docker.api`
+ * tüneline bağlı, K2: şekillendirme merkezde); ajan yalnız host dosyası
+ * kalemlerini tarar (`files.cleanupScan`).
+ */
+async function dockerCleanupItems(): Promise<CleanupItem[]> {
   const items: CleanupItem[] = [];
-
-  /* --- Docker --- */
   try {
     const provider = getDockerProvider();
     const [images, volumes, containers] = await Promise.all([
@@ -189,6 +193,11 @@ export async function localScanCleanup(): Promise<{ items: CleanupItem[]; totalB
   } catch {
     // Docker erişilemiyorsa diğer kalemler yine listelenir.
   }
+  return items;
+}
+
+export async function localScanCleanup(): Promise<{ items: CleanupItem[]; totalBytes: number }> {
+  const items: CleanupItem[] = await dockerCleanupItems();
 
   /* --- Host dosyaları --- */
 
@@ -391,10 +400,35 @@ export async function localRunCleanup(itemId: string): Promise<CleanupResult> {
 
 // --- Çoklu sunucu -------------------------------------------------------------
 
-export function scanCleanup(): ReturnType<typeof localScanCleanup> {
-  return onHost("files.cleanupScan", [], () => localScanCleanup());
+/** Native ajanlı sunucu mu (Docker kalemleri merkezde hesaplanır). */
+function nativeAgent(): boolean {
+  return currentAgentHost()?.capabilities.native === true;
 }
 
-export function runCleanup(itemId: string): Promise<CleanupResult> {
-  return onHost("files.cleanupRun", [itemId], () => localRunCleanup(itemId));
+export async function scanCleanup(): ReturnType<typeof localScanCleanup> {
+  if (!nativeAgent()) return onHost("files.cleanupScan", [], () => localScanCleanup());
+
+  const { agentCall } = await import("@/lib/agent/client");
+  const host = currentAgentHost()!;
+  const [docker, files] = await Promise.all([
+    dockerCleanupItems(),
+    agentCall<{ items: CleanupItem[]; totalBytes: number }>(host, "files.cleanupScan"),
+  ]);
+  const items = [...docker, ...files.items].sort((a, b) => b.bytes - a.bytes);
+  return { items, totalBytes: items.reduce((sum, item) => sum + item.bytes, 0) };
+}
+
+export async function runCleanup(itemId: string): Promise<CleanupResult> {
+  if (!nativeAgent() || !itemId.startsWith("docker-")) {
+    return onHost("files.cleanupRun", [itemId], () => localRunCleanup(itemId));
+  }
+  // Native sunucuda Docker kalemi: prune merkezden tünel üzerinden.
+  const item = (await dockerCleanupItems()).find((entry) => entry.id === itemId);
+  if (!item?.scope) return { ok: false, message: serverT("cleanup.notInList"), reclaimedBytes: 0 };
+  const result = await getDockerProvider().prune(item.scope);
+  return {
+    ok: true,
+    message: serverT("cleanup.removed", { count: result.removed }),
+    reclaimedBytes: result.reclaimedBytes,
+  };
 }

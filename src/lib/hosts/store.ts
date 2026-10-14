@@ -2,7 +2,7 @@ import "server-only";
 
 import { getDb } from "@/lib/db/client";
 import { LOCAL_HOST_ID } from "./context";
-import type { Host, HostAgentType, HostCapabilities, HostStatus } from "./types";
+import type { Host, HostAgentType, HostAnnounce, HostCapabilities, HostStatus } from "./types";
 
 /**
  * `hosts` tablosu — okuma ve durum güncellemeleri.
@@ -33,11 +33,12 @@ type HostRow = {
   sort_order: number;
   color: string | null;
   created_at: number;
+  announce: string | null;
 };
 
 const COLUMNS = `id, name, address, agent_type, is_local, enabled, status, agent_url,
   cert_fingerprint, last_seen, latency_ms, last_error, agent_version, protocol,
-  capabilities, hostname, os_name, sort_order, color, created_at`;
+  capabilities, hostname, os_name, sort_order, color, created_at, announce`;
 
 function parseCapabilities(raw: string): HostCapabilities {
   try {
@@ -45,6 +46,15 @@ function parseCapabilities(raw: string): HostCapabilities {
     return value && typeof value === "object" ? (value as HostCapabilities) : {};
   } catch {
     return {};
+  }
+}
+
+function parseAnnounce(raw: string | null): HostAnnounce | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as HostAnnounce;
+  } catch {
+    return null;
   }
 }
 
@@ -70,6 +80,7 @@ function toHost(row: HostRow): Host {
     sortOrder: row.sort_order,
     color: row.color,
     createdAt: row.created_at,
+    announce: parseAnnounce(row.announce),
   };
 }
 
@@ -87,6 +98,20 @@ export function listHosts(): Host[] {
  */
 export function activeHosts(): Host[] {
   return listHosts().filter((host) => host.enabled && (host.isLocal || host.status === "online"));
+}
+
+/**
+ * Sunucuda Docker var mı. Ajan `capabilities.docker`'ı bildirir; native
+ * ajan çekirdeği (Faz B adım 3) Docker sunmaz ve `false` der. Yerel ve eski
+ * kayıtlarda alan yok → var sayılır (davranış değişmez).
+ */
+export function hostHasDocker(host: Pick<Host, "capabilities">): boolean {
+  return host.capabilities.docker !== false;
+}
+
+/** Docker işleri için: etkin + Docker'ı olan sunucular. */
+export function dockerHosts(): Host[] {
+  return activeHosts().filter(hostHasDocker);
 }
 
 export function getHost(id: number): Host | null {
@@ -234,8 +259,8 @@ export function hostNameTaken(name: string, exceptId?: number): boolean {
 export function insertPendingHost(name: string, tokenEnc: string): number {
   const result = getDb()
     .prepare(
-      `INSERT INTO hosts (name, agent_type, is_local, status, token_enc, sort_order)
-       VALUES (?, 'agent', 0, 'pending', ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM hosts))`,
+      `INSERT INTO hosts (name, agent_type, is_local, status, token_enc, token_issued_at, sort_order)
+       VALUES (?, 'agent', 0, 'pending', ?, unixepoch(), (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM hosts))`,
     )
     .run(name, tokenEnc);
   return Number(result.lastInsertRowid);
@@ -246,7 +271,7 @@ export function markEnrolled(
   input: { agentUrl: string; fingerprint: string; update: HostStatusUpdate },
 ): void {
   getDb()
-    .prepare("UPDATE hosts SET agent_url = ?, address = ?, cert_fingerprint = ? WHERE id = ?")
+    .prepare("UPDATE hosts SET agent_url = ?, address = ?, cert_fingerprint = ?, announce = NULL WHERE id = ?")
     .run(input.agentUrl, new URL(input.agentUrl).hostname, input.fingerprint, id);
   updateHostStatus(id, input.update);
 }
@@ -267,8 +292,29 @@ export function updateHostMeta(
 export function resetHostSecret(id: number, tokenEnc: string): void {
   getDb()
     .prepare(
-      `UPDATE hosts SET token_enc = ?, cert_fingerprint = NULL, status = 'pending', last_error = NULL
+      `UPDATE hosts SET token_enc = ?, token_issued_at = unixepoch(), announce = NULL,
+         cert_fingerprint = NULL, status = 'pending', last_error = NULL
        WHERE id = ? AND is_local = 0`,
     )
     .run(tokenEnc, id);
+}
+
+/**
+ * Duyuru kabul edebilecek satırlar: kayıt bekleyen (sabitlenmemiş) uzak
+ * ajanlar, sırrı son `windowSeconds` içinde üretilmiş olanlar. Şifreli sır
+ * yalnız duyuru doğrulaması için döner.
+ */
+export function announceCandidates(windowSeconds: number): { id: number; tokenEnc: string }[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT id, token_enc FROM hosts
+       WHERE agent_type = 'agent' AND is_local = 0 AND cert_fingerprint IS NULL
+         AND token_enc IS NOT NULL AND token_issued_at >= unixepoch() - ?`,
+    )
+    .all(windowSeconds) as { id: number; token_enc: string }[];
+  return rows.map((row) => ({ id: row.id, tokenEnc: row.token_enc }));
+}
+
+export function saveAnnounce(id: number, announce: HostAnnounce): void {
+  getDb().prepare("UPDATE hosts SET announce = ? WHERE id = ? AND cert_fingerprint IS NULL").run(JSON.stringify(announce), id);
 }

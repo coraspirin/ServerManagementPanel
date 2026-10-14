@@ -184,10 +184,39 @@ function targetOf(host: Host): Target {
   return target;
 }
 
-function remoteError(error: { message: string; code?: string }): Error {
+/**
+ * Ajanın op'u hiç bilmemesi (`unknown-op:`, HTTP 404) ya da host
+ * politikasının kapatması (`policy-denied`, native ajan — kararlar.md K3)
+ * protokol uyumsuzluğu DEĞİL, "bu sunucuda bu özellik yok": `unsupported`
+ * (501 + yönerge). Eskiden 404 bütün sunucuyu "uyumsuz" gösteriyordu.
+ */
+function remoteError(host: Pick<Host, "id">, error: { message: string; code?: string }): Error {
+  if (error.message.startsWith("unknown-op:")) {
+    return new HostError("unsupported", host.id, serverT("hosts.errors.unsupported"));
+  }
+  if (error.code === "policy-denied" || error.code === "policy-invalid") {
+    return new HostError(
+      "unsupported",
+      host.id,
+      serverT("hosts.errors.policyDenied", { detail: error.message.replace(/^policy-(denied|invalid):/, "") }),
+    );
+  }
   const out = new Error(error.message) as Error & { code?: string };
   if (error.code) out.code = error.code;
   return out;
+}
+
+/** 404 gövdesi bir RPC yanıtıysa (`unknown-op`) onu, değilse durum hatasını döndürür. */
+function replyError(host: Pick<Host, "id">, status: number, text: string): Error {
+  if (status === 404) {
+    try {
+      const reply = decodeValue(text) as RpcResponse;
+      if (reply && reply.ok === false && typeof reply.error?.message === "string") return remoteError(host, reply.error);
+    } catch {
+      // RPC yanıtı değil — eski ajan ya da yanlış adres.
+    }
+  }
+  return statusError(host, status, text);
 }
 
 // --- Genel API ---------------------------------------------------------------
@@ -209,9 +238,9 @@ export async function agentCall<T = unknown>(
     { timeoutMs: options.timeoutMs ?? OP_TIMEOUTS[op] ?? DEFAULT_TIMEOUT_MS },
   );
   const text = await readAll(response);
-  if (status !== 200) throw statusError(host, status, text);
+  if (status !== 200) throw replyError(host, status, text);
   const reply = decodeValue(text) as RpcResponse;
-  if (!reply.ok) throw remoteError(reply.error);
+  if (!reply.ok) throw remoteError(host, reply.error);
   return reply.value as T;
 }
 
@@ -231,7 +260,7 @@ export async function* agentStream<T = unknown>(
     body,
     { timeoutMs: 0, signal },
   );
-  if (status !== 200) throw statusError(host, status, await readAll(response));
+  if (status !== 200) throw replyError(host, status, await readAll(response));
 
   const close = () => response.destroy();
   signal?.addEventListener("abort", close, { once: true });
@@ -246,7 +275,7 @@ export async function* agentStream<T = unknown>(
         if (!line) continue;
         const frame = decodeValue(line) as StreamFrame;
         if (frame.t === "d") yield frame.d as T;
-        else if (frame.t === "err") throw remoteError(frame.e);
+        else if (frame.t === "err") throw remoteError(host, frame.e);
         else return;
       }
     }

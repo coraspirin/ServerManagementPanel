@@ -32,6 +32,14 @@ Her tarifin sonunda: `npm run typecheck && npm run lint && npm test && npm run i
 4. Eski ajanlar `unknown-op:alan.ad` döner → çağıranda yakala, "ajanı güncelle" mesajı (örnek: `src/lib/dbadmin/exec/inventory.ts` → `dbadmin.agentOutdated`).
 5. Ajanlara ulaşması için sürüm yayınla (`surum-deploy.md`). Op adı bir kez yayınlandıktan sonra değiştirme.
 
+## Native (Go) ajana op ekle
+1. Node tarafındaki op adını ve dönüş biçimini birebir kullan (`src/lib/agent/ops.ts`, `providers/types.ts`).
+2. Mantık `agent/internal/<alan>/`'da (host'ta çalışır: yollar doğrudan `/`, `/proc`; `/host/*` öneki yok), kayıt `agent/internal/ops/ops.go` `New` içinde (`r.ops["alan.ad"] = Op{Call: …}` ya da `Stream`).
+3. Politika: çekirdek değilse profil/izin gerekir (`agent/internal/policy`); yeni profil kuralı gerekiyorsa orada.
+4. Kullanıcıya dönen metin → `src/locales/*`'e anahtar + `scripts/agent-strings.mjs` önek listesi → `node scripts/agent-strings.mjs`.
+5. Katalogda bu op'u kullanan özelliğe `ops: ["alan.ad"]` (`src/lib/permissions/catalog.ts`).
+6. `go test ./...` (fixture'lı sahte /proc deseni `hostinfo_test.go`), `bash scripts/build-agent.sh`, gerçek ajana `node scripts/agent-smoke.ts`.
+
 ## Docker sağlayıcısına yeni metot
 1. `src/lib/providers/types.ts` → `DockerProvider` arayüzü (+ gerekli tipler).
 2. `src/lib/providers/docker.live.ts` (Engine API, `request`/`requestBinary`/`openStream`) ve `docker.mock.ts`.

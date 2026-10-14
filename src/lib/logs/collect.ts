@@ -4,6 +4,8 @@ import { serverT } from "@/lib/i18n/runtime";
 import { announce } from "@/lib/alerts/announce";
 import { callHelper, helperConfigured } from "@/lib/host/helper";
 import { getDockerProvider } from "@/lib/providers";
+import { currentHostIdOrNull } from "@/lib/hosts/context";
+import { getHost, hostHasDocker } from "@/lib/hosts/store";
 import { getBool, getNumber, getString } from "@/lib/settings";
 import {
   forgetSource,
@@ -73,6 +75,11 @@ export async function collectLogs(): Promise<CollectOutcome> {
 }
 
 async function collectContainers(outcome: CollectOutcome): Promise<IncomingLine[]> {
+  // Docker'ı olmayan sunucu (native ajan çekirdeği): container logu yok, hata da değil.
+  const hostId = currentHostIdOrNull();
+  const host = hostId === null ? null : getHost(hostId);
+  if (host && !hostHasDocker(host)) return [];
+
   const provider = getDockerProvider();
   const perSource = getNumber("logs.max_lines_per_source");
   const wanted = selectedSources();

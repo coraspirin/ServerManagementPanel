@@ -35,6 +35,20 @@ export type Host = {
   sortOrder: number;
   color: string | null;
   createdAt: number;
+  /** Kayıt bekleyen ajanın kendini duyurusu (onay bekliyor); yoksa null. */
+  announce: HostAnnounce | null;
+};
+
+/** Ajanın duyurusu + merkezin gördüğü kaynak adres ve zaman (store.ts). */
+export type HostAnnounce = {
+  url: string;
+  fingerprint: string;
+  version: string;
+  hostname: string;
+  osName: string | null;
+  /** İsteğin geldiği adres (vekil başlığından; boş olabilir). */
+  sourceIp: string;
+  at: number;
 };
 
 /**
@@ -51,6 +65,12 @@ export type HostCapabilities = {
   dockerApi?: boolean;
   /** Sağlayıcı RPC'si (`docker.list`…); yoksa var sayılır. Native ajan false. */
   dockerRpc?: boolean;
+  /** Native (Go) ajan. */
+  native?: boolean;
+  /** Ajanın sunduğu op'lar (yalnız native ajan bildirir; yoksa hepsi var sayılır). */
+  ops?: string[];
+  /** Native ajan: politikada açık helper eylemleri. */
+  helperActions?: string[];
 };
 
 /** Seçili sunucunun taşındığı yerler. */

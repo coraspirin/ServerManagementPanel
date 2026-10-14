@@ -1,5 +1,5 @@
 # Sunucular — /hosts
-Son güncelleme: 2026-10-13 · boş başlangıç (D1) + yetki yoklaması + docker.api tüneli (commit edilmedi)
+Son güncelleme: 2026-10-14 · ajan duyurusu (`/api/agent/announce`, migration 036, "Ajan bulundu → onayla"); native ajan rozeti/yetenekleri (commit edilmedi)
 
 ## Ne yapar
 Çoklu sunucu yönetimi: panel-agent'lı uzak sunucu ekleme sihirbazı (kurulum kiti + kayıt), durum (çevrimiçi/çevrimdışı/uyumsuz), yeniden adlandırma/silme, token yenileme, ajan sürümü ve uzaktan güncelleme ("hepsini güncelle"). `/hosts/unavailable`: seçili sunucuya ulaşılamadığında yönlendirilen bilgi sayfası. `/ilk-sunucu`: etkin hiç sunucu yokken "İlk sunucunu ekle" (D1). Satırlarda **yetki yoklaması** (✅/🟡/🔴 özet + "Özellikler" penceresi, düzeltme komutlarıyla). Yerel sunucu artık aç/kapat düğmesine sahip (silinemez).
@@ -10,9 +10,10 @@ Son güncelleme: 2026-10-13 · boş başlangıç (D1) + yetki yoklaması + docke
 - Üst çubuktaki sunucu seçici: `src/components/shell/HostContext.tsx` (+ HostSelector).
 - API:
   - `src/app/api/hosts/route.ts` GET (`hosts.view`), POST (`hosts.manage`)
-  - `src/app/api/hosts/[id]/route.ts` PATCH, DELETE; `[id]/enroll` POST; `[id]/token` POST — `hosts.manage`
+  - `src/app/api/hosts/[id]/route.ts` PATCH, DELETE; `[id]/enroll` POST; `[id]/token` POST — `hosts.manage` (POST /api/hosts ve token: kurulum komutuna `--central <panel kökeni>`, `centralOrigin`)
   - `src/app/api/hosts/[id]/update/route.ts` GET, POST — `panel.update`
   - Ajan tarafı uçlar: `src/app/api/agent/{rpc,stream,enroll}/route.ts`
+  - Merkez tarafı, OTURUMSUZ: `src/app/api/agent/announce/route.ts` → `src/lib/hosts/announce.ts` — native ajanın duyurusu (HMAC, bekleyen sunucunun sırrı, sır üretiminden 1 sa içinde, hız sınırlı). Duyuru `hosts.announce`'a öneri olarak yazılır; ekranda "Ajan bulundu" → "Onayla ve bağlan" mevcut enroll'u çalıştırır (`native-ajan.md` adım 6). Migration 036: `hosts.token_issued_at`, `hosts.announce`; `HostView.announce` (yalnız sabitlenmemiş satırda).
 - lib:
   - `src/lib/hosts/local-probe.ts` (saf: `decideLocal`, `probeLocalMounts`, `localMountPaths`), `local-state.ts` (`applyLocalProbe` — açılışta; `localAutoDisabled`, `clearLocalAutoDisabled`; işaret `cache` `hosts:local-auto-disabled`).
   - `src/lib/permissions/features.server.ts` (`hostFeatures` — yoklama; yerelde mount'lar + `HELPER_SECRET`, ajanda hello capabilities, `proc` = `hostRoot` varsayılır), katalog `src/lib/permissions/catalog.ts`. `HostView.features` yalnız liste ekranında/`GET /api/hosts`'ta dolu.
@@ -34,6 +35,10 @@ Son güncelleme: 2026-10-13 · boş başlangıç (D1) + yetki yoklaması + docke
 
 ## Önemli kararlar ve tuzaklar
 - **Yerel isteğe bağlı (D1, 2026-10-13)**: açılışta docker.sock, /host/proc, /host/root'un ÜÇÜ DE yoksa yerel `enabled=0` + işaret; mount'lar gelince yalnız işaretliyse yeniden açılır. Kullanıcı `/hosts`'ta yereli aç/kapatınca işaret silinir. Mount'lar yokken yereli açmak 400 `hosts.validation.localNoMounts` (MOCK_MODE hariç). Yerel kapalıyken `providersFor(1)` `HostError` fırlatır; self-update `localProviders()` ile kendi container'ına erişmeye devam eder. MOCK_MODE'da yoklama yok.
-- Kullanıcının ajanı: 192.168.61.107 (DietPi, armv7, root, `/root/panel-agent`). 2026-10-14'ten beri `AGENT_IMAGE=panel-agent-local:1.13.1` (yayınsız yerel imaj, bkz. `surum-deploy.md`); bu bilgisayardan `ssh root@192.168.61.107` anahtarla açık. Elle dağıtım: repo kökünde `agent-deploy.py <IP…>`.
+- Kullanıcının ajanı: 192.168.61.107 (DietPi, armv7, root). **2026-10-14 09:45'ten beri NATIVE (Go) ajan** (kullanıcı kararı: Pi için tek kayıt, geçmiş korunarak): host 3 "DietPi" → `https://192.168.61.107:7443`, systemd `panel-agent-native.service` → `/root/panel-agent-native/panel-agent serve -env /root/panel-agent-native/agent.env` (sır Node ajanın `/root/panel-agent/.env` `AGENT_TOKEN`'ı, kopyalandı). Pi'de Docker/dosya/log/yedek özellikleri Faz B adım 4'e kadar YOK. Node ajan container'ı durduruldu (`docker compose -p panel-agent stop`, `unless-stopped` → açılışta da kapalı), dosyaları duruyor (`AGENT_IMAGE=panel-agent-local:1.13.1`).
+  - **Geri dönüş**: `systemctl disable --now panel-agent-native` → `cd /root/panel-agent && docker compose -p panel-agent start panel-agent` → merkezde host 3'ü yeniden kaydet (`POST /api/hosts/3/enroll {"agentUrl":"https://192.168.61.107:7443"}` ya da Sunucular ekranı; Node ajanın sertifikası volume'da, parmak izi `CF:CE:75:…:AB:A5`).
+  - Bu bilgisayardan `ssh root@192.168.61.107` anahtarla açık. Elle Node ajan dağıtımı: repo kökünde `agent-deploy.py <IP…>`.
+- **Panel API'sine Claude erişimi**: kullanıcı merkezde `agent` adlı panel kullanıcısı açtı (2026-10-14; şifre kullanıcıda/konuşmada — belgelere yazılmaz). `curl -c jar -d '{"username":…,"password":…}' http://192.168.61.114:8081/api/auth/login`; yazan isteklerde `x-csrf-token: <panel_xsrf çerezi>` + `origin`. Kayıt ucu gövdesi `{"agentUrl": …}`.
 - Ajan güncellemesi için önce sürüm etiketi + GHCR imajı yayımlanmış olmalı (`docker-publish.yml`, amd64/arm64/arm/v7).
-- Yeni ajan op'u eklenince eski ajanlar `unknown-op:<ad>` döner — çağıran taraf bunu "ajanı güncelle" mesajına çevirmeli.
+- Yeni ajan op'u eklenince eski ajanlar `unknown-op:<ad>` döner. 2026-10-14'ten beri `client.ts` bunu (ve native ajanın `policy-denied`'ını) `HostError("unsupported")` 501 + yönergeye çevirir; özel bir "ajanı güncelle" mesajı isteyen çağıran yine kendisi yakalayabilir.
+- **Native (Go) ajan** (`agent/`, ayrıntı `native-ajan.md`): hello'da `capabilities.native: true` ve `ops: [...]` bildirir; katalog satırlarındaki `ops` ile karşılaştırılıp eksik özellikler 🔴 `agentOpMissing` gösterilir. `/hosts` satırında "native" rozeti.

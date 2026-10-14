@@ -15,6 +15,15 @@ import { translateLoose } from "./translate.ts";
 
 export type DateInput = Date | number | string;
 
+/**
+ * Panelin saat dilimi (`general.timezone`) seçeneklere eklenir; çağıran
+ * kendi `timeZone`'unu verdiyse o kazanır. Verilmezse çalışma ortamının
+ * dilimi kullanılır — sunucuda bu zaten `process.env.TZ` (bkz. `time/zone.ts`).
+ */
+function zoned(options: Intl.DateTimeFormatOptions, timeZone?: string): Intl.DateTimeFormatOptions {
+  return timeZone && !options.timeZone ? { ...options, timeZone } : options;
+}
+
 function toDate(value: DateInput): Date | null {
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
@@ -24,30 +33,33 @@ export function formatDate(
   value: DateInput,
   dict: Dictionary,
   options: Intl.DateTimeFormatOptions = { dateStyle: "medium" },
+  timeZone?: string,
 ): string {
   const date = toDate(value);
   if (!date) return "—";
-  return date.toLocaleDateString(intlOf(dict), options);
+  return date.toLocaleDateString(intlOf(dict), zoned(options, timeZone));
 }
 
 export function formatTime(
   value: DateInput,
   dict: Dictionary,
   options: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" },
+  timeZone?: string,
 ): string {
   const date = toDate(value);
   if (!date) return "—";
-  return date.toLocaleTimeString(intlOf(dict), options);
+  return date.toLocaleTimeString(intlOf(dict), zoned(options, timeZone));
 }
 
 export function formatDateTime(
   value: DateInput,
   dict: Dictionary,
   options?: Intl.DateTimeFormatOptions,
+  timeZone?: string,
 ): string {
   const date = toDate(value);
   if (!date) return "—";
-  return date.toLocaleString(intlOf(dict), options);
+  return date.toLocaleString(intlOf(dict), zoned(options ?? {}, timeZone));
 }
 
 /**
@@ -141,7 +153,7 @@ export function formatUptime(seconds: number, dict: Dictionary): string {
  * `Intl.RelativeTimeFormat` DEĞİL, sözlük kullanılıyor: Intl Türkçede
  * "5 dakika önce" üretir, paneldeki yerleşik kısaltma ise "5 dk önce".
  */
-export function formatRelative(value: DateInput, dict: Dictionary): string {
+export function formatRelative(value: DateInput, dict: Dictionary, timeZone?: string): string {
   const date = toDate(value);
   if (!date) return "—";
 
@@ -155,5 +167,5 @@ export function formatRelative(value: DateInput, dict: Dictionary): string {
   if (seconds < 3600) return ago("minutes", Math.floor(seconds / 60));
   if (seconds < 86400) return ago("hours", Math.floor(seconds / 3600));
   if (seconds < 2592000) return ago("days", Math.floor(seconds / 86400));
-  return formatDate(date, dict);
+  return formatDate(date, dict, undefined, timeZone);
 }

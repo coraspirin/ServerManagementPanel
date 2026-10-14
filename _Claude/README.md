@@ -14,6 +14,7 @@ Bir sayfa üzerinde çalışmadan önce ilgili dosyayı oku: hangi dosyalar, uç
 | [surum-deploy.md](surum-deploy.md) | `deploy.sh`, sürüm yayınlama, ajan güncelleme, geri alma |
 | [veritabani-sema.md](veritabani-sema.md) | Panelin SQLite tabloları, migration'lar, host_id |
 | [host-helper.md](host-helper.md) | Host'taki yardımcı daemon: eylemler, güvenlik, kurulum |
+| [native-ajan.md](native-ajan.md) | Native (Go) ajan `agent/`: protokol, op'lar, politika, derleme (Faz B) |
 
 ## Sayfalar
 | Route | Dosya | Kısaca |

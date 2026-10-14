@@ -78,6 +78,42 @@ describe("evaluateFeature", () => {
     assert.equal(evaluateFeature(entry("network"), LOCAL, t).state, "ok");
   });
 
+  it("native ajan: op listesinde olmayan özellik 🔴 agentOpMissing, olan çalışır", () => {
+    const native: FeatureHost = {
+      ...PI,
+      capabilities: { docker: false, proc: true, hostRoot: true, helper: false },
+      ops: ["agent.hello", "system.info", "metrics.sample", "hardware.report"],
+    };
+    assert.equal(evaluateFeature(entry("monitoring"), native, t).state, "ok");
+    const files = evaluateFeature(entry("files"), native, t);
+    assert.equal(files.state, "off");
+    assert.equal(files.hints[0].code, "agentOpMissing");
+    assert.equal(files.hints[0].fix.where, "panel");
+    // Node ajanı liste bildirmez: op denetimi yapılmaz.
+    assert.equal(evaluateFeature(entry("files"), { ...PI, ops: null }, t).state, "ok");
+  });
+
+  it("native ajan: helper eylemleri politikadan kesin (doğrulanamadı yok)", () => {
+    const native: FeatureHost = {
+      ...PI,
+      native: true,
+      capabilities: ALL,
+      helperActions: ["service.list", "service.status", "service.restart", "service.start", "service.stop"],
+    };
+    // Tüm eylemler açık → ✅ (Node'da 🟡 helperUnverified olurdu).
+    assert.equal(evaluateFeature(entry("hostServices"), native, t).state, "ok");
+    // Hiçbiri açık değil → 🔴 policyMissing, komutlar policy.conf satırı.
+    const power = evaluateFeature(entry("hostPower"), native, t);
+    assert.equal(power.state, "off");
+    assert.equal(power.hints[0].code, "policyMissing");
+    assert.ok(power.hints[0].fix.commands.some((line) => line === "allow helper.power.reboot"));
+    assert.ok(power.hints[0].fix.commands.some((line) => line.includes("/etc/panel-agent/policy.conf")));
+    // Bir kısmı açık → 🟡.
+    const partial = evaluateFeature(entry("hostServices"), { ...native, helperActions: ["service.list"] }, t);
+    assert.equal(partial.state, "partial");
+    assert.equal(partial.hints[0].code, "policyMissing");
+  });
+
   it("evaluateHost tüm katalogu döndürür", () => {
     assert.equal(evaluateHost(PI, t).length, FEATURE_CATALOG.length);
   });

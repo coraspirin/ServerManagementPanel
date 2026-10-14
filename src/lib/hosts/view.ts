@@ -1,7 +1,7 @@
 import { appVersion } from "@/lib/env";
 import { compareTags } from "@/lib/selfupdate/plan";
 import type { FeatureEvaluation } from "@/lib/permissions/catalog";
-import type { Host, HostAgentType, HostCapabilities, HostStatus } from "./types";
+import type { Host, HostAgentType, HostAnnounce, HostCapabilities, HostStatus } from "./types";
 
 /**
  * Sunucunun istemciye/API'ye giden hâli. Sır (`token_enc`) ve TLS parmak izi
@@ -26,6 +26,8 @@ export type HostView = {
   hostname: string | null;
   osName: string | null;
   color: string | null;
+  /** Kayıt bekleyen ajanın duyurusu (onay bekliyor); yoksa null. */
+  announce: HostAnnounce | null;
   /**
    * Yetki yoklaması (kararlar.md D6): katalogdaki özelliklerin bu sunucudaki
    * durumu; yetenekler bilinmiyorsa null. Yalnız liste ekranı doldurur
@@ -63,5 +65,6 @@ export function toHostView(host: Host): HostView {
     hostname: host.hostname,
     osName: host.osName,
     color: host.color,
+    announce: host.certFingerprint === null ? host.announce : null,
   };
 }

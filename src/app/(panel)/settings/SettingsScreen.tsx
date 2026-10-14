@@ -10,6 +10,7 @@ import { CronEditor } from "@/components/settings/CronEditor";
 import { ContainerMultiSelect } from "@/components/settings/ContainerSelect";
 import { DirListEditor, DirPicker } from "@/components/settings/DirPicker";
 import { OwnerSelect } from "@/components/settings/HostUserSelect";
+import { TimeZoneSelect } from "@/components/settings/TimeZoneSelect";
 import { settingDefs, settingGroups } from "@/settings.schema";
 import { useDict, useT } from "@/lib/i18n/client";
 import {
@@ -371,6 +372,10 @@ function SettingInput({
 
   if (def.type === "dirs") {
     return <DirListEditor value={String(value)} disabled={disabled} onCommit={onCommit} />;
+  }
+
+  if (def.type === "timezone") {
+    return <TimeZoneSelect value={String(value)} disabled={disabled} onCommit={onCommit} />;
   }
 
   if (def.type === "owner") {

@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  announceUrl,
   decodeValue,
   encodeValue,
   enrollProof,
   normalizeFingerprint,
+  parseAnnounce,
   signRequest,
   verifyEnrollProof,
   verifyRequest,
@@ -109,5 +111,42 @@ describe("codec", () => {
 
   it("null korunur", () => {
     assert.equal(decodeValue(encodeValue(null)), null);
+  });
+});
+
+describe("duyuru (Faz B adım 6)", () => {
+  const FP = "AA:".repeat(31) + "AA";
+  const valid = { address: "192.168.1.20", port: 7443, fingerprint: FP, version: "1.13.1", hostname: "pi", osName: "Debian" };
+
+  it("geçerli gövde ayrıştırılır, adres URL'ye çevrilir", () => {
+    const parsed = parseAnnounce(JSON.stringify(valid));
+    assert.deepEqual(parsed, valid);
+    assert.equal(announceUrl(parsed!), "https://192.168.1.20:7443");
+    assert.equal(announceUrl({ address: "fd00::5", port: 7443 }), "https://[fd00::5]:7443");
+  });
+
+  it("biçim dışı alanlar reddedilir", () => {
+    const bad = [
+      { ...valid, port: 0 },
+      { ...valid, port: "7443" },
+      { ...valid, address: "1.2.3.4/evil" },
+      { ...valid, address: "a b" },
+      { ...valid, fingerprint: "abc" },
+      { ...valid, version: "1.0; rm" },
+      { ...valid, hostname: "x\ny" },
+      { ...valid, hostname: "" },
+    ];
+    for (const body of bad) assert.equal(parseAnnounce(JSON.stringify(body)), null, JSON.stringify(body));
+    assert.equal(parseAnnounce("[]"), null);
+    assert.equal(parseAnnounce("{"), null);
+  });
+
+  it("imza yola bağlı: RPC imzası duyuru olarak geçmez", () => {
+    const body = JSON.stringify(valid);
+    const rpc = signed({ body });
+    const asAnnounce = verifyRequest(SECRET, { ...rpc, path: "/api/agent/announce" }, NOW, () => true);
+    assert.deepEqual(asAnnounce, { ok: false, reason: "signature" });
+    const announce = signed({ body, path: "/api/agent/announce" });
+    assert.deepEqual(verifyRequest(SECRET, announce, NOW, () => true), { ok: true });
   });
 });

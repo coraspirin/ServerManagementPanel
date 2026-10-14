@@ -3,6 +3,7 @@ import "./globals.css";
 import { I18nProvider } from "@/lib/i18n/client";
 import { getDictionary } from "@/lib/i18n/runtime";
 import { getLocale, getT } from "@/lib/i18n/server";
+import { panelTimeZone } from "@/lib/time/zone.server";
 
 /**
  * Dil ayarı veritabanından okunuyor; sayfa önceden üretilirse kurulum anındaki
@@ -74,7 +75,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           ikisinin tüm metni istemci paketine girerdi. Kök layout burada
           olduğu için giriş ve kurulum ekranları da kapsanıyor.
         */}
-        <I18nProvider locale={locale} dict={getDictionary(locale)}>
+        <I18nProvider locale={locale} dict={getDictionary(locale)} timeZone={panelTimeZone()}>
           {children}
         </I18nProvider>
       </body>

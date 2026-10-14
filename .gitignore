@@ -51,3 +51,6 @@ src/locales/translate.py
 
 
 note.txt
+
+# Native ajan derleme çıktısı (scripts/build-agent.sh)
+/agent/dist/

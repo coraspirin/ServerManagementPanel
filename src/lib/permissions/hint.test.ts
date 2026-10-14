@@ -78,3 +78,30 @@ describe("buildHint", () => {
     assert.equal(hint.fix.where, "panel");
   });
 });
+
+describe("native ajan ipuçları", () => {
+  const NATIVE = { id: 3, name: "DietPi", address: "192.168.61.107", local: false, native: true };
+  it("kapalı eylem → policy.conf satırı, helper yeniden başlatma yok", () => {
+    const hint = buildHint("actionDisabled", { host: NATIVE, action: "compose.up" }, (key) => key);
+    assert.deepEqual(hint.fix.commands.slice(1), ["echo 'allow helper.compose.up' | sudo tee -a /etc/panel-agent/policy.conf"]);
+  });
+  it("desen reddi → allow.conf satırları policy.conf biçiminde", () => {
+    const hint = buildHint("patternDenied", { host: NATIVE, allowLines: ["compose.up ^/opt/stacks/web$"] }, (key) => key);
+    assert.ok(hint.fix.commands.includes("allow helper.compose.up ^/opt/stacks/web$"));
+    assert.ok(!hint.fix.commands.some((line) => line.includes("panel-helper")));
+  });
+  it("Node ajan için değişmez (allow.conf)", () => {
+    const hint = buildHint("actionDisabled", { host: { ...NATIVE, native: false }, action: "compose.up" }, (key) => key);
+    assert.ok(hint.fix.commands.some((line) => line.includes("/etc/panel-helper/allow.conf")));
+  });
+  it("argüman reddi (compose dışı): kesin satır, native başlık", () => {
+    const hint = buildHint(
+      "argumentDenied",
+      { host: NATIVE, action: "shell.preset", subject: "apt.upgrade", allowLines: ["shell.preset ^apt\.upgrade$"] },
+      (key, params) => `${key}|${params?.subject ?? ""}`,
+    );
+    assert.equal(hint.reason, "permissions.hint.argumentDenied|apt.upgrade");
+    assert.equal(hint.fix.commands[0], "# permissions.hint.where.native|");
+    assert.ok(hint.fix.commands.includes("allow helper.shell.preset ^apt\.upgrade$"));
+  });
+});

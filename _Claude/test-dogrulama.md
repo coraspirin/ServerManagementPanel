@@ -35,6 +35,15 @@ Merkez `:3123` (ayrı DATA_DIR) + ajan `PANEL_ROLE=agent` `:7443`; ajan tarafın
 4. Pi'de ölç (baz: 142 MB RSS, ~%12 CPU): `ps -eo pid,rss,pcpu,etime,args --sort=-rss | head -5`, 3× `docker stats --no-stream`, ağ sayaçları. Merkez günlüğünde `docker-api-denied` olmamalı (olursa `docker-api-policy.ts`'e eksik kural).
 5. Geri dönüş: ayarı **Ajandaki sağlayıcı** yap (anında, yeniden başlatma yok).
 
+## 4c. Native (Go) ajanı denemek (Faz B adım 3)
+- Yerelde (Windows, veri boş ama protokol tam): `cd agent && go build -o <scratch>/panel-agent.exe ./cmd/panel-agent`; `AGENT_TOKEN=<48 hex> AGENT_DATA=<scratch>/data AGENT_LISTEN=127.0.0.1 AGENT_PORT=17443 AGENT_POLICY=<scratch>/policy.conf ./panel-agent.exe` → `node scripts/agent-smoke.ts https://127.0.0.1:17443 <token>` (2026-10-14: 8/8).
+- Pi'de (kullanıcı onayıyla): `agent/dist/panel-agent-linux-armv7` → `/root/panel-agent-native/`, Node ajanın YANINDA `AGENT_PORT=7444`, ayrı token, `AGENT_DATA=/root/panel-agent-native/data`; merkezden aynı sınama betiği; merkeze "pi-native" olarak eklenip izleme/donanım sayfası; ölçüm `ps -o rss,pcpu`. Bitince süreç ve sunucu kaydı kaldırılır.
+
+## 4d. Native ajan duyurusu, `policy`, `doctor` (Faz B adım 6)
+- Duyuru diller arası (Windows): `go build -o <scratch>/panel-agent.exe ./cmd/panel-agent`; scratch'te küçük bir Node HTTP sunucusu panelin `src/lib/agent/protocol.ts`'ini `pathToFileURL` ile içe aktarıp `verifyRequest` + `parseAnnounce` uygular; ajan `AGENT_CENTRAL=http://127.0.0.1:<port> AGENT_TOKEN=… AGENT_DATA=<scratch>/data AGENT_LISTEN=127.0.0.1 AGENT_PORT=… serve` ile başlatılır → ilk duyuru hemen gelir (2026-10-14 ✓). Deneme verisi (TLS anahtarı) sonra silinir.
+- Gerçek merkezde (deploy sonrası): Sunucular → Sunucu ekle → komuttaki `--central` adresi uzak sunucudan erişilebilir olmalı → kurulum → pencerede "Ajan bulundu" (≤ 1 dk) → parmak izini kurulum çıktısıyla karşılaştır → Onayla ve bağlan.
+- Pi'de: `panel-agent policy show -env /root/panel-agent-native/agent.env`, `AGENT_SERVICE=panel-agent-native panel-agent doctor -env …` (2026-10-14 ✓). Politika değiştiren komutları üretim dosyasında denemeyin; geçici `AGENT_POLICY=/tmp/x.conf` verin.
+
 ## 5. Sunucuda deneme (192.168.61.114, ZimaOS)
 **Sunucu (2026-10-11 itibarıyla):** 192.168.61.114 artık **ZimaOS** (CasaOS tabanlı; kök dosya sistemi squashfs, SALT-OKUNUR — `/home` dahil; yazılabilir yerler `/DATA`, `/tmp`, `/opt`, `/var/lib/*`). SSH `~/.ssh/config` ile **root**. Panel bir CasaOS uygulaması:
 - container `server-management-panel`, servis `server-panel`, port `8081` → 3000
