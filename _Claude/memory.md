@@ -12,6 +12,12 @@ Biçim:
 
 ---
 
+## 2026-10-14 22:40 — v1.13.2 yayınlandı: ilk native ajan yayını, merkez deploy, Pi kendini güncelledi
+- CI logu (`gh auth login` sonrası): agent-release v1.13.1'de `TestHataMetinleriMerkezleUyumlu` düştü — test `power.cancel`'ı gerçekten çalıştırıyordu, runner'da `shutdown` vardı. Düzeltme `helper.commandPath` (+ `hint.ts` `#` filtresi) → commit `5a27d1d`; `set-version.sh patch --commit` → `67b99be` + `v1.13.2`; push.
+- İş akışları v1.13.2: agent-release ✓ (5 ikili, SHA256SUMS + .sig, install-agent.sh), Docker imajı ✓, CI ✓. İmza bağımsız doğrulandı (OpenSSL, gömülü anahtar).
+- `deploy.sh` → merkez 1.13.2 sağlıklı; Pi native ajanı otomatik güncellemeyle v1.13.2'yi indirdi, imza/özet/selftest → yeniden başladı → merkez onayı (`state.json` done, `.prev` yedek). deploy.sh, bu 5 sn'lik `ECONNREFUSED` yüzünden 1 döndü; önceki panel imajı (`37a4942591b8`) elle silindi.
+- v1.13.1 etiketi kaldı (GHCR imajı var, GitHub yayını yok). `note.txt` ve `host-helper/__pycache__/` commit dışı.
+
 ## 2026-10-14 17:20 — Push + v1.13.1 etiketi; agent-release başarısız (neden bilinmiyor)
 - `15c59cd` (güvenlik düzeltmeleri) commit; `main` push; `v1.13.1` etiketi push. Merkez `15c59cd` ile yeniden deploy (sağlıklı).
 - İş akışları: CI main/v1.13.1 ✓, Docker imajı main/v1.13.1 ✓ (GHCR 1.13.1), **agent-release ✖ "Derle (vet + test dahil)" adımında**. Loglar `gh` oturumu olmadan okunamıyor.

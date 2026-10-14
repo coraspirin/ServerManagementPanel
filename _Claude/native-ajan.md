@@ -1,10 +1,10 @@
 # Native (Go) ajan — `agent/`
-Son güncelleme: 2026-10-14 · Faz B adım 6 (duyuru, profiller, `policy`, `doctor`) — commit edilmedi; Pi'de (host 3) çalışıyor
+Son güncelleme: 2026-10-14 · v1.13.2 ile yayınlandı (ilk native ajan yayını); Pi (host 3) yayından kendini güncelledi
 
 ## Ne
 Node ajanın (aynı Docker imajı, `PANEL_ROLE=agent`, Pi'de ~124–142 MB RSS, 536 MB imaj) yerini alacak tek statik Go ikilisi (CGO yok, ~7 MB). Host'ta root olarak systemd ile çalışır; neyin yapılabileceğine host'taki politika dosyası karar verir (kararlar.md K1–K5). Merkezle **aynı protokol v3**'ü konuşur — merkezde protokol değişmez, Node ajanla yan yana çalışabilir.
 
-Faz B sırası: ~~DockerTransport + docker.api~~ → ~~adım 3: çekirdek~~ → ~~adım 4: docker tüneli + dosyalar + helper eylemleri (K4)~~ → ~~adım 5: güncelleme + CI + `install-agent.sh`~~ → ~~adım 6: duyuru ucu + profiller + `policy` + `doctor`~~ — hepsi yazıldı (2026-10-14), commit/deploy/yayın bekliyor.
+Faz B sırası: ~~DockerTransport + docker.api~~ → ~~adım 3: çekirdek~~ → ~~adım 4: docker tüneli + dosyalar + helper eylemleri (K4)~~ → ~~adım 5: güncelleme + CI + `install-agent.sh`~~ → ~~adım 6: duyuru ucu + profiller + `policy` + `doctor`~~ — hepsi yayınlandı (v1.13.2, 2026-10-14).
 
 ## Dosyalar
 - `agent/go.mod` — modül `github.com/coraspirin/servermanagementpanel/agent`, yalnız stdlib, Go ≥1.22 (bu bilgisayarda 1.27.2: `%LOCALAPPDATA%\go-sdk\go\bin`, Git Bash'te `export PATH="/c/Users/mucah/AppData/Local/go-sdk/go/bin:$PATH"`; winget bu ortamda takılıyor).

@@ -52,6 +52,12 @@ Commit/etiket/GHCR olmadan merkezdeki kod ajana böyle taşındı (Next standalo
 4. `/root/panel-agent/.env` yedeklenir (`.env.manual-X-<damga>`), `AGENT_IMAGE=panel-agent-local:X`, `docker compose -p panel-agent up -d --force-recreate --pull never panel-agent`; 2,5 dk içinde healthy değilse yedek geri konur.
 ⚠️ Ajan yerel imajdayken merkezin otomatik güncellemesi (`agents.auto_update`) bir sonraki merkez sürümünde GHCR'den o etiketi çekmeye çalışır; etiket yayınlanmadıysa "pull" adımında durur (zararsız, etiket başına bir kez). Kalıcı çözüm: sürümü yayınlayıp normal yola dönmek.
 
+## İlk native ajan yayını — v1.13.2 (2026-10-14)
+- v1.13.1 etiketi itildi (GHCR imajı yayınlandı) ama agent-release düştü: `TestHataMetinleriMerkezleUyumlu` `power.cancel`'ı GERÇEKTEN çalıştırıyordu; runner'da `shutdown` var, komut başarılı oldu. Düzeltme: `helper.commandPath` (testte boş geçici klasöre). Yayınlanmış etiketi taşımak yerine **v1.13.2** çıkarıldı; v1.13.1'in GitHub yayını YOK (etiket ve GHCR imajı var).
+- Ders: ajan testleri hiçbir sistem komutunu çalıştırmamalı; yerelde (Windows) ve Pi'de (komut yok/root) geçen test CI'da başka davranabilir. CI logu için `gh auth login` gerekli (`gh run view <id> --log-failed`).
+- v1.13.2: 5 ikili + `SHA256SUMS(.sig)` + `install-agent.sh`; imza bağımsız olarak OpenSSL + gömülü anahtarla doğrulandı. Merkez deploy edilince Pi'deki native ajan otomatik güncellemeyle (`agents.auto_update`) indirip doğrulayıp yeniden başladı ve onay aldı (~15 sn).
+- `deploy.sh` bu sırada "LOGLARDA HATA VAR" ile 1 döndü: ajan güncellenirken 5 sn `ECONNREFUSED` — beklenen; betik eski imajı silmeden durur (elle `docker rmi <önceki kimlik>`, kimlik bir önceki deploy günlüğündeki `writing image`).
+
 ## Native (Go) ajan yayını (Faz B adım 5)
 - **Ön koşul (bir kez)**: GitHub → Settings → Secrets and variables → Actions → `AGENT_SIGNING_KEY` = Ed25519 özel anahtarı (PKCS#8 PEM; 2026-10-14 üretildi ve eklendi, yerel kopyası yok; ortak anahtarı `agent/internal/update/keys.go` ve `scripts/install-agent.sh`'ta). Sır yoksa iş akışı durur — imzasız yayın ajanlarca reddedilir.
 - Kurulum komutu (panelin "Sunucu ekle" penceresi verir): `install-agent.sh --token T --version vX.Y.Z --profile standard --central <panel adresi>`; `--central` ile ajan kendini panele duyurur (1 sa), panelde "Onayla ve bağlan". Yerinde denetim: `panel-agent doctor`, izinler: `panel-agent policy show`.
